@@ -1,0 +1,1670 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portale Dipendenti</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Flatpickr CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" type="text/css" href="https://npmcdn.com/flatpickr/dist/themes/airbnb.css">
+    <style>
+        :root {
+            --primary: #0056b3;
+            --primary-light: #e8f0fe;
+            --secondary: #e9ecef;
+            --success: #28a745;
+            --success-light: #d4edda;
+            --danger: #dc3545;
+            --danger-light: #f8d7da;
+            --warning: #f0ad4e;
+            --info: #17a2b8;
+            --info-light: #d1ecf1;
+            --travel: #6f42c1;
+            --travel-light: #e8dff5;
+            --text-dark: #333;
+            --text-light: #6c757d;
+            --bg: #f4f7f6;
+            --card-bg: #ffffff;
+            --border: #dee2e6;
+            --input-bg: #ffffff;
+            --input-border: #dadce0;
+            --input-text: #202124;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Roboto', 'Helvetica', 'Arial', sans-serif;
+            background-color: var(--bg);
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            width: 100%;
+            max-width: 98%;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary) 0%, #003d82 100%);
+            color: white;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header-title {
+            text-align: left;
+            flex: 1;
+            /* allow it to take up remaining space next to hamburger */
+        }
+
+        .header-title h2 {
+            margin: 0;
+            font-size: 1.25rem;
+            font-weight: 500;
+            line-height: 1.6;
+            letter-spacing: 0.0075em;
+        }
+
+        .header-title p {
+            margin: 0;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.875rem;
+        }
+
+        .header-actions {
+            display: none;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-actions .btn-header {
+            background: transparent;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            font-size: 14px;
+            font-weight: 500;
+            border-radius: 6px;
+            width: auto;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .header-actions .btn-header:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .header-actions .btn-header svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        /* Hamburger button hidden by default on desktop */
+        .hamburger-btn {
+            display: none;
+            background: transparent;
+            border: none;
+            color: white;
+            padding: 8px;
+            cursor: pointer;
+            z-index: 101;
+            /* Reset global button styles */
+            width: auto;
+            margin: 0;
+            min-width: 0;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 24px;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+
+        /* Remove number input spinners */
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            appearance: none;
+            margin: 0;
+        }
+
+        input[type="number"] {
+            -moz-appearance: textfield;
+            appearance: textfield;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        input[type="password"] {
+            width: 100%;
+            padding: 16px 18px;
+            border: 1px solid var(--input-border);
+            border-radius: 8px;
+            font-size: 18px;
+            font-family: inherit;
+            background-color: var(--input-bg);
+            color: var(--text-dark);
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        input:focus {
+            border-color: var(--primary);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(0, 86, 179, 0.15);
+        }
+
+        /* Password field wrapper */
+        .password-wrapper {
+            position: relative;
+        }
+
+        .password-wrapper input {
+            padding-right: 48px;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            margin-top: 2px;
+            /* Slight adjustment because of the new input margin-top */
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+            color: var(--text-light);
+            width: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s;
+        }
+
+        .password-toggle:hover {
+            color: var(--primary);
+        }
+
+        .password-toggle:active {
+            transform: translateY(-50%) scale(0.95);
+        }
+
+        .password-toggle svg {
+            width: 22px;
+            height: 22px;
+        }
+
+        /* Buttons */
+        button {
+            width: 100%;
+            padding: 16px;
+            margin-top: 8px;
+            /* Added margin-top to separate button from inputs */
+            font-size: 18px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-family: inherit;
+            transition: transform 0.1s, opacity 0.2s;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), #003d82);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+        }
+
+        .actions-grid button .btn-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .actions-grid button .btn-icon svg {
+            width: 24px;
+            height: 24px;
+            stroke: currentColor;
+            stroke-width: 2;
+            fill: none;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        /* Screens */
+        #loginScreen,
+        #dashboardScreen {
+            display: none;
+        }
+
+        .active-screen {
+            display: block !important;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Dashboard specific */
+        .welcome {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .welcome h3 {
+            margin: 0;
+            color: var(--primary);
+            font-size: 24px;
+        }
+
+        /* 6-button actions grid */
+        .actions-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+
+        .actions-grid button {
+            margin: 0;
+            padding: 24px 12px;
+            font-size: 18px;
+            font-weight: 600;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+
+        .actions-grid button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-entrata {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-inizio-pausa {
+            background: var(--warning);
+            color: white;
+        }
+
+        .btn-fine-pausa {
+            background: #e8a735;
+            color: white;
+        }
+
+        .btn-uscita {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-inizio-trasferta {
+            background: var(--travel);
+            color: white;
+        }
+
+        .btn-ritorno-trasferta {
+            background: #8b5fd4;
+            color: white;
+        }
+
+        #clockStatus {
+            text-align: center;
+            font-size: 18px;
+            margin-bottom: 15px;
+            font-weight: bold;
+            min-height: 24px;
+        }
+
+        .error {
+            color: var(--danger);
+        }
+
+        .success {
+            color: var(--success);
+        }
+
+        /* ---- Monthly Attendance Table ---- */
+        .section-title {
+            font-size: 18px;
+            color: var(--text-light);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 8px;
+        }
+
+        .month-nav {
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            background: var(--primary-light);
+            border-radius: 12px;
+            padding: 8px;
+        }
+
+        .month-nav button {
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--primary);
+            color: white;
+            border-radius: 8px;
+            transition: opacity 0.2s, transform 0.1s;
+        }
+
+        .month-nav button:active {
+            transform: scale(0.9);
+        }
+
+        .month-nav button svg {
+            width: 20px;
+            height: 20px;
+            stroke-width: 3px;
+        }
+
+        .month-nav span {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-dark);
+            user-select: none;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+        }
+
+        .attendance-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 16px;
+            min-width: 700px;
+        }
+
+        .attendance-table thead th {
+            background: var(--primary);
+            color: white;
+            padding: 14px 12px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 16px;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+        }
+
+        .attendance-table tbody td {
+            padding: 10px;
+            text-align: center;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+            color: var(--text-dark);
+        }
+
+        .attendance-table tbody tr:hover {
+            background: var(--primary-light);
+        }
+
+        .attendance-table tbody tr.weekend:hover {
+            background: rgba(0, 0, 0, 0.04);
+        }
+
+        .attendance-table tbody tr.row-holiday {
+            background: #e3f2fd;
+            /* Light blue for holidays */
+        }
+
+        .attendance-table tbody tr.row-holiday:hover {
+            background: #bbdefb;
+        }
+
+        [data-theme="dark"] .attendance-table tbody tr.row-holiday {
+            background: #0d47a122;
+        }
+
+        .badge-holiday {
+            display: inline-block;
+            margin-left: 8px;
+            padding: 2px 8px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--primary);
+            border: 1px solid var(--primary);
+            border-radius: 12px;
+            background: #fff;
+            text-transform: uppercase;
+            vertical-align: middle;
+            line-height: 1;
+        }
+
+        [data-theme="dark"] .badge-holiday {
+            background: transparent;
+            color: #64b5f6;
+            border-color: #64b5f6;
+        }
+
+        .attendance-table .date-cell {
+            font-weight: 600;
+            text-align: left;
+            padding-left: 12px;
+            min-width: 120px;
+        }
+
+        .attendance-table .hours-cell {
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .attendance-table .hours-cell.incomplete {
+            color: var(--warning);
+        }
+
+        /* Monthly summary */
+        .monthly-summary {
+            display: flex;
+            gap: 15px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .summary-card {
+            flex: 1;
+            min-width: 120px;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .summary-card .label {
+            font-size: 14px;
+            color: var(--text-light);
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .summary-card .value {
+            font-size: 32px;
+            font-weight: 700;
+            margin-top: 5px;
+        }
+
+        .summary-card .value.positive {
+            color: var(--success);
+        }
+
+        .summary-card .value.negative {
+            color: var(--danger);
+        }
+
+        .summary-card .value.neutral {
+            color: var(--primary);
+        }
+
+        .summary-card .sub {
+            font-size: 13px;
+            color: var(--text-light);
+            margin-top: 3px;
+        }
+
+        /* Login screen narrower */
+        #loginScreen .content-inner {
+            max-width: 420px;
+            margin: 0 auto;
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+
+            .content {
+                padding: 20px 15px;
+            }
+
+            .header {
+                flex-direction: row;
+                align-items: center;
+                justify-content: flex-start;
+                /* Align left */
+                position: relative;
+            }
+
+            .hamburger-btn {
+                display: block;
+                order: -1;
+                margin-right: 15px;
+                margin-left: -5px;
+                padding: 12px;
+            }
+
+            .header-title {
+                flex: 1;
+                text-align: left !important;
+            }
+
+            .header-actions {
+                display: none !important;
+                /* Hide default flex layout, overrides inline JS styles */
+                position: absolute;
+                top: 100%;
+                left: 0;
+                right: 0;
+                background: var(--card-bg);
+                flex-direction: column;
+                padding: 15px;
+                box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+                z-index: 100;
+                border-radius: 0 0 12px 12px;
+                border: 1px solid var(--border);
+                border-top: none;
+            }
+
+            .header-actions.show-mobile-menu {
+                display: flex !important;
+                /* Display when toggled */
+                animation: slideDown 0.2s ease-out;
+            }
+
+            @keyframes slideDown {
+                from {
+                    opacity: 0;
+                    transform: translateY(-10px);
+                }
+
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+
+            .header-actions .btn-header {
+                width: 100%;
+                justify-content: flex-start;
+                padding: 12px 16px;
+                color: var(--text-dark);
+                /* Dark text for white dropdown */
+            }
+
+            .header-actions .btn-header svg {
+                stroke: var(--text-dark);
+            }
+
+            .header-actions .btn-header[style*="background:#dc3545"] {
+                color: white;
+                /* Keep logout button visible */
+            }
+
+            .actions-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+
+            .actions-grid button {
+                font-size: 13px;
+                padding: 12px 6px;
+                gap: 5px;
+            }
+
+            .monthly-summary {
+                flex-direction: column;
+            }
+
+            .month-nav button {
+                padding: 8px 12px;
+                font-size: 20px;
+            }
+
+            .month-nav span {
+                font-size: 16px;
+            }
+
+            /* Sticky columns for horizontal scrolling */
+            .attendance-table th:nth-child(1),
+            .attendance-table td:nth-child(1) {
+                position: sticky;
+                left: 0;
+                z-index: 2;
+                background-color: var(--card-bg);
+                min-width: 105px;
+                max-width: 105px;
+                box-shadow: 2px 0 5px rgba(0, 0, 0, 0.08);
+                /* slight right shadow to separate sticky content */
+            }
+
+            .attendance-table thead th:nth-child(1) {
+                z-index: 12;
+                background-color: var(--primary);
+            }
+
+            .attendance-table tbody tr:hover td:nth-child(1) {
+                background-color: var(--primary-light);
+            }
+
+            .attendance-table tbody tr.weekend td:nth-child(1) {
+                background-color: rgba(0, 0, 0, 0.04);
+            }
+
+            .attendance-table tbody tr.weekend:hover td:nth-child(1) {
+                background-color: rgba(0, 0, 0, 0.04);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .actions-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <div class="header">
+            <div class="header-title">
+                <h2>Marcatempo</h2>
+                <p>Portale Dipendenti</p>
+            </div>
+
+            <button class="hamburger-btn" onclick="toggleMobileMenu()" aria-label="Menu">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </button>
+
+            <div class="header-actions" id="headerActions">
+                <button class="btn-header" onclick="downloadCSVReport()" title="Scarica CSV">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="8" y1="13" x2="16" y2="13"></line>
+                        <line x1="8" y1="17" x2="16" y2="17"></line>
+                        <polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
+                    STAMPA CSV
+                </button>
+                <button class="btn-header" onclick="downloadPDFReport()" title="Scarica PDF">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    STAMPA PDF
+                </button>
+                <button class="btn-header" id="adminHeaderBtn" style="display:none;" onclick="goToAdmin()">
+                    <svg viewBox="0 0 24 24" fill="white" stroke="white" width="18" height="18">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg>
+                    ADMIN
+                </button>
+                <button class="btn-header"
+                    style="background:#dc3545; color:white; padding: 6px 16px; font-weight: 500; font-size: 14px;"
+                    onclick="logout()">
+                    ESCI
+                </button>
+            </div>
+        </div>
+
+        <div class="content">
+            <!-- LOGIN SCREEN -->
+            <div id="loginScreen" class="active-screen">
+                <div class="content-inner">
+                    <div class="form-group">
+                        <label>ID Dipendente</label>
+                        <input type="text" inputmode="numeric" pattern="[0-9]*" id="loginId"
+                            placeholder="Inserisci il tuo ID" required>
+                    </div>
+                    <div class="form-group">
+                        <label>PIN (Password Orologio)</label>
+                        <div class="password-wrapper">
+                            <input type="password" id="loginPin" placeholder="Inserisci il tuo PIN">
+                            <button type="button" class="password-toggle" onclick="togglePassword()"
+                                aria-label="Mostra password">
+                                <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                    stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                                <svg id="eyeOffIcon" style="display:none" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <path
+                                        d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24">
+                                    </path>
+                                    <line x1="1" y1="1" x2="23" y2="23"></line>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <button class="btn-primary" onclick="login()">Accedi</button>
+                    <p id="loginStatus" class="error" style="text-align:center; font-size: 16px; margin-top:10px;"></p>
+                </div>
+            </div>
+
+            <!-- DASHBOARD SCREEN -->
+            <div id="dashboardScreen">
+                <div class="welcome">
+                    <h3 id="welcomeName">Bentornato!</h3>
+                    <p style="margin:5px 0 0; color: #666; font-size:18px;">Registra la tua presenza</p>
+                </div>
+
+                <div class="actions-grid">
+                    <button class="btn-entrata" onclick="clock('entrata')">
+                        <span class="btn-icon"><svg viewBox="0 0 24 24">
+                                <polyline points="22 2 13.5 21 10 12 2 9.5 22 2"></polyline>
+                            </svg></span>
+                        Entrata
+                    </button>
+                    <button class="btn-uscita" onclick="clock('uscita')">
+                        <span class="btn-icon"><svg viewBox="0 0 24 24">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                <polyline points="16 17 21 12 16 7"></polyline>
+                                <line x1="21" y1="12" x2="9" y2="12"></line>
+                            </svg></span>
+                        Uscita
+                    </button>
+                    <button class="btn-inizio-pausa" onclick="clock('inizio_pausa')">
+                        <span class="btn-icon"><svg viewBox="0 0 24 24">
+                                <rect x="6" y="4" width="4" height="16"></rect>
+                                <rect x="14" y="4" width="4" height="16"></rect>
+                            </svg></span>
+                        Inizio Pausa
+                    </button>
+                    <button class="btn-fine-pausa" onclick="clock('fine_pausa')">
+                        <span class="btn-icon"><svg viewBox="0 0 24 24">
+                                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                            </svg></span>
+                        Fine Pausa
+                    </button>
+                    <button class="btn-inizio-trasferta" onclick="clock('inizio_trasferta')">
+                        <span class="btn-icon"><svg viewBox="0 0 24 24">
+                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                <circle cx="12" cy="10" r="3"></circle>
+                            </svg></span>
+                        Inizio Trasf.
+                    </button>
+                    <button class="btn-ritorno-trasferta" onclick="clock('ritorno_trasferta')">
+                        <span class="btn-icon"><svg viewBox="0 0 24 24">
+                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                            </svg></span>
+                        Ritorno Trasf.
+                    </button>
+                </div>
+
+                <p id="clockStatus"></p>
+
+                <!-- Monthly attendance section -->
+                <div class="section-title">Registro Presenze Mensile</div>
+
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 25px;">
+                    <div class="month-nav" style="flex: 1; margin-bottom: 0;">
+                        <button onclick="changeMonth(-1)" title="Mese Precedente">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="15 18 9 12 15 6"></polyline>
+                            </svg>
+                        </button>
+                        <span id="monthLabel">Febbraio 2026</span>
+                        <button onclick="changeMonth(1)" title="Mese Successivo">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </button>
+                    </div>
+                    <button id="calendarPickerBtn" title="Scegli Range Date"
+                        style="width: 56px; height: 56px; margin: 0; flex-shrink: 0; background: var(--primary); color: white; border: none; border-radius: 12px; padding: 0; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                    </button>
+                </div>
+                <input type="text" id="hiddenMonthPicker" style="display:none; position:absolute; visibility:hidden;">
+
+                <div class="table-container">
+                    <table class="attendance-table">
+                        <thead>
+                            <tr>
+                                <th style="cursor: pointer" onclick="toggleDateSort()">Data <span id="sortArrow"></span>
+                                </th>
+                                <th>Entrata</th>
+                                <th>Inizio Pausa</th>
+                                <th>Fine Pausa</th>
+                                <th>Uscita</th>
+                                <th>Inizio Trasf.</th>
+                                <th>Ritorno Trasf.</th>
+                                <th>Ore Lav.</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attendanceBody">
+                            <tr>
+                                <td colspan="8" style="text-align:center; color:#999; padding:20px;">Caricamento...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Monthly summary -->
+                <div class="monthly-summary" id="monthlySummary">
+                    <div class="summary-card">
+                        <div class="label">Ore Lavorate</div>
+                        <div class="value neutral" id="workedHours">—</div>
+                        <div class="sub">nel mese selezionato</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">Ore Teoriche</div>
+                        <div class="value neutral" id="theoreticalHours">—</div>
+                        <div class="sub">8h × gg lavorativi (Lun-Ven)</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">Bilancio Ore</div>
+                        <div class="value neutral" id="diffHours">—</div>
+                        <div class="sub" id="diffSub">ore </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Flatpickr JS -->
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://npmcdn.com/flatpickr/dist/l10n/it.js"></script>
+
+    <!-- jsPDF e AutoTable -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+
+    <script>
+        let currentEmpId = localStorage.getItem('empId');
+        let currentPin = localStorage.getItem('empPin');
+        let currentName = localStorage.getItem('empName');
+        let isAdmin = localStorage.getItem('isAdmin') === 'true';
+
+        // Current month for the table view
+        let viewYear = new Date().getFullYear();
+        let viewMonth = new Date().getMonth(); // 0-indexed
+
+        let flatpickrInstance = null;
+        let customRangeStart = null;
+        let customRangeEnd = null;
+
+        let globalEmployeeRecords = []; // For PDF/CSV export
+        let rawAttendanceRecords = []; // To store raw data for sorting/rendering
+        let currentSortOrder = 'asc'; // Default asc
+
+        const MONTH_NAMES = [
+            'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+            'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'
+        ];
+
+        const DAY_NAMES = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
+
+        const ACTION_MAP = {
+            // Map old "in"/"out" to new columns for backward compatibility
+            'in': 'entrata',
+            'out': 'uscita',
+            // New Anviz hardware action types
+            'In': 'entrata',
+            'Out': 'uscita',
+            'I_pausa': 'inizio_pausa',
+            'F_pausa': 'fine_pausa',
+            'U_trasf': 'inizio_trasferta',
+            'R_trasf': 'ritorno_trasferta',
+            'I_break': 'inizio_pausa', // Mapped visually to pausa
+            'F_break': 'fine_pausa',
+            // Web clock action types
+            'entrata': 'entrata',
+            'inizio_pausa': 'inizio_pausa',
+            'fine_pausa': 'fine_pausa',
+            'uscita': 'uscita',
+            'inizio_trasferta': 'inizio_trasferta',
+            'ritorno_trasferta': 'ritorno_trasferta'
+        };
+        // --- Flatpickr ---
+        function initFlatpickr() {
+            const pickerInput = document.getElementById('hiddenMonthPicker');
+            const calendarBtn = document.getElementById('calendarPickerBtn');
+
+            if (!pickerInput || !calendarBtn) {
+                console.error("Flatpickr elements missing in the DOM");
+                return;
+            }
+
+            // Inizializza flatpickr input (nascosto)
+            flatpickrInstance = flatpickr(pickerInput, {
+                locale: "it",
+                mode: "range",
+                dateFormat: "Y-m-d",
+                positionElement: calendarBtn,
+                onChange: function (selectedDates, dateStr, instance) {
+                    if (selectedDates.length === 2) {
+                        customRangeStart = selectedDates[0];
+                        customRangeEnd = selectedDates[1];
+                        updateMonthLabel();
+                        loadMonthlyAttendances();
+                    } else if (selectedDates.length === 0) {
+                        customRangeStart = null;
+                        customRangeEnd = null;
+                        updateMonthLabel();
+                        loadMonthlyAttendances();
+                    }
+                },
+                onClose: function (selectedDates) {
+                    if (selectedDates.length === 1) {
+                        customRangeStart = selectedDates[0];
+                        customRangeEnd = selectedDates[0];
+                        updateMonthLabel();
+                        loadMonthlyAttendances();
+                    }
+                }
+            });
+
+            // Apri flatpickr quando si clicca il bottone del calendario
+            calendarBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                flatpickrInstance.open();
+            });
+        }
+
+        // --- Theme ---
+        function toggleTheme() {
+            currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+            localStorage.setItem('theme', currentTheme);
+            applyTheme(currentTheme);
+        }
+
+        function applyTheme(theme) {
+            const checkbox = document.getElementById('themeCheckbox');
+            if (theme === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                if (checkbox) checkbox.checked = true;
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+                if (checkbox) checkbox.checked = false;
+            }
+        }
+
+        function goToAdmin() {
+            window.location.href = '/admin';
+        }
+
+        // --- Password toggle ---
+        function togglePassword() {
+            const input = document.getElementById('loginPin');
+            const eyeOpen = document.getElementById('eyeIcon');
+            const eyeOff = document.getElementById('eyeOffIcon');
+
+            if (input.type === 'password') {
+                input.type = 'text';
+                eyeOpen.style.display = 'none';
+                eyeOff.style.display = 'block';
+            } else {
+                input.type = 'password';
+                eyeOpen.style.display = 'block';
+                eyeOff.style.display = 'none';
+            }
+        }
+
+        // --- Screen navigation ---
+        function showLogin() {
+            document.getElementById('dashboardScreen').classList.remove('active-screen');
+            document.getElementById('headerActions').style.display = 'none';
+            document.getElementById('loginScreen').classList.add('active-screen');
+            document.getElementById('loginStatus').textContent = "";
+
+            const hamburger = document.querySelector('.hamburger-btn');
+            if (hamburger) hamburger.style.display = 'none';
+        }
+
+        function showDashboard() {
+            document.getElementById('loginScreen').classList.remove('active-screen');
+            document.getElementById('dashboardScreen').classList.add('active-screen');
+            document.getElementById('headerActions').style.display = 'flex';
+            document.getElementById('welcomeName').textContent = currentName ? "Ciao, " + currentName : "Bentornato!";
+            document.getElementById('clockStatus').textContent = "";
+            // Mostra bottone admin nell'header solo se l'utente è admin
+            const adminHeaderBtn = document.getElementById('adminHeaderBtn');
+            if (adminHeaderBtn) adminHeaderBtn.style.display = isAdmin ? '' : 'none';
+
+            const hamburger = document.querySelector('.hamburger-btn');
+            if (hamburger) hamburger.style.display = ''; // Let CSS media query handle it
+
+            updateMonthLabel();
+            loadMonthlyAttendances();
+        }
+
+        // --- Login ---
+        async function login() {
+            const idVal = document.getElementById('loginId').value.trim();
+            const pinVal = document.getElementById('loginPin').value;
+            const statusEl = document.getElementById('loginStatus');
+
+            if (!idVal || !pinVal) {
+                statusEl.textContent = "Inserisci ID e PIN per continuare.";
+                return;
+            }
+
+            statusEl.textContent = "Verifica credenziali in corso...";
+            statusEl.style.color = "#666";
+
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ employeeId: parseInt(idVal), pin: pinVal })
+                });
+
+                const data = await res.json().catch(() => ({}));
+
+                if (res.ok && data.success) {
+                    currentEmpId = idVal;
+                    currentPin = pinVal;
+                    currentName = data.name || "Utente " + idVal;
+                    isAdmin = data.isAdmin === true;
+
+                    localStorage.setItem('empId', currentEmpId);
+                    localStorage.setItem('empPin', currentPin);
+                    localStorage.setItem('empName', currentName);
+                    localStorage.setItem('isAdmin', isAdmin ? 'true' : 'false');
+                    if (data.apiKey) localStorage.setItem('adminApiKey', data.apiKey);
+
+                    showDashboard();
+                } else {
+                    statusEl.textContent = "Credenziali errate " + (res.status === 401 ? "(Controlla il PIN)" : "");
+                    statusEl.style.color = "var(--danger)";
+                }
+            } catch (err) {
+                statusEl.textContent = "Errore di connessione al server.";
+                statusEl.style.color = "var(--danger)";
+            }
+        }
+
+        function logout() {
+            localStorage.clear();
+            currentEmpId = null;
+            currentPin = null;
+            currentName = null;
+            isAdmin = false;
+            document.getElementById('loginId').value = "";
+            document.getElementById('loginPin').value = "";
+            showLogin();
+        }
+
+        function goToAdmin() {
+            if (isAdmin && !localStorage.getItem('adminApiKey')) {
+                alert("La tua sessione da amministratore è scaduta o non è aggiornata. Clicca su 'Esci' e accedi nuovamente per ripristinare i permessi.");
+                return;
+            }
+            window.location.href = '/admin';
+        }
+
+        // --- Clock action ---
+        async function clock(action) {
+            const statusEl = document.getElementById('clockStatus');
+            statusEl.textContent = 'Rilevamento GPS...';
+            statusEl.className = '';
+
+            if (!navigator.geolocation) {
+                sendTimbratura(action, null, null);
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    sendTimbratura(action, position.coords.latitude, position.coords.longitude);
+                },
+                (error) => {
+                    console.warn('GPS Error:', error.message);
+                    sendTimbratura(action, null, null);
+                },
+                { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+            );
+        }
+
+        async function sendTimbratura(action, lat, lon) {
+            const statusEl = document.getElementById('clockStatus');
+            statusEl.textContent = 'Invio timbratura...';
+
+            try {
+                const response = await fetch('/api/clock', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        employeeId: parseInt(currentEmpId),
+                        pin: currentPin,
+                        action: action,
+                        latitude: lat,
+                        longitude: lon
+                    })
+                });
+
+                if (response.status === 401) { logout(); return; }
+
+                if (response.ok) {
+                    const result = await response.json();
+                    const actionLabels = {
+                        'entrata': '🟢 Entrata',
+                        'inizio_pausa': '⏸️ Inizio Pausa',
+                        'fine_pausa': '▶️ Fine Pausa',
+                        'uscita': '🔴 Uscita',
+                        'inizio_trasferta': '🚗 Inizio Trasferta',
+                        'ritorno_trasferta': '🏠 Ritorno Trasferta'
+                    };
+                    if (result.status === 'pending') {
+                        statusEl.textContent = (actionLabels[action] || action) + ' — In attesa di approvazione admin';
+                        statusEl.className = '';
+                        statusEl.style.color = 'var(--warning)';
+                        setTimeout(() => { statusEl.textContent = ''; statusEl.style.color = ''; }, 5000);
+                    } else {
+                        statusEl.textContent = (actionLabels[action] || action) + ' Registrata!';
+                        statusEl.className = 'success';
+                        setTimeout(() => { statusEl.textContent = ''; }, 3000);
+                        loadMonthlyAttendances();
+                    }
+                } else {
+                    statusEl.textContent = 'Errore dal Server';
+                    statusEl.className = 'error';
+                }
+            } catch (error) {
+                statusEl.textContent = 'Errore di connessione.';
+                statusEl.className = 'error';
+            }
+        }
+
+        // --- Month navigation ---
+        function changeMonth(delta) {
+            customRangeStart = null;
+            customRangeEnd = null;
+            if (flatpickrInstance) flatpickrInstance.clear();
+            viewMonth += delta;
+            if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+            if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+            updateMonthLabel();
+            loadMonthlyAttendances();
+        }
+
+        function updateMonthLabel() {
+            const labelEl = document.getElementById('monthLabel');
+            if (customRangeStart && customRangeEnd) {
+                const dayFormatter = new Intl.DateTimeFormat('it-IT', { month: 'short', day: 'numeric', year: 'numeric' });
+                if (customRangeStart.getTime() === customRangeEnd.getTime()) {
+                    labelEl.textContent = dayFormatter.format(customRangeStart);
+                } else {
+                    labelEl.textContent = `${dayFormatter.format(customRangeStart)} - ${dayFormatter.format(customRangeEnd)}`;
+                }
+            } else {
+                labelEl.textContent = MONTH_NAMES[viewMonth] + ' ' + viewYear;
+            }
+        }
+
+        // --- Load & render monthly attendance table ---
+        async function loadMonthlyAttendances() {
+            const tbody = document.getElementById('attendanceBody');
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:#999; padding:20px;">Caricamento...</td></tr>';
+
+            try {
+                let url;
+                if (customRangeStart && customRangeEnd) {
+                    const startStr = toLocalDateKey(customRangeStart);
+                    const endStr = toLocalDateKey(customRangeEnd);
+                    url = `/api/employee/range-attendances?start_date=${startStr}&end_date=${endStr}`;
+                } else {
+                    const monthStr = viewYear + '-' + String(viewMonth + 1).padStart(2, '0');
+                    url = '/api/employee/monthly-attendances?month=' + monthStr;
+                }
+
+                const res = await fetch(url, {
+                    headers: {
+                        'X-Employee-ID': currentEmpId,
+                        'X-Employee-PIN': currentPin
+                    }
+                });
+
+                if (res.status === 401) { logout(); return; }
+
+                rawAttendanceRecords = await res.json(); // Store raw records
+                renderAttendanceTable(); // Render with current sort order
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="8" style="color:var(--danger); text-align:center;">Errore caricamento dati</td></tr>';
+            }
+        }
+
+        // Utility: local date key (evita toISOString che converte in UTC sballando le date)
+        function toggleDateSort() {
+            currentSortOrder = (currentSortOrder === 'asc') ? 'desc' : 'asc';
+            document.getElementById('sortArrow').textContent = currentSortOrder === 'asc' ? '↓' : '↑';
+            renderAttendanceTable();
+        }
+
+        function toLocalDateKey(d) {
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+
+        function renderAttendanceTable() {
+            const tbody = document.getElementById('attendanceBody');
+            const records = rawAttendanceRecords;
+
+            // Update sort arrow
+            const sortArrow = document.getElementById('sortArrow');
+            if (sortArrow) sortArrow.textContent = currentSortOrder === 'asc' ? '↓' : '↑';
+
+            // 1. Group records by date
+            const dailyMap = {};
+            records.forEach(r => {
+                const dateObj = new Date(r.timestamp);
+                const dateKey = toLocalDateKey(dateObj);
+                if (!dailyMap[dateKey]) {
+                    dailyMap[dateKey] = {
+                        entrata: null, inizio_pausa: null, fine_pausa: null, uscita: null, inizio_trasferta: null, ritorno_trasferta: null
+                    };
+                }
+                const mappedAction = ACTION_MAP[r.action] || r.action;
+                if (dailyMap[dateKey].hasOwnProperty(mappedAction)) {
+                    const timeStr = dateObj.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+                    if (mappedAction === 'entrata' && !dailyMap[dateKey].entrata) {
+                        dailyMap[dateKey].entrata = timeStr;
+                    } else if (mappedAction === 'uscita') {
+                        dailyMap[dateKey].uscita = timeStr;
+                    } else if (!dailyMap[dateKey][mappedAction]) {
+                        dailyMap[dateKey][mappedAction] = timeStr;
+                    }
+                }
+            });
+
+            // 2. Determine Date Range
+            let startDay, endDay;
+            if (customRangeStart && customRangeEnd) {
+                startDay = new Date(customRangeStart);
+                endDay = new Date(customRangeEnd);
+                endDay.setHours(23, 59, 59, 999);
+            } else {
+                startDay = new Date(viewYear, viewMonth, 1);
+                endDay = new Date(viewYear, viewMonth + 1, 0);
+            }
+
+            // 3. Collect and Sort Dates
+            const datesInRange = [];
+            let current = new Date(startDay);
+            while (current <= endDay) {
+                datesInRange.push(new Date(current));
+                current.setDate(current.getDate() + 1);
+            }
+
+            if (currentSortOrder === 'desc') {
+                datesInRange.sort((a, b) => b.getTime() - a.getTime());
+            } else {
+                datesInRange.sort((a, b) => a.getTime() - b.getTime());
+            }
+
+            // 4. Generate HTML
+            let totalWorkedMinutes = 0;
+            let html = '';
+            globalEmployeeRecords = [];
+
+            datesInRange.forEach(currentDate => {
+                const dateKey = toLocalDateKey(currentDate);
+                const dayOfWeek = currentDate.getDay();
+                const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                const isHolidayToday = isHoliday(currentDate);
+                const dayData = dailyMap[dateKey] || {};
+
+                let dateLabel = DAY_NAMES[dayOfWeek] + ' ' + String(currentDate.getDate()).padStart(2, '0') + '/' + String(currentDate.getMonth() + 1).padStart(2, '0');
+                if (isHolidayToday) dateLabel += ` <span class="badge-holiday">Festivo</span>`;
+
+                let hoursDisplay = '—';
+                let hoursClass = '';
+                let dailyMinutes = 0;
+                let balanceDisplay = '—';
+
+                if (dayData.entrata && dayData.uscita) {
+                    const entrataMins = timeToMinutes(dayData.entrata);
+                    const uscitaMins = timeToMinutes(dayData.uscita);
+                    let workedMins = uscitaMins - entrataMins;
+
+                    if (dayData.inizio_pausa && dayData.fine_pausa) {
+                        const pauseStart = timeToMinutes(dayData.inizio_pausa);
+                        const pauseEnd = timeToMinutes(dayData.fine_pausa);
+                        if (pauseEnd > pauseStart) workedMins -= (pauseEnd - pauseStart);
+                    }
+
+                    if (workedMins > 0) {
+                        dailyMinutes = workedMins;
+                        totalWorkedMinutes += workedMins;
+                        hoursDisplay = minutesToHHMM(workedMins);
+                        hoursClass = 'hours-cell';
+                        const theoreticalMins = isHolidayToday ? 0 : 480;
+                        const diffMins = workedMins - theoreticalMins;
+                        balanceDisplay = diffMins >= 0 ? '+' + minutesToHHMM(diffMins) : '-' + minutesToHHMM(Math.abs(diffMins));
+                    }
+                } else if (dayData.entrata && !dayData.uscita) {
+                    hoursDisplay = '...';
+                    hoursClass = 'hours-cell incomplete';
+                }
+
+                if (!isWeekend || Object.keys(dayData).length > 0) {
+                    globalEmployeeRecords.push({
+                        dateKey, dateLabel, isEmpty: Object.keys(dayData).length === 0,
+                        entrata: dayData.entrata, inizio_pausa: dayData.inizio_pausa,
+                        fine_pausa: dayData.fine_pausa, uscita: dayData.uscita,
+                        inizio_trasferta: dayData.inizio_trasferta, ritorno_trasferta: dayData.ritorno_trasferta,
+                        hoursDisplay, balanceDisplay
+                    });
+                }
+
+                if (!isWeekend || isHolidayToday || Object.keys(dayData).length > 0 || (customRangeStart && customRangeStart.getTime() === customRangeEnd.getTime())) {
+                    let trClass = isWeekend ? 'weekend' : '';
+                    if (isHolidayToday) trClass += ' row-holiday';
+
+                    html += `<tr class="${trClass.trim()}">
+                        <td class="date-cell">${dateLabel}</td>
+                        <td>${dayData.entrata || '—'}</td>
+                        <td>${dayData.inizio_pausa || '—'}</td>
+                        <td>${dayData.fine_pausa || '—'}</td>
+                        <td>${dayData.uscita || '—'}</td>
+                        <td>${dayData.inizio_trasferta || '—'}</td>
+                        <td>${dayData.ritorno_trasferta || '—'}</td>
+                        <td class="${hoursClass}">${hoursDisplay}</td>
+                    </tr>`;
+                }
+            });
+
+            if (html === '') {
+                html = '<tr><td colspan="8" style="text-align:center; color:#999; padding:20px;">Nessun dato trovato</td></tr>';
+            }
+            tbody.innerHTML = html;
+            updateMonthlySummary(totalWorkedMinutes, startDay, endDay);
+        }
+
+        function updateMonthlySummary(workedMinutes, startDay, endDay) {
+            // Calculate theoretical hours: 8h per business day (Mon-Fri) excluding holidays
+            let businessDays = 0;
+            let current = new Date(startDay);
+            while (current <= endDay) {
+                const dow = current.getDay();
+                if (dow !== 0 && dow !== 6 && !isHoliday(current)) businessDays++;
+                current.setDate(current.getDate() + 1);
+            }
+            const theoreticalMinutes = businessDays * 8 * 60;
+
+            const workedHHMM = minutesToHHMM(workedMinutes);
+            const theoreticalHHMM = minutesToHHMM(theoreticalMinutes);
+            const diffMinutes = workedMinutes - theoreticalMinutes;
+            const diffHHMM = (diffMinutes >= 0 ? '+' : '-') + minutesToHHMM(Math.abs(diffMinutes));
+
+            document.getElementById('workedHours').textContent = workedHHMM;
+            document.getElementById('theoreticalHours').textContent = theoreticalHHMM;
+
+            const diffEl = document.getElementById('diffHours');
+            diffEl.textContent = diffHHMM;
+            diffEl.className = 'value ' + (diffMinutes >= 0 ? 'positive' : 'negative');
+
+            const diffSub = document.getElementById('diffSub');
+            diffSub.textContent = diffMinutes >= 0 ? 'ore in più' : 'ore in meno';
+        }
+
+        // --- Export CSV / PDF ---
+        function downloadCSVReport() {
+            if (!globalEmployeeRecords || globalEmployeeRecords.length === 0) {
+                alert("Nessun record da esportare!");
+                return;
+            }
+
+            const tableColumn = ["Data", "Entrata", "In. Pausa", "Fine Pausa", "Uscita", "In. Trasf", "Rit. Trasf", "Ore Lav.", "Bilancio"];
+            const csvRows = [];
+            csvRows.push(tableColumn.join(";"));
+
+            globalEmployeeRecords.forEach(dayData => {
+                if (dayData.isEmpty) {
+                    csvRows.push([
+                        dayData.dateLabel, "Assenza", "-", "-", "-", "-", "-", "0:00", "-8:00"
+                    ].join(";"));
+                    return;
+                }
+
+                csvRows.push([
+                    dayData.dateLabel,
+                    dayData.entrata || '—',
+                    dayData.inizio_pausa || '—',
+                    dayData.fine_pausa || '—',
+                    dayData.uscita || '—',
+                    dayData.inizio_trasferta || '—',
+                    dayData.ritorno_trasferta || '—',
+                    dayData.hoursDisplay === '...' ? '—' : dayData.hoursDisplay,
+                    dayData.balanceDisplay
+                ].join(";"));
+            });
+
+            const csvData = new Blob(["\uFEFF" + csvRows.join("\n")], { type: 'text/csv;charset=utf-8;' });
+            const csvUrl = URL.createObjectURL(csvData);
+            const link = document.createElement("a");
+
+            const fileName = `Report_Presenze_${currentName.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`;
+            link.href = csvUrl;
+            link.setAttribute("download", fileName);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function downloadPDFReport() {
+            if (!globalEmployeeRecords || globalEmployeeRecords.length === 0) {
+                alert("Nessun record da esportare!");
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation: 'landscape', format: 'a4' });
+
+            doc.setFontSize(18);
+            doc.text(`Report Presenze - ${currentName}`, 14, 20);
+
+            doc.setFontSize(11);
+            let filterText = `Periodo: ${document.getElementById('monthLabel').textContent}`;
+            doc.text(filterText, 14, 28);
+
+            const tableColumn = ["Data", "Entrata", "In. Pausa", "Fine Pausa", "Uscita", "In. Trasf", "Rit. Trasf", "Ore Lav.", "Bilancio"];
+            const tableRows = [];
+
+            globalEmployeeRecords.forEach(dayData => {
+                if (dayData.isEmpty) {
+                    tableRows.push([
+                        dayData.dateLabel, "Assenza", "-", "-", "-", "-", "-", "0:00", "-8:00"
+                    ]);
+                    return;
+                }
+
+                tableRows.push([
+                    dayData.dateLabel,
+                    dayData.entrata || '—',
+                    dayData.inizio_pausa || '—',
+                    dayData.fine_pausa || '—',
+                    dayData.uscita || '—',
+                    dayData.inizio_trasferta || '—',
+                    dayData.ritorno_trasferta || '—',
+                    dayData.hoursDisplay === '...' ? '—' : dayData.hoursDisplay,
+                    dayData.balanceDisplay
+                ]);
+            });
+
+            doc.autoTable({
+                head: [tableColumn],
+                body: tableRows,
+                startY: 34,
+                styles: { fontSize: 9, cellPadding: 2 },
+                headStyles: { fillColor: [0, 86, 179] },
+                didParseCell: function (data) {
+                    if (data.row.raw[1] === "Assenza") {
+                        data.cell.styles.fillColor = [255, 235, 238];
+                        data.cell.styles.textColor = [198, 40, 40];
+                    }
+                }
+            });
+
+            const fileName = `Report_Presenze_${currentName.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.pdf`;
+            doc.save(fileName);
+        }
+
+        // --- Utility ---
+        function timeToMinutes(timeStr) {
+            // "HH:MM" -> total minutes
+            const parts = timeStr.split(':');
+            return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+        }
+
+        function minutesToHHMM(totalMinutes) {
+            const h = Math.floor(totalMinutes / 60);
+            const m = totalMinutes % 60;
+            return h + ':' + String(m).padStart(2, '0');
+        }
+
+        function isHoliday(date) {
+            const m = date.getMonth() + 1;
+            const d = date.getDate();
+            const y = date.getFullYear();
+            const mmdd = String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+
+            // Fixed holidays
+            const fixedHolidays = [
+                '01-01', // Capodanno
+                '01-06', // Epifania
+                '04-25', // Liberazione
+                '05-01', // Lavoro
+                '06-02', // Repubblica
+                '08-15', // Ferragosto
+                '11-01', // Ognissanti
+                '12-08', // Immacolata
+                '12-25', // Natale
+                '12-26'  // S. Stefano
+            ];
+
+            if (fixedHolidays.includes(mmdd)) return true;
+
+            // Variable holidays (Easter Monday only - Easter is always Sunday)
+            const variableHolidays = {
+                2024: ['04-01'],
+                2025: ['04-21'],
+                2026: ['04-06'],
+                2027: ['03-29'],
+                2028: ['04-17']
+            };
+
+            const yyyymmdd = y + '-' + mmdd;
+            if (variableHolidays[y] && variableHolidays[y].includes(mmdd)) return true;
+
+            return false;
+        }
+
+        // --- Initialization ---
+        window.addEventListener('DOMContentLoaded', () => {
+            initFlatpickr(); // Initialize immediately when DOM is ready
+
+            if (currentEmpId && currentPin) {
+                showDashboard();
+            } else {
+                showLogin();
+            }
+        });
+
+        // --- Mobile Menu Toggle ---
+        function toggleMobileMenu() {
+            const menu = document.getElementById('headerActions');
+            if (menu) {
+                menu.classList.toggle('show-mobile-menu');
+            }
+        }
+
+        // Close mobile menu when clicking outside or clicking an action button
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('headerActions');
+            const hamburger = document.querySelector('.hamburger-btn');
+            if (menu && menu.classList.contains('show-mobile-menu')) {
+                // Ignore clicks on the hamburger button itself (toggleMobileMenu handles it)
+                if (hamburger && hamburger.contains(e.target)) return;
+
+                // If clicked outside the menu, or clicked a button inside the menu
+                if (!menu.contains(e.target) || e.target.closest('button')) {
+                    menu.classList.remove('show-mobile-menu');
+                }
+            }
+        });
+    </script>
+
+</body>
+
+</html>

@@ -1,0 +1,2337 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pannello di Amministrazione</title>
+    <!-- Material UI Fonts (Roboto) -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <!-- Flatpickr CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" type="text/css" href="https://npmcdn.com/flatpickr/dist/themes/airbnb.css">
+    <style>
+        :root {
+            /* Custom Blue Accents matching Employee Portal */
+            --primary: #0056b3;
+            --primary-dark: #003d82;
+            --primary-light: #e8f0fe;
+            --secondary: #757575;
+            --success: #2e7d32;
+            --success-light: #edf7ed;
+            --danger: #d32f2f;
+            --danger-light: #fdeded;
+            --warning: #ed6c02;
+            --warning-light: #fff4e5;
+            --info: #0288d1;
+            --info-light: #e5f6fd;
+
+            --text-dark: #202124;
+            --text-secondary: #5f6368;
+            --text-light: #9aa0a6;
+
+            --bg: #f8f9fa;
+            --card-bg: #ffffff;
+            --border: #dadce0;
+            --table-row-hover: #f1f3f4;
+
+            --anomaly-bg: #fff8e1;
+            --anomaly-text: #b18c00;
+            --empty-bg: #fce8e6;
+            --empty-text: #c5221f;
+
+            --header-bg: #ffffff;
+            --header-text: #202124;
+
+            --input-bg: #ffffff;
+            --input-border: #dadce0;
+            --input-text: #202124;
+
+            /* Elevation (Shadows) */
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Roboto', 'Helvetica', 'Arial', sans-serif;
+            background-color: var(--bg);
+            color: var(--text-dark);
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 24px;
+        }
+
+        .container {
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: var(--elevation-2);
+            width: 100%;
+            max-width: 98%;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 16px 24px;
+            text-align: left;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-title h2 {
+            margin: 0;
+            font-size: 1.25rem;
+            font-weight: 500;
+            line-height: 1.6;
+            letter-spacing: 0.0075em;
+        }
+
+        .header-title p {
+            margin: 0;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.875rem;
+            font-weight: 400;
+            line-height: 1.43;
+            letter-spacing: 0.01071em;
+        }
+
+        .content {
+            padding: 20px;
+        }
+
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 0.75rem;
+            font-weight: 400;
+            color: var(--text-secondary);
+            letter-spacing: 0.03333em;
+        }
+
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        input[type="number"] {
+            -moz-appearance: textfield;
+            appearance: textfield;
+        }
+
+        /* MUI Outlined Input mimic */
+        input[type="text"],
+        input[type="number"],
+        input[type="password"],
+        input[type="date"],
+        input[type="month"],
+        select {
+            width: 100%;
+            padding: 16.5px 14px;
+            border: 1px solid var(--input-border);
+            border-radius: 4px;
+            font-size: 1rem;
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--input-bg);
+            color: var(--input-text);
+            transition: border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        input:hover,
+        select:hover {
+            border-color: var(--text-dark);
+        }
+
+        input:focus,
+        select:focus {
+            border-color: var(--primary);
+            border-width: 2px;
+            padding: 15.5px 13px;
+            /* slight adjust to compensate for 2px border */
+            outline: none;
+        }
+
+        .password-wrapper {
+            position: relative;
+        }
+
+        .password-wrapper input {
+            padding-right: 48px;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+            color: var(--text-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s;
+        }
+
+        .password-toggle:hover {
+            color: var(--primary);
+        }
+
+        .password-toggle svg {
+            width: 22px;
+            height: 22px;
+        }
+
+        /* MUI Contained Button mimic */
+        button {
+            padding: 6px 16px;
+            font-size: 0.875rem;
+            min-width: 64px;
+            border: 0;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+            font-family: 'Roboto', sans-serif;
+            letter-spacing: 0.02857em;
+            text-transform: uppercase;
+            transition: background-color 250ms cubic-bezier(0.4, 0, 0.2, 1) 0ms, box-shadow 250ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;
+        }
+
+        button:active {
+            box-shadow: var(--elevation-2);
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: #fff;
+            box-shadow: var(--elevation-1);
+            width: 100%;
+            padding: 8px 22px;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+            box-shadow: var(--elevation-2);
+        }
+
+        /* MUI Outlined Button mimic */
+        .btn-secondary {
+            background-color: transparent;
+            color: var(--primary);
+            border: 1px solid rgba(25, 118, 210, 0.5);
+            padding: 5px 15px;
+        }
+
+        .btn-secondary:hover {
+            background-color: rgba(25, 118, 210, 0.04);
+            border: 1px solid var(--primary);
+        }
+
+        .btn-logout {
+            background-color: var(--danger);
+            color: white;
+            font-weight: 500;
+            border: none;
+            padding: 6px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .btn-logout:hover {
+            opacity: 0.9;
+        }
+
+        /* Month Navigation */
+        .month-nav {
+            height: 56px;
+            display: flex;
+            align-items: center;
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            border-radius: 4px;
+            overflow: hidden;
+            transition: border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            padding: 4px;
+        }
+
+        .month-nav:hover {
+            border-color: var(--text-dark);
+        }
+
+        .month-nav button {
+            width: 46px;
+            height: 46px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            min-width: unset;
+            box-shadow: none !important;
+            transition: opacity 0.2s, transform 0.1s;
+        }
+
+        .month-nav button:hover {
+            opacity: 0.9;
+            color: white;
+        }
+
+        .month-nav button:active {
+            transform: scale(0.9);
+        }
+
+        .month-nav button svg {
+            width: 20px;
+            height: 20px;
+            stroke-width: 3px;
+        }
+
+        .month-nav-text {
+            flex: 1;
+            text-align: center;
+            font-size: 1rem;
+            font-weight: 500;
+            padding: 8px 10px;
+            color: var(--text-dark);
+            user-select: none;
+        }
+
+        .month-nav-picker {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 46px;
+            height: 46px;
+            cursor: pointer;
+            border-left: 1px solid var(--input-border);
+            color: var(--text-secondary);
+        }
+
+        /* Screens */
+        #loginScreen,
+        #dashboardScreen {
+            display: none;
+        }
+
+        .active-screen {
+            display: block !important;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Dashboard specific */
+        .filters-bar {
+            background: var(--primary-light);
+            border: 1px solid var(--border);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: flex-end;
+        }
+
+        .filter-item {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .filter-item label {
+            font-size: 14px;
+            margin-bottom: 5px;
+            display: block;
+            color: var(--text-dark);
+            font-weight: 600;
+        }
+
+        .filter-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            box-shadow: none;
+        }
+
+        .attendance-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+            font-family: 'Roboto', 'Helvetica', 'Arial', sans-serif;
+            min-width: 900px;
+        }
+
+        .attendance-table .row-anomaly {
+            background-color: var(--anomaly-bg);
+            color: var(--anomaly-text);
+        }
+
+        .attendance-table .row-holiday {
+            background-color: var(--primary-light);
+            color: var(--primary-dark);
+        }
+
+        [data-theme="dark"] .attendance-table .row-holiday {
+            background-color: #0d47a122;
+        }
+
+        [data-theme="dark"] .attendance-table .row-anomaly {
+            background-color: #ffd60011;
+        }
+
+        .badge-holiday {
+            display: inline-block;
+            margin-left: 8px;
+            padding: 2px 8px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--primary);
+            border: 1px solid var(--primary);
+            border-radius: 12px;
+            background: #fff;
+            text-transform: uppercase;
+            vertical-align: middle;
+            line-height: 1;
+        }
+
+        [data-theme="dark"] .badge-holiday {
+            background: transparent;
+            color: #64b5f6;
+            border-color: #64b5f6;
+        }
+
+        .attendance-table thead th {
+            background: var(--header-bg);
+            color: var(--text-secondary);
+            padding: 16px;
+            text-align: left;
+            font-weight: 500;
+            font-size: 0.875rem;
+            line-height: 1.5rem;
+            letter-spacing: 0.01071em;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .attendance-table tbody td {
+            padding: 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+            color: var(--text-dark);
+            font-size: 0.875rem;
+            font-weight: 400;
+        }
+
+        /* Pagination Settings (MUI TablePagination mimic) */
+        .pagination {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 20px;
+            padding: 12px 16px;
+            border-top: 1px solid var(--border);
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .pagination button {
+            padding: 8px;
+            min-width: unset;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: transparent;
+            color: var(--text-secondary);
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: none;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            background-color: rgba(0, 0, 0, 0.04);
+            color: var(--text-dark);
+            box-shadow: none;
+        }
+
+        [data-theme="dark"] .pagination button:hover:not(:disabled) {
+            background-color: rgba(255, 255, 255, 0.08);
+        }
+
+        .pagination button:disabled {
+            color: var(--text-light);
+            cursor: default;
+        }
+
+        .pagination-info {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .page-size-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .page-size-selector select {
+            width: auto;
+            padding: 4px 24px 4px 8px;
+            border: none;
+            border-bottom: 1px solid var(--input-border);
+            border-radius: 0;
+            background-color: transparent;
+            font-size: 0.875rem;
+        }
+
+        .page-size-selector select:hover {
+            background-color: transparent;
+            border-bottom: 1px solid var(--text-dark);
+        }
+
+        .page-size-selector select:focus {
+            box-shadow: none;
+            border-width: 1px;
+            padding: 4px 24px 4px 8px;
+        }
+
+        .attendance-table tbody tr {
+            transition: background-color 0.2s;
+        }
+
+        .attendance-table tbody tr:hover {
+            background-color: var(--table-row-hover);
+        }
+
+        .attendance-table .date-cell {
+            font-weight: 500;
+        }
+
+        .attendance-table .emp-cell {
+            color: var(--text-secondary);
+        }
+
+        .attendance-table .hours-cell {
+            font-weight: 500;
+            color: var(--text-dark);
+        }
+
+        .attendance-table .balance-cell.positive {
+            color: var(--success);
+            font-weight: 500;
+        }
+
+        .attendance-table .balance-cell.negative {
+            color: var(--danger);
+            font-weight: 500;
+        }
+
+        .attendance-table .balance-cell.neutral {
+            color: var(--text-light);
+        }
+
+        /* Anomalies highlighting */
+        .row-anomaly {
+            background-color: var(--anomaly-bg) !important;
+        }
+
+        .row-anomaly td {
+            color: var(--anomaly-text) !important;
+        }
+
+        .row-empty {
+            background-color: var(--empty-bg) !important;
+        }
+
+        .row-empty td {
+            color: var(--empty-text) !important;
+            font-weight: 500;
+        }
+
+        .error {
+            color: var(--danger);
+        }
+
+        #loginScreen .content-inner {
+            max-width: 420px;
+            margin: 0 auto;
+        }
+
+        /* Top Actions */
+        .top-actions {
+            display: flex;
+            gap: 15px;
+        }
+
+        .btn-icon-only {
+            background: transparent;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+            height: auto;
+        }
+
+        .btn-icon-only:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .page-size-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .page-size-selector select {
+            width: auto;
+            padding: 6px 10px;
+        }
+
+        /* Hamburger button hidden by default on desktop */
+        .hamburger-btn {
+            display: none;
+            background: transparent;
+            border: none;
+            color: white;
+            padding: 8px;
+            cursor: pointer;
+            z-index: 101;
+            /* Reset global button styles */
+            width: auto;
+            margin: 0;
+            min-width: 0;
+        }
+
+        /* Custom Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            backdrop-filter: blur(3px);
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--card-bg);
+            padding: 24px;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+            width: 90%;
+            max-width: 400px;
+            color: var(--text-dark);
+            animation: modalFadeIn 0.2s ease-out;
+        }
+
+        @keyframes modalFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text-dark);
+        }
+
+        .modal-body {
+            font-size: 14px;
+            color: var(--text-light);
+            margin-bottom: 24px;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        .modal-btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+        }
+
+        .modal-btn.cancel {
+            background: var(--bg);
+            color: var(--text-dark);
+            border: 1px solid var(--border);
+        }
+
+        .modal-btn.confirm {
+            background: var(--primary);
+            color: white;
+        }
+
+        /* Responsive Mobile Layout */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            .content {
+                padding: 15px 10px;
+            }
+
+            .header {
+                flex-direction: row;
+                align-items: center;
+                justify-content: flex-start;
+                /* Align left */
+                position: relative;
+            }
+
+            .hamburger-btn {
+                display: block;
+                order: -1;
+                /* Move to the left of the title */
+                margin-right: 15px;
+                /* Spacing from title */
+                margin-left: -10px;
+                /* Pull further to the left edge */
+                padding: 12px;
+                /* Bigger touch target */
+            }
+
+            .header-title {
+                flex: 1;
+                text-align: left !important;
+            }
+
+            .top-actions {
+                display: none !important;
+                /* Hide default stack layout */
+                position: absolute;
+                top: 100%;
+                left: 0;
+                right: 0;
+                background: var(--card-bg);
+                flex-direction: column;
+                padding: 15px;
+                box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+                z-index: 100;
+                border-radius: 0 0 12px 12px;
+                border: 1px solid var(--border);
+                border-top: none;
+                gap: 8px;
+            }
+
+            .top-actions.show-mobile-menu {
+                display: flex !important;
+                /* Display when toggled */
+                animation: slideDown 0.2s ease-out;
+            }
+
+            @keyframes slideDown {
+                from {
+                    opacity: 0;
+                    transform: translateY(-10px);
+                }
+
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+
+            .top-actions .btn-icon-only {
+                color: var(--text-dark);
+                /* Dark text for white dropdown */
+                justify-content: flex-start;
+            }
+
+            .top-actions .btn-icon-only svg {
+                stroke: var(--text-dark);
+            }
+
+            .top-actions .btn-logout {
+                color: white;
+                /* Keep logout button visible */
+            }
+
+            .btn-icon-only {
+                width: 100%;
+                /* Take full width on mobile */
+                justify-content: center;
+                font-size: 14px;
+                padding: 12px 10px;
+                /* larger tap target */
+            }
+
+            .btn-logout {
+                width: 100%;
+                margin-top: 5px;
+                padding: 12px 10px;
+            }
+
+            .filters-bar {
+                flex-direction: column;
+                align-items: stretch;
+                padding: 15px;
+            }
+
+            /* Date Picker alignment on mobile */
+            .filter-item>div {
+                flex-direction: column;
+            }
+
+            #calendarPickerBtn {
+                width: 100%;
+                /* Make calendar button full width under the nav */
+                margin-top: 10px;
+            }
+
+            .filter-item {
+                flex: unset;
+                width: 100%;
+            }
+
+            .filter-actions {
+                width: 100%;
+                margin-top: 10px;
+            }
+
+            .filter-actions button {
+                width: 100%;
+                padding: 12px;
+            }
+
+            .month-nav button {
+                padding: 12px 10px;
+            }
+
+            .month-nav-text {
+                font-size: 0.95rem;
+                /* slightly larger for readability */
+                padding: 12px 10px;
+            }
+
+            .pagination {
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 10px;
+            }
+
+            .page-size-selector {
+                width: 100%;
+                justify-content: center;
+                margin-bottom: 10px;
+            }
+
+            .modal-content {
+                padding: 20px 15px;
+            }
+
+            /* Sticky columns for horizontal scrolling */
+            .attendance-table th:nth-child(1),
+            .attendance-table td:nth-child(1) {
+                position: sticky;
+                left: 0;
+                z-index: 2;
+                background-color: var(--card-bg);
+                min-width: 105px;
+                max-width: 105px;
+                padding-left: 10px;
+                padding-right: 10px;
+                white-space: pre-wrap;
+            }
+
+            .attendance-table thead th:nth-child(1) {
+                z-index: 12;
+                background-color: var(--header-bg);
+            }
+
+            .attendance-table th:nth-child(2),
+            .attendance-table td:nth-child(2) {
+                position: sticky;
+                left: 105px;
+                z-index: 2;
+                background-color: var(--card-bg);
+                min-width: 120px;
+                max-width: 120px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                box-shadow: 2px 0 5px rgba(0, 0, 0, 0.08);
+                padding-left: 10px;
+                padding-right: 10px;
+            }
+
+            .attendance-table thead th:nth-child(2) {
+                z-index: 12;
+                background-color: var(--header-bg);
+            }
+
+            /* Background resets for sticky hover/states */
+            .attendance-table tbody tr.row-anomaly td:nth-child(1),
+            .attendance-table tbody tr.row-anomaly td:nth-child(2) {
+                background-color: var(--anomaly-bg);
+            }
+
+            .attendance-table tbody tr.row-empty td:nth-child(1),
+            .attendance-table tbody tr.row-empty td:nth-child(2) {
+                background-color: var(--empty-bg);
+            }
+
+            .attendance-table tbody tr:hover td:nth-child(1),
+            .attendance-table tbody tr:hover td:nth-child(2) {
+                background-color: var(--table-row-hover);
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Custom Confirm Modal -->
+    <div class="modal-overlay" id="confirmModal">
+        <div class="modal-content">
+            <div class="modal-title" id="confirmModalTitle">Conferma Azione</div>
+            <div class="modal-body" id="confirmModalBody">Sei sicuro di voler procedere?</div>
+            <div class="modal-actions">
+                <button class="modal-btn cancel" onclick="closeConfirmModal(false)">Annulla</button>
+                <button class="modal-btn confirm" id="confirmModalBtn"
+                    onclick="closeConfirmModal(true)">Conferma</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <div class="header-title" style="text-align: left;">
+                <h2>Marcatempo</h2>
+                <p>Pannello di Amministrazione</p>
+            </div>
+
+            <button class="hamburger-btn" onclick="toggleMobileMenu()" aria-label="Menu">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </button>
+
+            <div class="top-actions" id="topActions" style="display:flex; align-items:center;">
+                <button class="btn-icon-only" onclick="downloadCSVReport()" title="Scarica Report in CSV"
+                    style="font-size:14px; padding: 8px 12px; font-weight:500; display:flex; gap:6px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="8" y1="13" x2="16" y2="13"></line>
+                        <line x1="8" y1="17" x2="16" y2="17"></line>
+                        <polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
+                    Stampa CSV
+                </button>
+                <button class="btn-icon-only" onclick="downloadPDFReport()" title="Scarica Report in PDF"
+                    style="font-size:14px; padding: 8px 12px; font-weight:500; display:flex; gap:6px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Stampa PDF
+                </button>
+                <button class="btn-icon-only" onclick="window.location.href='/'" title="Torna al Portale Dipendenti"
+                    style="font-size:14px; padding: 8px 12px; font-weight:500; display:flex; gap:6px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                        <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                    </svg>
+                    Portale Dipendenti
+                </button>
+                <button id="logoutBtn" class="btn-logout" onclick="logout()">Esci</button>
+            </div>
+        </div>
+
+        <div class="content">
+
+            <!-- DASHBOARD SCREEN -->
+            <div id="dashboardScreen" class="active-screen">
+
+                <div class="filters-bar">
+                    <div class="filter-item" style="flex: 2;">
+                        <label>Periodo di Riferimento</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <div class="month-nav" style="flex: 1;">
+                                <button onclick="prevMonth()" title="Mese Precedente">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                                        stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="15 18 9 12 15 6"></polyline>
+                                    </svg>
+                                </button>
+                                <div class="month-nav-text" id="currentMonthDisplay" style="min-width: 140px;">
+                                    Caricamento...</div>
+                                <button onclick="nextMonth()" title="Mese Successivo">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                                        stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="9 18 15 12 9 6"></polyline>
+                                    </svg>
+                                </button>
+                            </div>
+                            <button class="btn-icon-only" id="calendarPickerBtn" title="Scegli Range Date"
+                                style="border-radius: 4px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text-dark); height: 56px; width: 56px; margin: 0; padding: 0; display: flex; align-items: center; justify-content: center;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <input type="text" id="hiddenMonthPicker"
+                            style="display:none; position:absolute; visibility:hidden;">
+                    </div>
+                    <div class="filter-item">
+                        <label>Dipendente</label>
+                        <select id="filterEmp" onchange="loadAdminAttendances()">
+                            <option value="">Tutti i dipendenti</option>
+                            <!-- Popolato da JS -->
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <label>Cerca</label>
+                        <input type="text" id="filterSearch" placeholder="Cerca nome o ID..."
+                            oninput="filterLocalRecords()">
+                    </div>
+                    <div class="filter-actions" style="flex: 0; align-items:flex-end;">
+                        <button class="btn-secondary" onclick="resetFilters()">Reset Filtri</button>
+                    </div>
+                </div>
+
+                <!-- Validation Requests Section -->
+                <div class="validation-section" id="validationSection"
+                    style="display: none; margin-bottom: 25px; background: var(--warning-light); border: 1px solid var(--warning); border-radius: 8px; padding: 20px;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3 style="margin: 0; color: var(--warning); display: flex; align-items: center; gap: 8px;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path
+                                    d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z">
+                                </path>
+                                <line x1="12" y1="9" x2="12" y2="13"></line>
+                                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                            </svg>
+                            Richieste di Validazione Pendenti
+                            <span id="validationCountBadge"
+                                style="background: var(--warning); color: white; border-radius: 12px; padding: 2px 8px; font-size: 14px; margin-left: 10px;">0</span>
+                        </h3>
+                    </div>
+                    <div class="table-container" style="border-color: var(--warning); background: var(--card-bg);">
+                        <table class="attendance-table" id="validationTable">
+                            <thead style="background: rgba(237, 108, 2, 0.05);">
+                                <tr>
+                                    <th>Dipendente</th>
+                                    <th>Data e Ora</th>
+                                    <th>Tipo Marcatura</th>
+                                    <th>Posizione GPS</th>
+                                    <th style="text-align: right;">Azioni</th>
+                                </tr>
+                            </thead>
+                            <tbody id="validationBody">
+                                <!-- Popolato da JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table class="attendance-table">
+                        <thead>
+                            <tr>
+                                <th style="cursor: pointer" onclick="toggleDateSort()">Data <span id="sortArrow"></span>
+                                </th>
+                                <th style="min-width: 150px;">Dipendente</th>
+                                <th>Entrata</th>
+                                <th>In. Pausa</th>
+                                <th>Fine Pausa</th>
+                                <th style="min-width: 60px;">Uscita</th>
+                                <th>In. Trasf</th>
+                                <th>Rit. Trasf</th>
+                                <th style="min-width: 80px;">Ore Lav.</th>
+                                <th style="min-width: 80px;">Bilancio</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attendanceBody">
+                            <tr>
+                                <td colspan="10" style="text-align:center; color:#999; padding:20px;">Utilizza i
+                                    filtri
+                                    per visualizzare i record</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="pagination" id="paginationControls" style="display: none;">
+                    <div class="page-size-selector">
+                        <label style="font-size: 14px; color: var(--text-dark);">Record per pagina:</label>
+                        <select id="pageSize" onchange="changePageSize()">
+                            <option value="15">15</option>
+                            <option value="30">30</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                            <option value="999999">Tutti</option>
+                        </select>
+                    </div>
+                    <!-- Left Arrow SVG -->
+                    <button id="btnPrevPage" onclick="changePage(-1)" title="Pagina Precedente">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                    </button>
+                    <span class="pagination-info" id="pageInfo">1 / 1</span>
+                    <!-- Right Arrow SVG -->
+                    <button id="btnNextPage" onclick="changePage(1)" title="Pagina Successiva">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Flatpickr JS -->
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://npmcdn.com/flatpickr/dist/l10n/it.js"></script>
+
+    <!-- jsPDF e AutoTable -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+
+    <!-- jsPDF e AutoTable -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+
+    <script>
+        let adminApiKey = localStorage.getItem('adminApiKey');
+        let adminName = localStorage.getItem('adminName');
+        let storedAdminId = localStorage.getItem('adminId') || localStorage.getItem('empId');
+
+        let currentPage = 1;
+        let itemsPerPage = 15;
+        let currentSortOrder = 'desc'; // Default desc
+        let globalProcessedData = []; // All records including empty ones
+        let globalFilteredData = [];  // Data currently matching the search filter
+        let flatpickrInstance = null;
+        let currentFilterDate = new Date(); // Track current month for navigation
+        let customRangeStart = null; // Set when user picks a specific date range
+        let customRangeEnd = null;
+        let currentTheme = localStorage.getItem('theme') || 'light';
+
+        function toggleDateSort() {
+            currentSortOrder = (currentSortOrder === 'asc') ? 'desc' : 'asc';
+            // Re-sort globalFilteredData
+            if (currentSortOrder === 'asc') {
+                globalFilteredData.sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+            } else {
+                globalFilteredData.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+            }
+            displayCurrentPage();
+        }
+
+        const ACTION_MAP = {
+            'in': 'entrata',
+            'out': 'uscita',
+            'In': 'entrata',
+            'Out': 'uscita',
+            'I_pausa': 'inizio_pausa',
+            'F_pausa': 'fine_pausa',
+            'U_trasf': 'inizio_trasferta',
+            'R_trasf': 'ritorno_trasferta',
+            'I_break': 'inizio_pausa', // Mapped to pausa for display purposes
+            'F_break': 'fine_pausa',
+            'entrata': 'entrata',
+            'inizio_pausa': 'inizio_pausa',
+            'fine_pausa': 'fine_pausa',
+            'uscita': 'uscita',
+            'inizio_trasferta': 'inizio_trasferta',
+            'ritorno_trasferta': 'ritorno_trasferta'
+        };
+
+        // Initialize App
+        if (adminApiKey) {
+            applyTheme(currentTheme);
+            initFiltersDefaults();
+            populateEmployees();
+            loadAdminAttendances();
+            loadPendingValidations();
+        } else {
+            alert("Non sei autenticato come amministratore. Effettua l'accesso dal portale principale.");
+            window.location.href = "/";
+        }
+
+        // --- Init defaults & Flatpickr ---
+        function initFiltersDefaults() {
+            // Setup Flatpickr for Date Range Selection
+            const pickerInput = document.getElementById('hiddenMonthPicker');
+            const calendarBtn = document.getElementById('calendarPickerBtn');
+
+            flatpickrInstance = flatpickr(pickerInput, {
+                locale: "it",
+                mode: "range",
+                dateFormat: "Y-m-d", // Internal format
+                positionElement: calendarBtn,
+                onChange: function (selectedDates, dateStr, instance) {
+                    if (selectedDates.length === 2) {
+                        customRangeStart = selectedDates[0];
+                        customRangeEnd = selectedDates[1];
+                        updateMonthDisplay();
+                        loadAdminAttendances();
+                    } else if (selectedDates.length === 0) {
+                        // Cleared
+                        customRangeStart = null;
+                        customRangeEnd = null;
+                        updateMonthDisplay();
+                        loadAdminAttendances();
+                    }
+                },
+                onClose: function (selectedDates) {
+                    if (selectedDates.length === 1) {
+                        // Force single day range if they only picked one end and clicked away
+                        customRangeStart = selectedDates[0];
+                        customRangeEnd = selectedDates[0];
+                        updateMonthDisplay();
+                        loadAdminAttendances();
+                    }
+                }
+            });
+
+            if (calendarBtn) {
+                calendarBtn.addEventListener('click', () => {
+                    flatpickrInstance.open();
+                });
+            }
+
+            updateMonthDisplay();
+
+            if (document.getElementById('filterSearch')) {
+                document.getElementById('filterSearch').value = '';
+            }
+        }
+
+        function updateMonthDisplay() {
+            const displayEl = document.getElementById('currentMonthDisplay');
+            if (!displayEl) return;
+            const dayFormatter = new Intl.DateTimeFormat('it-IT', { month: 'short', day: 'numeric', year: 'numeric' });
+            const monthFormatter = new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' });
+
+            if (customRangeStart && customRangeEnd) {
+                if (customRangeStart.getTime() === customRangeEnd.getTime()) {
+                    displayEl.textContent = dayFormatter.format(customRangeStart);
+                } else {
+                    const startStr = dayFormatter.format(customRangeStart);
+                    const endStr = dayFormatter.format(customRangeEnd);
+                    displayEl.textContent = `${startStr} - ${endStr}`;
+                }
+            } else {
+                let formattedStr = monthFormatter.format(currentFilterDate);
+                displayEl.textContent = formattedStr.charAt(0).toUpperCase() + formattedStr.slice(1);
+            }
+        }
+
+        function prevMonth() {
+            customRangeStart = null;
+            customRangeEnd = null;
+            currentFilterDate.setMonth(currentFilterDate.getMonth() - 1);
+            if (flatpickrInstance) flatpickrInstance.clear();
+            updateMonthDisplay();
+            loadAdminAttendances();
+        }
+
+        function nextMonth() {
+            customRangeStart = null;
+            customRangeEnd = null;
+            currentFilterDate.setMonth(currentFilterDate.getMonth() + 1);
+            if (flatpickrInstance) flatpickrInstance.clear();
+            updateMonthDisplay();
+            loadAdminAttendances();
+        }
+
+        async function populateEmployees() {
+            try {
+                const res = await fetch('/api/employees', {
+                    headers: { 'Authorization': 'Bearer ' + adminApiKey }
+                });
+
+                if (res.status === 401) { logout(); return; }
+                const data = await res.json();
+
+                const select = document.getElementById('filterEmp');
+                select.innerHTML = '<option value="">Tutti i dipendenti</option>';
+                if (data && data.length) {
+                    data.forEach(e => {
+                        let empName = e.name ? e.name.trim() : "";
+                        // Always hide EX visually
+                        if (empName.toUpperCase().startsWith("EX")) return;
+
+                        // Exclude empty names or names starting with "nome vuoto"
+                        if (!empName || empName.toLowerCase().startsWith("nome vuoto")) {
+                            return;
+                        }
+
+                        select.innerHTML += `<option value="${e.id}">${empName} (ID: ${e.id})</option>`;
+                    });
+                }
+            } catch (err) {
+                console.error("Errore caricamento dipendenti", err);
+            }
+        }
+
+
+
+        // --- Validations Logic ---
+        async function loadPendingValidations() {
+            try {
+                const res = await fetch('/api/admin/pending-validations?status=pending', {
+                    headers: { 'Authorization': 'Bearer ' + adminApiKey }
+                });
+
+                if (res.status === 401) { logout(); return; }
+                const validations = await res.json() || [];
+
+                const section = document.getElementById('validationSection');
+                const badge = document.getElementById('validationCountBadge');
+                const tbody = document.getElementById('validationBody');
+
+                if (validations.length === 0) {
+                    section.style.display = 'none';
+                    return;
+                }
+
+                section.style.display = 'block';
+                badge.textContent = validations.length;
+
+                const actionLabels = {
+                    'entrata': 'Entrata',
+                    'inizio_pausa': 'Inizio Pausa',
+                    'fine_pausa': 'Fine Pausa',
+                    'uscita': 'Uscita',
+                    'inizio_trasferta': 'Inizio Trasferta',
+                    'ritorno_trasferta': 'Ritorno Trasferta'
+                };
+
+                const dateRenderer = new Intl.DateTimeFormat('it-IT', {
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit'
+                });
+
+                tbody.innerHTML = validations.map(v => {
+                    const actionName = actionLabels[v.action] || v.action;
+                    const dateObj = new Date(v.timestamp);
+                    const formattedDate = dateRenderer.format(dateObj);
+
+                    let gpsText = 'Non disponibile';
+                    if (v.latitude != null && v.longitude != null) {
+                        gpsText = `<a href="https://maps.google.com/?q=${v.latitude},${v.longitude}" target="_blank" style="color: var(--primary); text-decoration: none; display: flex; align-items: center; gap: 4px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                            Mappa
+                        </a>`;
+                    }
+
+                    return `
+                        <tr>
+                            <td style="font-weight: 500;">${v.employee_name || 'ID: ' + v.employee_id}</td>
+                            <td>${formattedDate}</td>
+                            <td><span style="background: var(--bg); padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); font-size: 12px; font-weight: 500;">${actionName}</span></td>
+                            <td>${gpsText}</td>
+                            <td style="text-align: right;">
+                                <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                                    <button style="background: var(--success); color: white; padding: 6px 12px; border-radius: 4px; border: none; font-size: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 4px;" onclick="handleValidationAction(${v.id}, 'approve')">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Approva
+                                    </button>
+                                    <button style="background: var(--danger); color: white; padding: 6px 12px; border-radius: 4px; border: none; font-size: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 4px;" onclick="handleValidationAction(${v.id}, 'reject')">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg> Rifiuta
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+            } catch (err) {
+                console.error("Errore recupero validazioni:", err);
+            }
+        }
+
+        let pendingValidationAction = null;
+
+        function showCustomConfirm(message, title, confirmText, confirmColor, onConfirmCallback) {
+            document.getElementById('confirmModalTitle').textContent = title || "Conferma";
+            document.getElementById('confirmModalBody').textContent = message;
+
+            const confirmBtn = document.getElementById('confirmModalBtn');
+            confirmBtn.textContent = confirmText || "Conferma";
+            confirmBtn.style.background = confirmColor || "var(--primary)";
+
+            pendingValidationAction = onConfirmCallback;
+            document.getElementById('confirmModal').classList.add('active');
+        }
+
+        function closeConfirmModal(confirmed) {
+            document.getElementById('confirmModal').classList.remove('active');
+            if (confirmed && pendingValidationAction) {
+                pendingValidationAction();
+            }
+            pendingValidationAction = null;
+        }
+
+        async function handleValidationAction(id, action) {
+            const isApprove = action === 'approve';
+
+            showCustomConfirm(
+                `Sei sicuro di voler ${isApprove ? 'approvare' : 'rifiutare'} questa marcatura?`,
+                isApprove ? "Approva Marcatura" : "Rifiuta Marcatura",
+                isApprove ? "Approva" : "Rifiuta",
+                isApprove ? "var(--success)" : "var(--danger)",
+                async () => {
+                    const endpoint = `/api/admin/${action}-validation`;
+
+                    try {
+                        const res = await fetch(endpoint, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': 'Bearer ' + adminApiKey
+                            },
+                            body: JSON.stringify({
+                                id: id,
+                                adminId: parseInt(storedAdminId) || 0
+                            })
+                        });
+
+                        if (res.status === 401) { logout(); return; }
+
+                        if (res.ok) {
+                            // Update lists
+                            loadPendingValidations();
+                            if (action === 'approve') {
+                                loadAdminAttendances(); // Refresh main table
+                            }
+                        } else {
+                            const data = await res.json();
+                            alert("Errore: " + (data.message || res.statusText));
+                        }
+                    } catch (err) {
+                        alert("Errore di connessione al server");
+                    }
+                } // Chiude arrow function
+            ); // Chiude showCustomConfirm
+        } // Chiude handleValidationAction
+
+        function logout() {
+            localStorage.removeItem('adminApiKey');
+            localStorage.removeItem('adminName');
+            localStorage.removeItem('adminId');
+            localStorage.removeItem('empId');
+            localStorage.removeItem('employeeName');
+            localStorage.removeItem('isAdmin');
+            adminApiKey = null;
+            adminName = null;
+            storedAdminId = null;
+            window.location.href = "/";
+        }
+
+        function resetFilters() {
+            initFiltersDefaults();
+            document.getElementById('filterEmp').value = "";
+            document.getElementById('filterSearch').value = "";
+            loadAdminAttendances();
+        }
+
+        // --- Theme Toggle ---
+        function toggleTheme() {
+            currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+            localStorage.setItem('theme', currentTheme);
+            applyTheme(currentTheme);
+        }
+
+        function applyTheme(theme) {
+            const checkbox = document.getElementById('themeCheckbox');
+            if (theme === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                if (checkbox) checkbox.checked = true;
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+                if (checkbox) checkbox.checked = false;
+            }
+        }
+
+        // --- PDF Generation ---
+        function downloadPDFReport() {
+            if (globalFilteredData.length === 0) {
+                alert("Nessun record da esportare!");
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation: 'landscape', format: 'a4' });
+
+            // Titolo
+            doc.setFontSize(18);
+            doc.text("Report Presenze - Marcatempo", 14, 20);
+
+            // Info Filtri
+            doc.setFontSize(11);
+            let filterText = "Filtri attivi: Tutto. ";
+
+            let formattedStr = "";
+            if (customRangeStart && customRangeEnd) {
+                const dayFormatter = new Intl.DateTimeFormat('it-IT', { month: 'short', day: 'numeric', year: 'numeric' });
+                if (customRangeStart.getTime() === customRangeEnd.getTime()) {
+                    formattedStr = dayFormatter.format(customRangeStart);
+                } else {
+                    formattedStr = `${dayFormatter.format(customRangeStart)} - ${dayFormatter.format(customRangeEnd)}`;
+                }
+            } else {
+                const monthFormatter = new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' });
+                formattedStr = monthFormatter.format(currentFilterDate);
+                formattedStr = formattedStr.charAt(0).toUpperCase() + formattedStr.slice(1);
+            }
+
+            filterText = `Periodo: ${formattedStr}. `;
+
+            const empSelect = document.getElementById('filterEmp');
+            if (empSelect.value) {
+                filterText += `Dipendente: ${empSelect.options[empSelect.selectedIndex].text}`;
+            }
+
+            doc.text(filterText, 14, 28);
+
+            const tableColumn = ["Data", "Dipendente", "Entrata", "In. Pausa", "Fine Pausa", "Uscita", "In. Trasf", "Rit. Trasf", "Ore Lav.", "Bilancio"];
+            const tableRows = [];
+
+            globalFilteredData.forEach(dayData => {
+                const ds = dayData.dateKey.split('-');
+                let displayDate = `${ds[2]}/${ds[1]}/${ds[0]}`;
+                if (dayData.isHoliday) displayDate += ' (Festivo)';
+
+                if (dayData.isEmpty) {
+                    tableRows.push([
+                        displayDate, dayData.empDisplay, "Assenza", "-", "-", "-", "-", "-", "0:00", "-8:00"
+                    ]);
+                    return;
+                }
+
+                let hoursDisplay = '—';
+                let balanceDisplay = '—';
+
+                if (dayData.entrata && dayData.uscita) {
+                    const entrataMins = timeToMinutes(dayData.entrata);
+                    const uscitaMins = timeToMinutes(dayData.uscita);
+                    let workedMins = uscitaMins - entrataMins;
+
+                    if (dayData.inizio_pausa && dayData.fine_pausa) {
+                        const pauseStart = timeToMinutes(dayData.inizio_pausa);
+                        const pauseEnd = timeToMinutes(dayData.fine_pausa);
+                        if (pauseEnd > pauseStart) {
+                            workedMins -= (pauseEnd - pauseStart);
+                        }
+                    }
+
+                    if (workedMins > 0) {
+                        hoursDisplay = minutesToHHMM(workedMins);
+                        const theoreticalMins = dayData.isHoliday ? 0 : 480;
+                        const diffMins = workedMins - theoreticalMins;
+                        balanceDisplay = diffMins >= 0 ? '+' + minutesToHHMM(diffMins) : '-' + minutesToHHMM(Math.abs(diffMins));
+                    }
+                }
+
+                tableRows.push([
+                    displayDate,
+                    dayData.empDisplay,
+                    dayData.entrata || '—',
+                    dayData.inizio_pausa || '—',
+                    dayData.fine_pausa || '—',
+                    dayData.uscita || '—',
+                    dayData.inizio_trasferta || '—',
+                    dayData.ritorno_trasferta || '—',
+                    hoursDisplay,
+                    balanceDisplay
+                ]);
+            });
+
+            doc.autoTable({
+                head: [tableColumn],
+                body: tableRows,
+                startY: 34,
+                styles: { fontSize: 9, cellPadding: 2 },
+                headStyles: { fillColor: [0, 86, 179] },
+                didParseCell: function (data) {
+                    // Highlights for Absences
+                    if (data.row.raw[2] === "Assenza") {
+                        data.cell.styles.fillColor = [255, 235, 238];
+                        data.cell.styles.textColor = [198, 40, 40];
+                    }
+                }
+            });
+
+            const fileName = `Report_Presenze_${new Date().toISOString().slice(0, 10)}.pdf`;
+            doc.save(fileName);
+        }
+
+        // --- CSV Generation ---
+        function downloadCSVReport() {
+            if (globalFilteredData.length === 0) {
+                alert("Nessun record da esportare!");
+                return;
+            }
+
+            const tableColumn = ["Data", "Dipendente", "Entrata", "In. Pausa", "Fine Pausa", "Uscita", "In. Trasf", "Rit. Trasf", "Ore Lav.", "Bilancio"];
+            const csvRows = [];
+
+            // Add headers
+            csvRows.push(tableColumn.join(";"));
+
+            globalFilteredData.forEach(dayData => {
+                const ds = dayData.dateKey.split('-');
+                let displayDate = `${ds[2]}/${ds[1]}/${ds[0]}`;
+                if (dayData.isHoliday) displayDate += ' (Festivo)';
+
+                if (dayData.isEmpty) {
+                    csvRows.push([
+                        displayDate, dayData.empDisplay, "Assenza", "-", "-", "-", "-", "-", "0:00", "-8:00"
+                    ].join(";"));
+                    return;
+                }
+
+                let hoursDisplay = '—';
+                let balanceDisplay = '—';
+
+                if (dayData.entrata && dayData.uscita) {
+                    const entrataMins = timeToMinutes(dayData.entrata);
+                    const uscitaMins = timeToMinutes(dayData.uscita);
+                    let workedMins = uscitaMins - entrataMins;
+
+                    if (dayData.inizio_pausa && dayData.fine_pausa) {
+                        const pauseStart = timeToMinutes(dayData.inizio_pausa);
+                        const pauseEnd = timeToMinutes(dayData.fine_pausa);
+                        if (pauseEnd > pauseStart) {
+                            workedMins -= (pauseEnd - pauseStart);
+                        }
+                    }
+
+                    if (workedMins > 0) {
+                        hoursDisplay = minutesToHHMM(workedMins);
+                        const theoreticalMins = dayData.isHoliday ? 0 : 480;
+                        const diffMins = workedMins - theoreticalMins;
+                        balanceDisplay = diffMins >= 0 ? '+' + minutesToHHMM(diffMins) : '-' + minutesToHHMM(Math.abs(diffMins));
+                    }
+                }
+
+                csvRows.push([
+                    displayDate,
+                    dayData.empDisplay,
+                    dayData.entrata || '—',
+                    dayData.inizio_pausa || '—',
+                    dayData.fine_pausa || '—',
+                    dayData.uscita || '—',
+                    dayData.inizio_trasferta || '—',
+                    dayData.ritorno_trasferta || '—',
+                    hoursDisplay,
+                    balanceDisplay
+                ].join(";"));
+            });
+
+            // BOM to support UTF-8 in Excel
+            const csvData = new Blob(["\uFEFF" + csvRows.join("\n")], { type: 'text/csv;charset=utf-8;' });
+            const csvUrl = URL.createObjectURL(csvData);
+            const link = document.createElement("a");
+
+            const fileName = `Report_Presenze_${new Date().toISOString().slice(0, 10)}.csv`;
+            link.href = csvUrl;
+            link.setAttribute("download", fileName);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // --- Utilities for Dates ---
+        function getDatesInRange(startDate, endDate) {
+            const dateArray = [];
+            let currentDate = new Date(startDate);
+            const stopDate = new Date(endDate);
+            while (currentDate <= stopDate) {
+                const dayOfWeek = currentDate.getDay();
+                dateArray.push({
+                    dateKey: currentDate.toLocaleDateString('en-CA'),
+                    isSunday: dayOfWeek === 0,
+                    isSaturday: dayOfWeek === 6,
+                    isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
+                    isHoliday: isHoliday(currentDate)
+                });
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+            return dateArray;
+        }
+
+        // --- Load & render table ---
+        async function loadAdminAttendances() {
+            const tbody = document.getElementById('attendanceBody');
+            tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; color:var(--text-light); padding:20px;">Caricamento...</td></tr>';
+
+            // Get first and last day of the currently focused month
+            let firstDay, lastDay;
+            if (customRangeStart && customRangeEnd) {
+                firstDay = customRangeStart;
+                lastDay = customRangeEnd;
+            } else {
+                const year = currentFilterDate.getFullYear();
+                const month = currentFilterDate.getMonth();
+                firstDay = new Date(year, month, 1);
+                lastDay = new Date(year, month + 1, 0);
+            }
+
+            // Format dates for API (YYYY-MM-DD local)
+            const startStr = firstDay.toLocaleDateString('en-CA');
+            const endStr = lastDay.toLocaleDateString('en-CA');
+
+            const empId = document.getElementById('filterEmp').value;
+
+            const params = new URLSearchParams();
+            params.append('start_date', startStr);
+            params.append('end_date', endStr);
+            if (empId) params.append('employee_id', empId);
+
+            try {
+                // Fetch valid employees to build a names map
+                const empRes = await fetch('/api/employees', {
+                    headers: { 'Authorization': 'Bearer ' + adminApiKey }
+                });
+
+                if (empRes.status === 401) { logout(); return; }
+                const empList = await empRes.json();
+                const currentNamesMap = {};
+
+                empList.forEach(e => {
+                    currentNamesMap[e.id] = e.name ? e.name.trim() : "";
+                });
+
+                const res = await fetch('/api/attendances?' + params.toString(), {
+                    headers: { 'Authorization': 'Bearer ' + adminApiKey }
+                });
+
+                if (res.status === 401) { logout(); return; }
+
+                const records = await res.json();
+                renderAdminTable(records, currentNamesMap);
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="10" style="color:var(--danger); text-align:center;">Errore caricamento dati</td></tr>';
+            }
+        }
+
+        function renderAdminTable(records, currentNamesMap) {
+            const tbody = document.getElementById('attendanceBody');
+
+            // Fetch employees map from select box for quick name lookup
+            const selectOptions = document.getElementById('filterEmp').options;
+            const filterEmpId = document.getElementById('filterEmp').value;
+            const allEmpIds = [];
+
+            for (let i = 1; i < selectOptions.length; i++) {
+                allEmpIds.push(selectOptions[i].value);
+            }
+
+            // Critical fix: make sure the specific filterEmpId is also actually valid
+            if (filterEmpId && !allEmpIds.includes(filterEmpId)) {
+                return; // The selected employee was probably an "EX" or blank that was removed
+            }
+
+            // Genera la lista dei giorni del periodo selezionato
+            let firstDay, lastDay;
+            if (customRangeStart && customRangeEnd) {
+                firstDay = customRangeStart;
+                lastDay = customRangeEnd;
+            } else {
+                const year = currentFilterDate.getFullYear();
+                const month = currentFilterDate.getMonth();
+                firstDay = new Date(year, month, 1);
+                lastDay = new Date(year, month + 1, 0);
+            }
+
+            const rangeDays = getDatesInRange(firstDay, lastDay);
+
+            const groupedMap = {};
+
+            function isInvalidName(n) {
+                if (!n) return true;
+                let lower = n.toLowerCase().trim();
+                if (lower.startsWith("ex")) return true;
+                if (lower.startsWith("nome vuoto")) return true;
+                return false;
+            }
+
+            // Popoliamo la mappa con le timbrature reali
+            if (records && records.length > 0) {
+                records.forEach(r => {
+                    const empId = String(r.employee_id); // Assicurati sia stringa per uguaglianze
+
+                    let cName = currentNamesMap[r.employee_id] || "";
+                    let hName = r.employee_name || "";
+
+                    if (cName.toUpperCase().startsWith("EX")) return; // Always hide EX visually
+
+                    let bestName = "";
+                    if (!isInvalidName(cName)) {
+                        bestName = cName;
+                    } else if (!isInvalidName(hName)) {
+                        bestName = hName;
+                    }
+
+                    // IF we don't have a bestName, we exclude them!
+                    if (!bestName) return;
+
+                    // If filter is active and doesn't match, skip
+                    if (filterEmpId && filterEmpId !== empId) return;
+
+                    const dateObj = new Date(r.timestamp);
+                    const dateKey = dateObj.toISOString().slice(0, 10);
+                    const isHolidayToday = isHoliday(dateObj);
+                    const dailyKey = empId + '_' + dateKey;
+
+                    if (!groupedMap[dailyKey]) {
+                        groupedMap[dailyKey] = {
+                            empId: empId,
+                            empName: bestName,
+                            dateKey: dateKey,
+                            entrata: null,
+                            inizio_pausa: null,
+                            fine_pausa: null,
+                            uscita: null,
+                            inizio_trasferta: null,
+                            ritorno_trasferta: null,
+                            totalMarkingsCount: 0,
+                            dedupCount: 0,
+                            rawRecords: [], // Collect all raw records for two-pass dedup
+                            isEmpty: false,
+                            isWeekend: dateObj.getDay() === 0 || dateObj.getDay() === 6,
+                            isSaturday: dateObj.getDay() === 6,
+                            isHoliday: isHolidayToday
+                        };
+                    }
+
+                    const mappedAction = ACTION_MAP[r.action] || r.action;
+                    groupedMap[dailyKey].rawRecords.push({
+                        tsMs: dateObj.getTime(),
+                        mappedAction: mappedAction,
+                        timeStr: dateObj.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+                        lat: r.latitude,
+                        lon: r.longitude
+                    });
+                });
+            }
+
+            // Seconda passata: dedup e assegnazione per ogni gruppo giornaliero
+            const DEDUP_THRESHOLD_MS = 10 * 60 * 1000; // 10 minuti
+
+            Object.values(groupedMap).forEach(group => {
+                if (group.rawRecords.length === 0) return;
+
+                // Ordina per timestamp
+                group.rawRecords.sort((a, b) => a.tsMs - b.tsMs);
+
+                // Identifica i record duplicati (stessa azione già assegnata, entro 10 min da un'altra marcatura diversa)
+                const validFlags = new Array(group.rawRecords.length).fill(true);
+
+                for (let i = 0; i < group.rawRecords.length; i++) {
+                    const rec = group.rawRecords[i];
+                    // Controlla se questa azione è già stata assegnata da un record precedente valido
+                    let alreadyAssigned = false;
+                    for (let j = 0; j < i; j++) {
+                        if (validFlags[j] && group.rawRecords[j].mappedAction === rec.mappedAction) {
+                            if (rec.mappedAction === 'uscita') {
+                                // Per 'uscita' teniamo l'ultimo. Se il precedente è entro 10 min,
+                                // è un duplicato → escludiamo il precedente dal conteggio
+                                if (Math.abs(rec.tsMs - group.rawRecords[j].tsMs) <= DEDUP_THRESHOLD_MS) {
+                                    validFlags[j] = false;
+                                    group.dedupCount++;
+                                }
+                            } else {
+                                alreadyAssigned = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (alreadyAssigned) {
+                        // È un duplicato. Controlla se è entro 10 min da un'ALTRA marcatura diversa
+                        const hasNearbyDifferent = group.rawRecords.some((other, idx) =>
+                            idx !== i &&
+                            other.mappedAction !== rec.mappedAction &&
+                            Math.abs(rec.tsMs - other.tsMs) <= DEDUP_THRESHOLD_MS
+                        );
+
+                        if (hasNearbyDifferent) {
+                            // Probabile errore di codice: ignorare
+                            validFlags[i] = false;
+                            group.dedupCount++;
+                        }
+                    }
+                }
+
+                // Assegna i valori dai record validi
+                for (let i = 0; i < group.rawRecords.length; i++) {
+                    const rec = group.rawRecords[i];
+
+                    if (validFlags[i]) {
+                        group.totalMarkingsCount++;
+                    }
+
+                    // Assegnazione orari (solo da record validi)
+                    if (validFlags[i] && group.hasOwnProperty(rec.mappedAction)) {
+                        if (rec.mappedAction === 'entrata' && !group.entrata) {
+                            group.entrata = rec.timeStr;
+                            group.entrata_lat = rec.lat; group.entrata_lon = rec.lon;
+                        } else if (rec.mappedAction === 'uscita') {
+                            group.uscita = rec.timeStr; // Keep the latest
+                            group.uscita_lat = rec.lat; group.uscita_lon = rec.lon;
+                        } else if (!group[rec.mappedAction]) {
+                            group[rec.mappedAction] = rec.timeStr;
+                            group[rec.mappedAction + '_lat'] = rec.lat; group[rec.mappedAction + '_lon'] = rec.lon;
+                        }
+                    }
+                }
+
+                // Terza passata: rileva marcature "orfane" (metà coppia senza l'altra metà)
+                // MA solo se la marcatura vicina è dello STESSO tipo logico.
+                // Tipo "inizio": entrata, inizio_pausa, inizio_trasferta
+                // Tipo "fine": uscita, fine_pausa, ritorno_trasferta
+                // Due azioni "inizio" vicine con una orfana → errore di codice
+                // Una "fine" seguita da un "inizio" → sequenza legittima (es. ritorno trasf. + inizio pausa)
+                const startActions = new Set(['entrata', 'inizio_pausa', 'inizio_trasferta']);
+                const endActions = new Set(['uscita', 'fine_pausa', 'ritorno_trasferta']);
+                const actionPairs = {
+                    'inizio_pausa': 'fine_pausa',
+                    'fine_pausa': 'inizio_pausa',
+                    'inizio_trasferta': 'ritorno_trasferta',
+                    'ritorno_trasferta': 'inizio_trasferta'
+                };
+
+                for (let i = 0; i < group.rawRecords.length; i++) {
+                    if (!validFlags[i]) continue;
+
+                    const rec = group.rawRecords[i];
+                    const pairedAction = actionPairs[rec.mappedAction];
+                    if (!pairedAction) continue; // entrata/uscita non hanno coppia obbligatoria
+
+                    // Controlla se la coppia è compilata
+                    if (group[pairedAction]) continue; // La coppia esiste, tutto ok
+
+                    // La coppia manca. È orfana.
+                    // Determina se è tipo "inizio" o "fine"
+                    const isStart = startActions.has(rec.mappedAction);
+                    const isEnd = endActions.has(rec.mappedAction);
+
+                    // Cerca un'altra marcatura valida entro 10 min dello STESSO tipo logico
+                    const hasNearbySameType = group.rawRecords.some((other, idx) =>
+                        idx !== i &&
+                        validFlags[idx] &&
+                        other.mappedAction !== rec.mappedAction &&
+                        Math.abs(rec.tsMs - other.tsMs) <= DEDUP_THRESHOLD_MS &&
+                        ((isStart && startActions.has(other.mappedAction)) ||
+                            (isEnd && endActions.has(other.mappedAction)))
+                    );
+
+                    if (hasNearbySameType) {
+                        // Orfana vicina ad un'azione dello stesso tipo → errore di codice
+                        validFlags[i] = false;
+                        group.dedupCount++;
+                        group.totalMarkingsCount--;
+                        group[rec.mappedAction] = null;
+                    }
+                }
+
+            });
+
+            // Aggiungiamo i record vuoti per i giorni feriali mancanti
+            const empsToCheck = filterEmpId ? [filterEmpId] : allEmpIds;
+
+            const today = new Date();
+            const todayStr = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+
+            empsToCheck.forEach(empId => {
+                let nameToUse = currentNamesMap[empId] || `Dipendente ID: ${empId}`;
+
+                rangeDays.forEach(day => {
+                    if (day.dateKey > todayStr) return; // Do not generate empty records for future days
+                    if (day.isSunday) return; // Domeniche escluse completamente
+
+                    const dailyKey = empId + '_' + day.dateKey;
+
+                    // I festivi e i sabati feriali vengono inclusi se hanno marcature
+                    // O se vogliamo mostrarli come "Festivo" non lavorato (i festivi)
+                    if (day.isHoliday) {
+                        if (!groupedMap[dailyKey]) {
+                            groupedMap[dailyKey] = {
+                                empId: empId,
+                                empName: nameToUse,
+                                dateKey: day.dateKey,
+                                entrata: null, inizio_pausa: null, fine_pausa: null, uscita: null, inizio_trasferta: null, ritorno_trasferta: null,
+                                totalMarkingsCount: 0,
+                                isEmpty: true,
+                                isWeekend: false,
+                                isSaturday: false,
+                                isHoliday: true
+                            };
+                        }
+                    } else if (!day.isSaturday) {
+                        // Giorni feriali (lun-ven): genera record vuoti come assenza
+                        if (!groupedMap[dailyKey]) {
+                            groupedMap[dailyKey] = {
+                                empId: empId,
+                                empName: nameToUse,
+                                dateKey: day.dateKey,
+                                entrata: null, inizio_pausa: null, fine_pausa: null, uscita: null, inizio_trasferta: null, ritorno_trasferta: null,
+                                totalMarkingsCount: 0,
+                                isEmpty: true,
+                                isWeekend: false,
+                                isSaturday: false,
+                                isHoliday: false
+                            };
+                        }
+                    } else {
+                        // Sabato: se ha marcature le mostra, altrimenti non genera record vuoto
+                        if (groupedMap[dailyKey]) {
+                            groupedMap[dailyKey].isSaturday = true;
+                        }
+                    }
+                });
+            });
+
+            // Convert to array and sort
+            let authList = Object.values(groupedMap);
+            authList.sort((a, b) => {
+                const cmp = a.dateKey.localeCompare(b.dateKey);
+                if (cmp !== 0) {
+                    return currentSortOrder === 'asc' ? cmp : -cmp;
+                }
+                return parseInt(a.empId) - parseInt(b.empId);
+            });
+
+            // Preparazione del display text per i global filter
+            globalProcessedData = [];
+            authList.forEach(dayData => {
+                dayData.empDisplay = dayData.empName;
+                globalProcessedData.push(dayData);
+            });
+
+            // Avvio il filtraggio locale su questo listone
+            filterLocalRecords();
+        }
+
+        // --- Local Filter & Pagination ---
+        function filterLocalRecords() {
+            const tbody = document.getElementById('attendanceBody');
+            const searchQuery = document.getElementById('filterSearch') ? document.getElementById('filterSearch').value.toLowerCase().trim() : '';
+
+            globalFilteredData = [];
+
+            globalProcessedData.forEach(dayData => {
+                if (searchQuery) {
+                    const idStr = String(dayData.empId);
+                    if (!dayData.empDisplay.toLowerCase().includes(searchQuery) && !idStr.includes(searchQuery)) {
+                        return; // Salta
+                    }
+                }
+                globalFilteredData.push(dayData);
+            });
+
+            if (globalFilteredData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; color:var(--text-light); padding:20px;">Nessun record trovato per i filtri selezionati</td></tr>';
+                document.getElementById('paginationControls').style.display = 'none';
+            } else {
+                currentPage = 1;
+                displayCurrentPage();
+            }
+        }
+
+        function displayCurrentPage() {
+            const tbody = document.getElementById('attendanceBody');
+            const paginationControls = document.getElementById('paginationControls');
+
+            const totalPages = Math.ceil(globalFilteredData.length / itemsPerPage);
+            if (currentPage > totalPages) currentPage = totalPages;
+            if (currentPage < 1) currentPage = 1;
+
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = Math.min(startIndex + itemsPerPage, globalFilteredData.length);
+            const pageData = globalFilteredData.slice(startIndex, endIndex);
+
+            let html = '';
+
+            const sortArrow = document.getElementById('sortArrow');
+            if (sortArrow) sortArrow.textContent = currentSortOrder === 'asc' ? '↓' : '↑';
+
+            pageData.forEach(dayData => {
+                // Formatta la data
+                const ds = dayData.dateKey.split('-');
+                let displayDate = `${ds[2]}/${ds[1]}/${ds[0]}`;
+                if (dayData.isHoliday) displayDate += ` <span class="badge-holiday">Festivo</span>`;
+
+                // Calcolo ore lavorate e anomalie
+                let hoursDisplay = '—';
+                let balanceDisplay = '—';
+                let balanceClass = 'neutral';
+                let anomalyReasons = [];
+
+                // Funzione helper per generare SVG warning con tooltip
+                function makeWarningSvg(tooltip) {
+                    const escapedTooltip = tooltip.replace(/"/g, '&amp;quot;').replace(/'/g, '&#39;');
+                    return `<span title="${escapedTooltip}" style="cursor:help; display:inline-flex; vertical-align:middle; margin-left:4px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></span>`;
+                }
+
+                if (dayData.isEmpty) {
+                    const emptyTooltip = 'Nessuna timbratura registrata in questo giorno lavorativo';
+                    html += `<tr class="row-empty">
+                        <td class="date-cell">${displayDate}</td>
+                        <td class="emp-cell">${dayData.empDisplay}</td>
+                        <td colspan="6">Nessuna timbratura</td>
+                        <td class="hours-cell">0:00 ${makeWarningSvg(emptyTooltip)}</td>
+                        <td class="balance-cell negative">-8:00</td>
+                    </tr>`;
+                    return; // Passa al prossimo ciclo
+                }
+
+                // Controllo: numero dispari di timbrature
+                if (dayData.totalMarkingsCount % 2 !== 0) {
+                    anomalyReasons.push(`Numero dispari di timbrature (${dayData.totalMarkingsCount})`);
+                }
+                // Controllo: manca entrata o uscita
+                if (!dayData.entrata && dayData.totalMarkingsCount > 0) {
+                    anomalyReasons.push('Manca la timbratura di entrata');
+                }
+                if (!dayData.uscita && dayData.totalMarkingsCount > 0) {
+                    anomalyReasons.push('Manca la timbratura di uscita');
+                }
+                // Controllo: pausa incompleta
+                if (dayData.inizio_pausa && !dayData.fine_pausa) {
+                    anomalyReasons.push('Inizio pausa senza fine pausa');
+                }
+                if (!dayData.inizio_pausa && dayData.fine_pausa) {
+                    anomalyReasons.push('Fine pausa senza inizio pausa');
+                }
+
+
+                if (dayData.entrata && dayData.uscita) {
+                    const entrataMins = timeToMinutes(dayData.entrata);
+                    const uscitaMins = timeToMinutes(dayData.uscita);
+                    let workedMins = uscitaMins - entrataMins;
+
+                    if (dayData.inizio_pausa && dayData.fine_pausa) {
+                        const pauseStart = timeToMinutes(dayData.inizio_pausa);
+                        const pauseEnd = timeToMinutes(dayData.fine_pausa);
+                        if (pauseEnd > pauseStart) {
+                            workedMins -= (pauseEnd - pauseStart);
+                        }
+                    }
+
+                    if (workedMins > 0) {
+                        hoursDisplay = minutesToHHMM(workedMins);
+                        const theoreticalMins = dayData.isHoliday ? 0 : 480;
+                        const diffMins = workedMins - theoreticalMins;
+
+                        if (diffMins >= 0) {
+                            balanceDisplay = '+' + minutesToHHMM(diffMins);
+                            balanceClass = 'positive';
+                        } else {
+                            balanceDisplay = '-' + minutesToHHMM(Math.abs(diffMins));
+                            balanceClass = 'negative';
+                        }
+                    } else if (dayData.isHoliday) {
+                        hoursDisplay = '0:00';
+                        balanceDisplay = '+0:00';
+                        balanceClass = 'neutral';
+                    } else {
+                        anomalyReasons.push('Ore lavorate negative o nulle');
+                    }
+                }
+
+                const isAnomaly = anomalyReasons.length > 0;
+                const tooltipText = anomalyReasons.join(' · ');
+
+                function renderTime(timeStr, lat, lon) {
+                    if (!timeStr) return '—';
+                    if (lat && lon) {
+                        return `${timeStr} <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" title="Apri Posizione GPS" style="text-decoration:none; display:inline-block; margin-left:4px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: text-bottom;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg></a>`;
+                    }
+                    return timeStr;
+                }
+
+                html += `<tr class="${isAnomaly ? 'row-anomaly' : ''} ${dayData.isHoliday ? 'row-holiday' : ''}">
+                    <td class="date-cell">${displayDate}</td>
+                    <td class="emp-cell">${dayData.empDisplay}</td>
+                    <td>${renderTime(dayData.entrata, dayData.entrata_lat, dayData.entrata_lon)}</td>
+                    <td>${renderTime(dayData.inizio_pausa, dayData.inizio_pausa_lat, dayData.inizio_pausa_lon)}</td>
+                    <td>${renderTime(dayData.fine_pausa, dayData.fine_pausa_lat, dayData.fine_pausa_lon)}</td>
+                    <td>${renderTime(dayData.uscita, dayData.uscita_lat, dayData.uscita_lon)}</td>
+                    <td>${renderTime(dayData.inizio_trasferta, dayData.inizio_trasferta_lat, dayData.inizio_trasferta_lon)}</td>
+                    <td>${renderTime(dayData.ritorno_trasferta, dayData.ritorno_trasferta_lat, dayData.ritorno_trasferta_lon)}</td>
+                    <td class="hours-cell">${hoursDisplay} ${isAnomaly ? makeWarningSvg(tooltipText) : ''}</td>
+                    <td class="balance-cell ${balanceClass}">${balanceDisplay}</td>
+                </tr>`;
+            });
+
+            tbody.innerHTML = html;
+
+            if (totalPages > 1 || itemsPerPage === 999999) {
+                // Se c'è solo una pagina ma stiamo visualizzando "Tutti", mostriamo i count
+                paginationControls.style.display = 'flex';
+                document.getElementById('pageInfo').textContent = `${currentPage} / ${totalPages}`;
+                document.getElementById('btnPrevPage').disabled = (currentPage === 1);
+                document.getElementById('btnNextPage').disabled = (currentPage === totalPages);
+            } else {
+                // Non serve mostrare freccette ma la select tornerebbe utile
+                paginationControls.style.display = 'flex';
+                document.getElementById('pageInfo').textContent = `1 / 1`;
+                document.getElementById('btnPrevPage').disabled = true;
+                document.getElementById('btnNextPage').disabled = true;
+            }
+        }
+
+        function changePage(delta) {
+            currentPage += delta;
+            displayCurrentPage();
+        }
+
+        function changePageSize() {
+            const select = document.getElementById('pageSize');
+            itemsPerPage = parseInt(select.value, 10);
+            currentPage = 1;
+            displayCurrentPage();
+        }
+
+        // --- Utility ---
+        function timeToMinutes(timeStr) {
+            const parts = timeStr.split(':');
+            return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+        }
+
+        function minutesToHHMM(totalMinutes) {
+            const h = Math.floor(totalMinutes / 60);
+            const m = totalMinutes % 60;
+            return h + ':' + String(m).padStart(2, '0');
+        }
+
+        function isHoliday(date) {
+            const m = date.getMonth() + 1;
+            const d = date.getDate();
+            const y = date.getFullYear();
+            const mmdd = String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+
+            const fixedHolidays = [
+                '01-01', '01-06', '04-25', '05-01', '06-02', '08-15', '11-01', '12-08', '12-25', '12-26'
+            ];
+            if (fixedHolidays.includes(mmdd)) return true;
+
+            const variableHolidays = {
+                2024: ['04-01'],
+                2025: ['04-21'],
+                2026: ['04-06'],
+                2027: ['03-29'],
+                2028: ['04-17']
+            };
+            if (variableHolidays[y] && variableHolidays[y].includes(mmdd)) return true;
+
+            return false;
+        }
+
+        // --- Mobile Menu Toggle ---
+        function toggleMobileMenu() {
+            const menu = document.getElementById('topActions');
+            if (menu) {
+                menu.classList.toggle('show-mobile-menu');
+            }
+        }
+
+        // Close mobile menu when clicking outside or clicking an action button
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('topActions');
+            const hamburger = document.querySelector('.hamburger-btn');
+            if (menu && menu.classList.contains('show-mobile-menu')) {
+                // Ignore clicks on the hamburger button itself (toggleMobileMenu handles it)
+                if (hamburger && hamburger.contains(e.target)) return;
+
+                // If clicked outside the menu, or clicked a button inside the menu
+                if (!menu.contains(e.target) || e.target.closest('button')) {
+                    menu.classList.remove('show-mobile-menu');
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>
