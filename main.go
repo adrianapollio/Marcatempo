@@ -10,8 +10,7 @@ import (
 	"time"
 )
 
-// API Key statica per il gestionale - modificare in base alle esigenze in produzione (meglio ENV variable)
-const APIKey = "LA_MIA_CHIAVE_SEGRETA_123"
+// Nessuna API Key statica - rimosso segreto hardcoded
 
 // ClockData è la struttura della request in arrivo dal frontend (Web/Browser)
 type ClockData struct {
@@ -22,23 +21,21 @@ type ClockData struct {
 	Longitude  *float64 `json:"longitude"`
 }
 
+// ManualClockData è la struttura per l'inserimento manuale da admin
+type ManualClockData struct {
+	AdminID    int    `json:"adminId"`
+	EmployeeID int    `json:"employeeId"`
+	Date       string `json:"date"` // YYYY-MM-DD
+	Time       string `json:"time"` // HH:MM
+	Action     string `json:"action"`
+}
+
 // LoginData è la struttura per la richiesta di Login (Web)
 type LoginData struct {
 	EmployeeID int    `json:"employeeId"`
 	PIN        string `json:"pin"`
 }
 
-// AuthMiddleware controlla la presenza del Bearer token corretto
-func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		token := r.Header.Get("Authorization")
-		if token != "Bearer "+APIKey {
-			http.Error(w, "Non autorizzato - Bearer token mancante o errato", http.StatusUnauthorized)
-			return
-		}
-		next.ServeHTTP(w, r)
-	}
-}
 
 // handleClock gestire le TIMBRATURE via Web (Frontend)
 func handleClock(w http.ResponseWriter, r *http.Request) {
@@ -130,10 +127,6 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		name := GetEmployeeName(data.EmployeeID)
 		isAdmin := IsEmployeeAdmin(data.EmployeeID)
 		response := map[string]interface{}{"success": true, "name": name, "isAdmin": isAdmin}
-		// Se è admin, includi anche l'API Key per accesso al pannello admin
-		if isAdmin {
-			response["apiKey"] = APIKey
-		}
 		json.NewEncoder(w).Encode(response)
 	} else {
 		http.Error(w, "PIN errato", http.StatusUnauthorized)
@@ -156,11 +149,10 @@ func handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 
 	if VerifyAdminPIN(data.EmployeeID, data.PIN) {
 		name := GetEmployeeName(data.EmployeeID)
-		// Ritorna l'API Key da utilizzare come Bearer token per le successive chiamate admin
+		// Ritorna esito positivo
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": true,
 			"name":    name,
-			"apiKey":  APIKey,
 		})
 	} else {
 		http.Error(w, "Credenziali non valide o privilegi insufficienti", http.StatusUnauthorized)
@@ -357,6 +349,67 @@ func handleRejectValidation(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "rejected", "message": "Marcatura rifiutata"})
 }
 
+// handleAdminManualClock gestisce l'inserimento manuale di una marcatura da parte dell'admin
+func handleAdminManualClock(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Metodo non consentito", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var data ManualClockData
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+		log.Printf("MANUAL CLOCK DECODE ERR: %v", err)
+		http.Error(w, "Errore payload JSON", http.StatusBadRequest)
+		return
+	}
+	
+	log.Printf("MANUAL CLOCK REQ: %+v", data)
+
+	// Verifica se l'adminId è valido
+	if !IsEmployeeAdmin(data.AdminID) {
+		log.Printf("MANUAL CLOCK UNAUTH: AdminID %d non è admin", data.AdminID)
+		http.Error(w, "Privilegi insufficienti", http.StatusUnauthorized)
+		return
+	}
+
+	// Parse date and time
+	dateTimeStr := fmt.Sprintf("%s %s:00", data.Date, data.Time)
+	timestamp, err := time.ParseInLocation("2006-01-02 15:04:05", dateTimeStr, time.Local)
+	if err != nil {
+		log.Printf("MANUAL CLOCK TIME PARSE ERR: %v", err)
+		http.Error(w, "Formato data/ora non valido", http.StatusBadRequest)
+		return
+	}
+
+	statusCode := 0
+	if data.Action == "Out" || data.Action == "out" || data.Action == "F_pausa" || data.Action == "R_trasf" || data.Action == "uscita" || data.Action == "fine_pausa" || data.Action == "ritorno_trasferta" {
+		statusCode = 1
+	}
+
+	employeeName := GetEmployeeName(data.EmployeeID)
+	if employeeName == "" {
+		employeeName = fmt.Sprintf("Utente %d", data.EmployeeID)
+	}
+	
+	log.Printf("MANUAL CLOCK: going to InsertRecord(empId=%d, name=%s, ts=%v, action=%s, sc=%d)", data.EmployeeID, employeeName, timestamp, data.Action, statusCode)
+
+	err = InsertRecord(data.EmployeeID, employeeName, timestamp, data.Action, statusCode, "manual_web", nil, nil)
+	if err != nil {
+		log.Printf("Errore inserimento marcatura manuale: %v", err)
+		http.Error(w, "Errore salvataggio nel database", http.StatusInternalServerError)
+		return
+	}
+	
+	log.Println("MANUAL CLOCK SUCCESS")
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "success",
+		"message": "Marcatura manuale inserita con successo",
+	})
+}
+
 func main() {
 	log.Println("Avvio Time & Attendance Microservice...")
 
@@ -375,11 +428,12 @@ func main() {
 	http.HandleFunc("/api/employee/attendances", handleEmployeeAttendances)
 	http.HandleFunc("/api/employee/monthly-attendances", handleEmployeeMonthlyAttendances)
 	http.HandleFunc("/api/employee/range-attendances", handleEmployeeRangeAttendances)
-	http.HandleFunc("/api/attendances", AuthMiddleware(handleAttendances))
-	http.HandleFunc("/api/employees", AuthMiddleware(handleEmployees))
-	http.HandleFunc("/api/admin/pending-validations", AuthMiddleware(handlePendingValidations))
-	http.HandleFunc("/api/admin/approve-validation", AuthMiddleware(handleApproveValidation))
-	http.HandleFunc("/api/admin/reject-validation", AuthMiddleware(handleRejectValidation))
+	http.HandleFunc("/api/attendances", handleAttendances)
+	http.HandleFunc("/api/employees", handleEmployees)
+	http.HandleFunc("/api/admin/pending-validations", handlePendingValidations)
+	http.HandleFunc("/api/admin/approve-validation", handleApproveValidation)
+	http.HandleFunc("/api/admin/reject-validation", handleRejectValidation)
+	http.HandleFunc("/api/admin/manual-clock", handleAdminManualClock)
 
 	// Servire dashboard admin
 	http.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {

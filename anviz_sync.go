@@ -310,11 +310,9 @@ func syncFromDevice(ip string, deviceID uint32) {
 	defer conn.Close()
 
 	// --- 1. Login Authentication (Command 0x38) ---
-	// La password fornita è 12345. Protocollo Anviz tipicamente usa Little Endian per i payload DATA numerici.
-	pwdBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(pwdBytes, 12345)
-
-	loginPacket := BuildAnvizPacket(deviceID, 0x38, pwdBytes)
+	// La password fornita è vuota (0). Protocollo Anviz tipicamente usa Little Endian per i payload DATA numerici.
+	pwdZero := make([]byte, 4) // Password di default/vuota
+	loginPacket := BuildAnvizPacket(deviceID, 0x38, pwdZero)
 	_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 	if _, err := conn.Write(loginPacket); err != nil {
 		log.Printf("TCP Worker: Errore durante tcp write (login): %v", err)
@@ -327,21 +325,11 @@ func syncFromDevice(ip string, deviceID uint32) {
 		log.Printf("TCP Worker: Timeout lettura login Anviz %s", ip)
 		return
 	}
-	// Se la risposta al login (indice 6 RET Code) non è 0x00, la pwd è errata
+	// Se la risposta al login (indice 6 RET Code) non è 0x00, proseguiamo comunque (su alcuni FW la pwd vuota non serve login)
 	if loginRes[6] != 0x00 {
-		log.Printf("TCP Worker: Login fallito con 12345 su %s (RET: 0x%X). Tento con password VUOTA...", ip, loginRes[6])
-
-		pwdZero := make([]byte, 4)
-		loginPacketZero := BuildAnvizPacket(deviceID, 0x38, pwdZero)
-		_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		conn.Write(loginPacketZero)
-
-		loginResZero := readFullAnvizPacket(conn)
-		if loginResZero == nil || loginResZero[6] != 0x00 {
-			log.Printf("TCP Worker: Anche Login con Pwd zero fallito su %s. Tuttavia, proseguiamo (su alcuni FW la pwd vuota non serve login).", ip)
-		} else {
-			log.Printf("TCP Worker: Login con password vuota riuscito su %s!", ip)
-		}
+		log.Printf("TCP Worker: Login non riuscito con password vuota su %s (RET: 0x%X). Proseguo comunque...", ip, loginRes[6])
+	} else {
+		log.Printf("TCP Worker: Login riuscito su %s!", ip)
 	}
 
 	// --- 1. Scaricamento Profili Staff (Command 0x72) ---

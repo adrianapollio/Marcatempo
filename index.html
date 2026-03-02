@@ -471,6 +471,16 @@
             background: rgba(0, 0, 0, 0.04);
         }
 
+        .attendance-table tbody tr.row-absence {
+            background: #ffebee;
+            /* Light red for absences */
+        }
+
+        .attendance-table tbody tr.row-anomaly {
+            background: #fff3e0;
+            /* Light orange for anomalies */
+        }
+
         .attendance-table tbody tr.row-holiday {
             background: #e3f2fd;
             /* Light blue for holidays */
@@ -478,6 +488,22 @@
 
         .attendance-table tbody tr.row-holiday:hover {
             background: #bbdefb;
+        }
+
+        .attendance-table tbody tr.row-absence:hover {
+            background: #ffcdd2;
+        }
+
+        .attendance-table tbody tr.row-anomaly:hover {
+            background: #ffe0b2;
+        }
+
+        [data-theme="dark"] .attendance-table tbody tr.row-absence {
+            background: #c6282822;
+        }
+
+        [data-theme="dark"] .attendance-table tbody tr.row-anomaly {
+            background: #ef6c0022;
         }
 
         [data-theme="dark"] .attendance-table tbody tr.row-holiday {
@@ -1060,10 +1086,6 @@
             }
         }
 
-        function goToAdmin() {
-            window.location.href = '/admin';
-        }
-
         // --- Password toggle ---
         function togglePassword() {
             const input = document.getElementById('loginPin');
@@ -1142,7 +1164,6 @@
                     localStorage.setItem('empPin', currentPin);
                     localStorage.setItem('empName', currentName);
                     localStorage.setItem('isAdmin', isAdmin ? 'true' : 'false');
-                    if (data.apiKey) localStorage.setItem('adminApiKey', data.apiKey);
 
                     showDashboard();
                 } else {
@@ -1167,10 +1188,6 @@
         }
 
         function goToAdmin() {
-            if (isAdmin && !localStorage.getItem('adminApiKey')) {
-                alert("La tua sessione da amministratore è scaduta o non è aggiornata. Clicca su 'Esci' e accedi nuovamente per ripristinare i permessi.");
-                return;
-            }
             window.location.href = '/admin';
         }
 
@@ -1331,11 +1348,14 @@
                 const dateKey = toLocalDateKey(dateObj);
                 if (!dailyMap[dateKey]) {
                     dailyMap[dateKey] = {
-                        entrata: null, inizio_pausa: null, fine_pausa: null, uscita: null, inizio_trasferta: null, ritorno_trasferta: null
+                        entrata: null, inizio_pausa: null, fine_pausa: null, uscita: null, inizio_trasferta: null, ritorno_trasferta: null,
+                        totalMarkingsCount: 0
                     };
                 }
                 const mappedAction = ACTION_MAP[r.action] || r.action;
                 if (dailyMap[dateKey].hasOwnProperty(mappedAction)) {
+                    dailyMap[dateKey].totalMarkingsCount++;
+
                     const timeStr = dateObj.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
                     if (mappedAction === 'entrata' && !dailyMap[dateKey].entrata) {
                         dailyMap[dateKey].entrata = timeStr;
@@ -1392,29 +1412,87 @@
                 let dailyMinutes = 0;
                 let balanceDisplay = '—';
 
-                if (dayData.entrata && dayData.uscita) {
-                    const entrataMins = timeToMinutes(dayData.entrata);
-                    const uscitaMins = timeToMinutes(dayData.uscita);
-                    let workedMins = uscitaMins - entrataMins;
+                // Calculation: sum segments (morning, afternoon, travel)
+                const t = (timeStr) => timeStr ? timeToMinutes(timeStr) : null;
+                const e = t(dayData.entrata);
+                const iP = t(dayData.inizio_pausa);
+                const fP = t(dayData.fine_pausa);
+                const u = t(dayData.uscita);
+                const iT = t(dayData.inizio_trasferta);
+                const rT = t(dayData.ritorno_trasferta);
 
-                    if (dayData.inizio_pausa && dayData.fine_pausa) {
-                        const pauseStart = timeToMinutes(dayData.inizio_pausa);
-                        const pauseEnd = timeToMinutes(dayData.fine_pausa);
-                        if (pauseEnd > pauseStart) workedMins -= (pauseEnd - pauseStart);
+                let workedMins = 0;
+                let segmentsFound = false;
+
+                // 1. Morning Segment (E -> iP)
+                if (e !== null && iP !== null && iP > e) {
+                    workedMins += (iP - e);
+                    segmentsFound = true;
+                }
+                // 2. Afternoon Segment (fP -> U)
+                if (fP !== null && u !== null && u > fP) {
+                    workedMins += (u - fP);
+                    segmentsFound = true;
+                }
+                // 3. Travel Segment (iT -> rT)
+                if (iT !== null && rT !== null && rT > iT) {
+                    workedMins += (rT - iT);
+                    segmentsFound = true;
+                }
+
+                // Fallback: simple day (E -> U) without pause markers or with partial ones
+                if (!segmentsFound && e !== null && u !== null && u > e) {
+                    workedMins = (u - e);
+                    // Subtract valid pause if any
+                    if (iP !== null && fP !== null && fP > iP) {
+                        workedMins -= (fP - iP);
                     }
+                }
 
-                    if (workedMins > 0) {
-                        dailyMinutes = workedMins;
-                        totalWorkedMinutes += workedMins;
-                        hoursDisplay = minutesToHHMM(workedMins);
-                        hoursClass = 'hours-cell';
-                        const theoreticalMins = isHolidayToday ? 0 : 480;
-                        const diffMins = workedMins - theoreticalMins;
-                        balanceDisplay = diffMins >= 0 ? '+' + minutesToHHMM(diffMins) : '-' + minutesToHHMM(Math.abs(diffMins));
+                let anomalyReasons = [];
+                const makeWarningSvg = (tooltip) => {
+                    const escapedTooltip = tooltip.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                    return `<span title="${escapedTooltip}" style="cursor:help; display:inline-flex; vertical-align:middle; margin-left:4px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></span>`;
+                };
+
+                // Anomaly detection
+                if (dayData.totalMarkingsCount % 2 !== 0) {
+                    anomalyReasons.push(`Numero dispari di timbrature (${dayData.totalMarkingsCount})`);
+                }
+                if (!dayData.entrata && dayData.totalMarkingsCount > 0) {
+                    anomalyReasons.push('Manca la timbratura di entrata');
+                }
+                if (!dayData.uscita && dayData.totalMarkingsCount > 0) {
+                    anomalyReasons.push('Manca la timbratura di uscita');
+                }
+                if (dayData.inizio_pausa && !dayData.fine_pausa) {
+                    anomalyReasons.push('Inizio pausa senza fine pausa');
+                }
+                if (!dayData.inizio_pausa && dayData.fine_pausa) {
+                    anomalyReasons.push('Fine pausa senza inizio pausa');
+                }
+
+                if (workedMins > 0) {
+                    dailyMinutes = workedMins;
+                    totalWorkedMinutes += workedMins;
+                    hoursDisplay = minutesToHHMM(workedMins);
+                    hoursClass = 'hours-cell';
+                    const theoreticalMins = isHolidayToday ? 0 : 480;
+                    const diffMins = workedMins - theoreticalMins;
+                    balanceDisplay = diffMins >= 0 ? '+' + minutesToHHMM(diffMins) : '-' + minutesToHHMM(Math.abs(diffMins));
+
+                    if (anomalyReasons.length > 0) {
+                        hoursDisplay += ' ' + makeWarningSvg(anomalyReasons.join(' · '));
                     }
                 } else if (dayData.entrata && !dayData.uscita) {
                     hoursDisplay = '...';
                     hoursClass = 'hours-cell incomplete';
+                    if (anomalyReasons.length > 0) {
+                        hoursDisplay += ' ' + makeWarningSvg(anomalyReasons.join(' · '));
+                    }
+                } else if (!isWeekend && !isHolidayToday) {
+                    hoursDisplay = '0:00';
+                    balanceDisplay = '-8:00';
                 }
 
                 if (!isWeekend || Object.keys(dayData).length > 0) {
@@ -1430,6 +1508,8 @@
                 if (!isWeekend || isHolidayToday || Object.keys(dayData).length > 0 || (customRangeStart && customRangeStart.getTime() === customRangeEnd.getTime())) {
                     let trClass = isWeekend ? 'weekend' : '';
                     if (isHolidayToday) trClass += ' row-holiday';
+                    if (!isWeekend && !isHolidayToday && workedMins === 0 && (!dayData.entrata)) trClass += ' row-absence';
+                    if (anomalyReasons.length > 0) trClass += ' row-anomaly';
 
                     html += `<tr class="${trClass.trim()}">
                         <td class="date-cell">${dateLabel}</td>
