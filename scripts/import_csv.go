@@ -17,6 +17,7 @@ import (
 var csvFiles = []string{
 	`timbrature_elaborate_v3.csv`,
 	`timbrature_ordinate_v2 (1).csv`, // Attenzione: usare path assoluti se lanciato da altre directory
+	`richieste.csv`,
 }
 
 func main() {
@@ -68,11 +69,68 @@ func main() {
 
 		// Raccogli intestazioni per capire quale file stiamo leggendo
 		header := records[0]
-		isExtendedFile := len(header) >= 9 // E' il file v2 che possiede Inizio Pausa, Fine Pausa, etc...
+		isRichiesteFile := len(header) >= 6 && header[0] == "ID" && header[1] == "UserID"
+		isExtendedFile := len(header) >= 9 // E' il file v2 che possiede Inizio Pausa, Fine Pausa, ecc...
 
 		for i, row := range records {
 			if i == 0 {
 				continue // Skip the header
+			}
+
+			if isRichiesteFile {
+				if len(row) < 5 {
+					continue
+				}
+				stato := strings.TrimSpace(row[4])
+				if stato != "Approvato" {
+					continue
+				}
+
+				userIdStr := strings.TrimSpace(row[1])
+				userId, err := strconv.Atoi(userIdStr)
+				if err != nil {
+					continue
+				}
+
+				var employeeName string
+				err = db.QueryRow("SELECT name FROM employees WHERE id = ?", userId).Scan(&employeeName)
+				if err != nil {
+					employeeName = fmt.Sprintf("Utente %d", userId)
+				}
+
+				checkTimeStr := strings.TrimSpace(row[2])
+				timestamp, err := time.ParseInLocation("2006-01-02 15:04:05", checkTimeStr, time.Local)
+				if err != nil {
+					continue
+				}
+
+				recordTypeStr := strings.TrimSpace(row[3])
+				statusCode := 0
+				if recordTypeStr != "NULL" && recordTypeStr != "" {
+					statusCode, _ = strconv.Atoi(recordTypeStr)
+				}
+
+				statusMap := map[int]string{
+					0: "In",
+					1: "Out",
+					2: "I_pausa",
+					3: "F_pausa",
+					4: "U_trasf",
+					5: "R_trasf",
+					6: "I_break",
+					7: "F_break",
+				}
+				action := statusMap[statusCode]
+				if action == "" {
+					action = fmt.Sprintf("unknown_%d", statusCode)
+				}
+
+				_, err = stmt.Exec(userId, employeeName, timestamp.Format(time.RFC3339), action, statusCode, "manual_csv", nil, nil)
+				if err == nil {
+					totalInserted++
+				}
+				totalProcessed++
+				continue
 			}
 
 			// Le righe devono avere almeno ID, Name, Data, ingresso (min. 4 indici)

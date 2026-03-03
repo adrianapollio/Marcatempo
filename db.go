@@ -88,6 +88,11 @@ func InitDB() {
 		reviewed_by INTEGER,
 		reviewed_at DATETIME
 	);
+	CREATE TABLE IF NOT EXISTS custom_holidays (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		date TEXT UNIQUE NOT NULL,
+		description TEXT
+	);
 	`
 	_, err = DB.Exec(createTableQuery)
 	if err != nil {
@@ -208,6 +213,28 @@ func GetAllEmployees() ([]Employee, error) {
 	return employees, nil
 }
 
+// scanRecords è un helper interno per unificare la scansione dei record dal dataset SQLite
+func scanRecords(rows *sql.Rows) ([]Record, error) {
+	var records []Record
+	for rows.Next() {
+		var r Record
+		var timestampStr string
+		err := rows.Scan(&r.ID, &r.EmployeeID, &r.EmployeeName, &timestampStr, &r.Action, &r.StatusCode, &r.Source, &r.Latitude, &r.Longitude)
+		if err != nil {
+			return nil, err
+		}
+
+		// Riconvertiamo a time.Time per i client REST
+		t, parseErr := time.Parse(time.RFC3339, timestampStr)
+		if parseErr == nil {
+			r.Timestamp = t
+		}
+
+		records = append(records, r)
+	}
+	return records, nil
+}
+
 // GetRecords legge i record SQLite con supporto a range filtri (query API) e filter opzionale per employee
 func GetRecords(startDate, endDate, employeeID string) ([]Record, error) {
 	query := `SELECT id, employee_id, employee_name, timestamp, action, status_code, source, latitude, longitude FROM records WHERE 1=1`
@@ -234,24 +261,7 @@ func GetRecords(startDate, endDate, employeeID string) ([]Record, error) {
 	}
 	defer rows.Close()
 
-	var records []Record
-	for rows.Next() {
-		var r Record
-		var timestampStr string
-		err := rows.Scan(&r.ID, &r.EmployeeID, &r.EmployeeName, &timestampStr, &r.Action, &r.StatusCode, &r.Source, &r.Latitude, &r.Longitude)
-		if err != nil {
-			return nil, err
-		}
-
-		// Riconvertiamo a time.Time per i client REST
-		t, parseErr := time.Parse(time.RFC3339, timestampStr)
-		if parseErr == nil {
-			r.Timestamp = t
-		}
-
-		records = append(records, r)
-	}
-	return records, nil
+	return scanRecords(rows)
 }
 
 // GetEmployeeRecords legge solo gli ultimi record di uno specifico dipendente
@@ -264,23 +274,7 @@ func GetEmployeeRecords(employeeID int, limit int) ([]Record, error) {
 	}
 	defer rows.Close()
 
-	var records []Record
-	for rows.Next() {
-		var r Record
-		var timestampStr string
-		err := rows.Scan(&r.ID, &r.EmployeeID, &r.EmployeeName, &timestampStr, &r.Action, &r.StatusCode, &r.Source, &r.Latitude, &r.Longitude)
-		if err != nil {
-			return nil, err
-		}
-
-		t, parseErr := time.Parse(time.RFC3339, timestampStr)
-		if parseErr == nil {
-			r.Timestamp = t
-		}
-
-		records = append(records, r)
-	}
-	return records, nil
+	return scanRecords(rows)
 }
 
 // GetEmployeeMonthlyRecords restituisce tutti i record di un dipendente per un dato mese
@@ -299,23 +293,7 @@ func GetEmployeeMonthlyRecords(employeeID int, year int, month int) ([]Record, e
 	}
 	defer rows.Close()
 
-	var records []Record
-	for rows.Next() {
-		var r Record
-		var timestampStr string
-		err := rows.Scan(&r.ID, &r.EmployeeID, &r.EmployeeName, &timestampStr, &r.Action, &r.StatusCode, &r.Source, &r.Latitude, &r.Longitude)
-		if err != nil {
-			return nil, err
-		}
-
-		t, parseErr := time.Parse(time.RFC3339, timestampStr)
-		if parseErr == nil {
-			r.Timestamp = t
-		}
-
-		records = append(records, r)
-	}
-	return records, nil
+	return scanRecords(rows)
 }
 
 // GetEmployeeRangeRecords restituisce tutti i record di un dipendente in un range di date
@@ -331,23 +309,7 @@ func GetEmployeeRangeRecords(employeeID int, startDate string, endDate string) (
 	}
 	defer rows.Close()
 
-	var records []Record
-	for rows.Next() {
-		var r Record
-		var timestampStr string
-		err := rows.Scan(&r.ID, &r.EmployeeID, &r.EmployeeName, &timestampStr, &r.Action, &r.StatusCode, &r.Source, &r.Latitude, &r.Longitude)
-		if err != nil {
-			return nil, err
-		}
-
-		t, parseErr := time.Parse(time.RFC3339, timestampStr)
-		if parseErr == nil {
-			r.Timestamp = t
-		}
-
-		records = append(records, r)
-	}
-	return records, nil
+	return scanRecords(rows)
 }
 
 // InsertPendingValidation crea una nuova richiesta di validazione per marcatura web
@@ -410,6 +372,85 @@ func GetPendingValidations(status string) ([]PendingValidation, error) {
 	return validations, nil
 }
 
+// GetRecordByID recupera un singolo record tramite il suo ID
+func GetRecordByID(id int) (Record, error) {
+	query := `SELECT id, employee_id, employee_name, timestamp, action, status_code, source, latitude, longitude FROM records WHERE id = ?`
+	var r Record
+	var timestampStr string
+	err := DB.QueryRow(query, id).Scan(&r.ID, &r.EmployeeID, &r.EmployeeName, &timestampStr, &r.Action, &r.StatusCode, &r.Source, &r.Latitude, &r.Longitude)
+	if err != nil {
+		return r, err
+	}
+
+	t, parseErr := time.Parse(time.RFC3339, timestampStr)
+	if parseErr == nil {
+		r.Timestamp = t
+	}
+	return r, nil
+}
+
+// UpdateManualRecord aggiorna i dati di un record manuale esistente
+func UpdateManualRecord(id int, timestamp time.Time, action string, statusCode int) error {
+	query := `UPDATE records SET timestamp = ?, action = ?, status_code = ? WHERE id = ? AND source = 'manual_web'`
+	res, err := DB.Exec(query, timestamp.Format(time.RFC3339), action, statusCode, id)
+	if err != nil {
+		return err
+	}
+	
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("nessun record aggiornato (potrebbe non esistere o non essere manual_web)")
+	}
+	return nil
+}
+
+// actionGroup restituisce il gruppo semantico di un'azione per il controllo duplicati.
+// Ogni tipo di marcatura ha il proprio gruppo, così "Entrata" non blocca "Inizio Pausa".
+func actionGroup(action string) string {
+	switch action {
+	case "In", "in", "entrata":
+		return "entrata"
+	case "Out", "out", "uscita":
+		return "uscita"
+	case "I_pausa", "inizio_pausa", "I_break":
+		return "inizio_pausa"
+	case "F_pausa", "fine_pausa", "F_break":
+		return "fine_pausa"
+	case "U_trasf", "inizio_trasferta":
+		return "inizio_trasferta"
+	case "R_trasf", "ritorno_trasferta":
+		return "ritorno_trasferta"
+	default:
+		return action
+	}
+}
+
+// GetRecordHasDeviceEquivalent verifica se per quel dipendente esiste già una marcatura device
+// della stessa tipologia specifica (es. entrata, inizio_pausa) nello stesso giorno.
+func GetRecordHasDeviceEquivalent(employeeID int, date string, action string) bool {
+	targetGroup := actionGroup(action)
+
+	query := `SELECT action FROM records WHERE employee_id = ? AND date(timestamp) = date(?) AND source = 'device'`
+	rows, err := DB.Query(query, employeeID, date)
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var dbAction string
+		if err := rows.Scan(&dbAction); err == nil {
+			if actionGroup(dbAction) == targetGroup {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // ApproveValidation approva una richiesta pendente e copia il record nella tabella records
 func ApproveValidation(validationID int, adminID int) error {
 	// Recupera la validazione pendente
@@ -458,3 +499,50 @@ func RejectValidation(validationID int, adminID int) error {
 		adminID, now, validationID)
 	return err
 }
+
+// CustomHoliday rappresenta una data considerata festiva a livello aziendale
+type CustomHoliday struct {
+	ID          int    `json:"id"`
+	Date        string `json:"date"` // Formato YYYY-MM-DD
+	Description string `json:"description"`
+}
+
+// GetCustomHolidays restituisce l'elenco di tutte le festività personalizzate
+func GetCustomHolidays() ([]CustomHoliday, error) {
+	query := `SELECT id, date, description FROM custom_holidays ORDER BY date ASC`
+	rows, err := DB.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var holidays []CustomHoliday
+	for rows.Next() {
+		var h CustomHoliday
+		var desc sql.NullString
+		err := rows.Scan(&h.ID, &h.Date, &desc)
+		if err != nil {
+			return nil, err
+		}
+		if desc.Valid {
+			h.Description = desc.String
+		}
+		holidays = append(holidays, h)
+	}
+	return holidays, nil
+}
+
+// AddCustomHoliday aggiunge una nuova festività personalizzata
+func AddCustomHoliday(date string, description string) error {
+	query := `INSERT INTO custom_holidays (date, description) VALUES (?, ?)`
+	_, err := DB.Exec(query, date, description)
+	return err
+}
+
+// DeleteCustomHoliday elimina una festività personalizzata
+func DeleteCustomHoliday(id int) error {
+	query := `DELETE FROM custom_holidays WHERE id = ?`
+	_, err := DB.Exec(query, id)
+	return err
+}
+

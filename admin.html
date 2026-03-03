@@ -10,1017 +10,7 @@
     <!-- Flatpickr CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link rel="stylesheet" type="text/css" href="https://npmcdn.com/flatpickr/dist/themes/airbnb.css">
-    <style>
-        :root {
-            /* Custom Blue Accents matching Employee Portal */
-            --primary: #0056b3;
-            --primary-dark: #003d82;
-            --primary-light: #e8f0fe;
-            --secondary: #757575;
-            --success: #2e7d32;
-            --success-light: #edf7ed;
-            --danger: #d32f2f;
-            --danger-light: #fdeded;
-            --warning: #ed6c02;
-            --warning-light: #fff4e5;
-            --info: #0288d1;
-            --info-light: #e5f6fd;
-
-            --text-dark: #202124;
-            --text-secondary: #5f6368;
-            --text-light: #9aa0a6;
-
-            --bg: #f8f9fa;
-            --card-bg: #ffffff;
-            --border: #dadce0;
-            --table-row-hover: #f1f3f4;
-
-            --anomaly-bg: #fff8e1;
-            --anomaly-text: #b18c00;
-            --empty-bg: #fce8e6;
-            --empty-text: #c5221f;
-
-            --header-bg: #ffffff;
-            --header-text: #202124;
-
-            --input-bg: #ffffff;
-            --input-border: #dadce0;
-            --input-text: #202124;
-
-            /* Elevation (Shadows) */
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Roboto', 'Helvetica', 'Arial', sans-serif;
-            background-color: var(--bg);
-            color: var(--text-dark);
-            display: flex;
-            align-items: flex-start;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            padding: 24px;
-        }
-
-        .container {
-            background: var(--card-bg);
-            border-radius: 16px;
-            box-shadow: var(--elevation-2);
-            width: 100%;
-            max-width: 98%;
-            overflow: hidden;
-            position: relative;
-        }
-
-        .header {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-            color: white;
-            padding: 16px 24px;
-            text-align: left;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .header-title h2 {
-            margin: 0;
-            font-size: 1.25rem;
-            font-weight: 500;
-            line-height: 1.6;
-            letter-spacing: 0.0075em;
-        }
-
-        .header-title p {
-            margin: 0;
-            color: rgba(255, 255, 255, 0.8);
-            font-size: 0.875rem;
-            font-weight: 400;
-            line-height: 1.43;
-            letter-spacing: 0.01071em;
-        }
-
-        .content {
-            padding: 20px;
-        }
-
-        /* Form Elements */
-        .form-group {
-            margin-bottom: 20px;
-            text-align: left;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 4px;
-            font-size: 0.75rem;
-            font-weight: 400;
-            color: var(--text-secondary);
-            letter-spacing: 0.03333em;
-        }
-
-        input[type="number"]::-webkit-outer-spin-button,
-        input[type="number"]::-webkit-inner-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-
-        input[type="number"] {
-            -moz-appearance: textfield;
-            appearance: textfield;
-        }
-
-        /* MUI Outlined Input mimic */
-        input[type="text"],
-        input[type="number"],
-        input[type="password"],
-        input[type="date"],
-        input[type="month"],
-        select {
-            width: 100%;
-            padding: 16.5px 14px;
-            border: 1px solid var(--input-border);
-            border-radius: 4px;
-            font-size: 1rem;
-            font-family: 'Roboto', sans-serif;
-            background-color: var(--input-bg);
-            color: var(--input-text);
-            transition: border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        input:hover,
-        select:hover {
-            border-color: var(--text-dark);
-        }
-
-        input:focus,
-        select:focus {
-            border-color: var(--primary);
-            border-width: 2px;
-            padding: 15.5px 13px;
-            /* slight adjust to compensate for 2px border */
-            outline: none;
-        }
-
-        .password-wrapper {
-            position: relative;
-        }
-
-        .password-wrapper input {
-            padding-right: 48px;
-        }
-
-        .password-toggle {
-            position: absolute;
-            right: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 4px;
-            color: var(--text-light);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: color 0.2s;
-        }
-
-        .password-toggle:hover {
-            color: var(--primary);
-        }
-
-        .password-toggle svg {
-            width: 22px;
-            height: 22px;
-        }
-
-        /* MUI Contained Button mimic */
-        button {
-            padding: 6px 16px;
-            font-size: 0.875rem;
-            min-width: 64px;
-            border: 0;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: 500;
-            font-family: 'Roboto', sans-serif;
-            letter-spacing: 0.02857em;
-            text-transform: uppercase;
-            transition: background-color 250ms cubic-bezier(0.4, 0, 0.2, 1) 0ms, box-shadow 250ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;
-        }
-
-        button:active {
-            box-shadow: var(--elevation-2);
-        }
-
-        .btn-primary {
-            background-color: var(--primary);
-            color: #fff;
-            box-shadow: var(--elevation-1);
-            width: 100%;
-            padding: 8px 22px;
-        }
-
-        .btn-primary:hover {
-            background-color: var(--primary-dark);
-            box-shadow: var(--elevation-2);
-        }
-
-        /* MUI Outlined Button mimic */
-        .btn-secondary {
-            background-color: transparent;
-            color: var(--primary);
-            border: 1px solid rgba(25, 118, 210, 0.5);
-            padding: 5px 15px;
-        }
-
-        .btn-secondary:hover {
-            background-color: rgba(25, 118, 210, 0.04);
-            border: 1px solid var(--primary);
-        }
-
-        .btn-logout {
-            background-color: var(--danger);
-            color: white;
-            font-weight: 500;
-            border: none;
-            padding: 6px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: opacity 0.2s;
-        }
-
-        .btn-logout:hover {
-            opacity: 0.9;
-        }
-
-        /* Tab Navigation */
-        .tab-navigation {
-            display: flex;
-            gap: 10px;
-            background: var(--card-bg);
-            padding: 10px;
-            border-radius: 12px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
-            border: 1px solid var(--border);
-        }
-
-        .tab-btn {
-            padding: 10px 20px;
-            border: none;
-            background: transparent;
-            color: var(--text-light);
-            font-weight: 600;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .tab-btn:hover {
-            background: rgba(0, 86, 179, 0.05);
-            color: var(--primary);
-        }
-
-        .tab-btn.active {
-            background: var(--primary);
-            color: white;
-            box-shadow: 0 2px 4px rgba(0, 86, 179, 0.2);
-        }
-
-        /* Empty state styling */
-        .month-nav {
-            height: 56px;
-            display: flex;
-            align-items: center;
-            background: var(--input-bg);
-            border: 1px solid var(--input-border);
-            border-radius: 4px;
-            overflow: hidden;
-            transition: border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            padding: 4px;
-        }
-
-        .month-nav:hover {
-            border-color: var(--text-dark);
-        }
-
-        .month-nav button {
-            width: 46px;
-            height: 46px;
-            background: var(--primary);
-            color: white;
-            border: none;
-            padding: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 4px;
-            min-width: unset;
-            box-shadow: none !important;
-            transition: opacity 0.2s, transform 0.1s;
-        }
-
-        .month-nav button:hover {
-            opacity: 0.9;
-            color: white;
-        }
-
-        .month-nav button:active {
-            transform: scale(0.9);
-        }
-
-        .month-nav button svg {
-            width: 20px;
-            height: 20px;
-            stroke-width: 3px;
-        }
-
-        .month-nav-text {
-            flex: 1;
-            text-align: center;
-            font-size: 1rem;
-            font-weight: 500;
-            padding: 8px 10px;
-            color: var(--text-dark);
-            user-select: none;
-        }
-
-        .month-nav-picker {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 46px;
-            height: 46px;
-            cursor: pointer;
-            border-left: 1px solid var(--input-border);
-            color: var(--text-secondary);
-        }
-
-        /* Screens */
-        #loginScreen,
-        #dashboardScreen {
-            display: none;
-        }
-
-        .active-screen {
-            display: block !important;
-            animation: fadeIn 0.3s ease-in-out;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        /* Dashboard specific */
-        .filters-bar {
-            background: var(--primary-light);
-            border: 1px solid var(--border);
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 25px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 15px;
-            align-items: flex-end;
-        }
-
-        .filter-item {
-            flex: 1;
-            min-width: 200px;
-        }
-
-        .filter-item label {
-            font-size: 14px;
-            margin-bottom: 5px;
-            display: block;
-            color: var(--text-dark);
-            font-weight: 600;
-        }
-
-        .filter-actions {
-            display: flex;
-            gap: 10px;
-        }
-
-        .table-container {
-            overflow-x: auto;
-            border-radius: 4px;
-            border: 1px solid var(--border);
-            box-shadow: none;
-        }
-
-        .attendance-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.875rem;
-            font-family: 'Roboto', 'Helvetica', 'Arial', sans-serif;
-            min-width: 900px;
-        }
-
-        .attendance-table .row-anomaly {
-            background-color: var(--anomaly-bg);
-            color: var(--anomaly-text);
-        }
-
-
-        [data-theme="dark"] .attendance-table .row-anomaly {
-            background-color: #ffd60011;
-        }
-
-        [data-theme="dark"] .attendance-table .row-holiday {
-            background-color: #0d47a122;
-        }
-
-        .badge-holiday {
-            display: inline-block;
-            margin-left: 8px;
-            padding: 2px 8px;
-            font-size: 0.7rem;
-            font-weight: 600;
-            color: var(--primary);
-            border: 1px solid var(--primary);
-            border-radius: 12px;
-            background: #fff;
-            text-transform: uppercase;
-            vertical-align: middle;
-            line-height: 1;
-        }
-
-        [data-theme="dark"] .badge-holiday {
-            background: transparent;
-            color: #64b5f6;
-            border-color: #64b5f6;
-        }
-
-        .attendance-table thead th {
-            background: var(--header-bg);
-            color: var(--text-secondary);
-            padding: 16px;
-            text-align: left;
-            font-weight: 500;
-            font-size: 0.875rem;
-            line-height: 1.5rem;
-            letter-spacing: 0.01071em;
-            white-space: nowrap;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-            border-bottom: 2px solid var(--border);
-        }
-
-        .attendance-table tbody td {
-            padding: 16px;
-            text-align: left;
-            border-bottom: 1px solid var(--border);
-            white-space: nowrap;
-            color: var(--text-dark);
-            font-size: 0.875rem;
-            font-weight: 400;
-        }
-
-        /* Pagination Settings (MUI TablePagination mimic) */
-        .pagination {
-            display: flex;
-            justify-content: flex-end;
-            align-items: center;
-            gap: 20px;
-            padding: 12px 16px;
-            border-top: 1px solid var(--border);
-            color: var(--text-secondary);
-            font-size: 0.875rem;
-        }
-
-        .pagination button {
-            padding: 8px;
-            min-width: unset;
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            background: transparent;
-            color: var(--text-secondary);
-            border: none;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: none;
-        }
-
-        .pagination button:hover:not(:disabled) {
-            background-color: rgba(0, 0, 0, 0.04);
-            color: var(--text-dark);
-            box-shadow: none;
-        }
-
-        [data-theme="dark"] .pagination button:hover:not(:disabled) {
-            background-color: rgba(255, 255, 255, 0.08);
-        }
-
-        .pagination button:disabled {
-            color: var(--text-light);
-            cursor: default;
-        }
-
-        .pagination-info {
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-        }
-
-        .page-size-selector {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .page-size-selector select {
-            width: auto;
-            padding: 4px 24px 4px 8px;
-            border: none;
-            border-bottom: 1px solid var(--input-border);
-            border-radius: 0;
-            background-color: transparent;
-            font-size: 0.875rem;
-        }
-
-        .page-size-selector select:hover {
-            background-color: transparent;
-            border-bottom: 1px solid var(--text-dark);
-        }
-
-        .page-size-selector select:focus {
-            box-shadow: none;
-            border-width: 1px;
-            padding: 4px 24px 4px 8px;
-        }
-
-        .attendance-table tbody tr {
-            transition: background-color 0.2s;
-        }
-
-        .attendance-table tbody tr:hover {
-            background-color: var(--table-row-hover);
-        }
-
-        .attendance-table .date-cell {
-            font-weight: 500;
-        }
-
-        .attendance-table .emp-cell {
-            color: var(--text-secondary);
-        }
-
-        .attendance-table .hours-cell {
-            font-weight: 500;
-            color: var(--text-dark);
-        }
-
-        .attendance-table .balance-cell.positive {
-            color: var(--success);
-            font-weight: 500;
-        }
-
-        .attendance-table .balance-cell.negative {
-            color: var(--danger);
-            font-weight: 500;
-        }
-
-        .attendance-table .balance-cell.neutral {
-            color: var(--text-light);
-        }
-
-        /* Anomalies highlighting */
-        .row-anomaly {
-            background-color: var(--anomaly-bg);
-        }
-
-        .row-anomaly td {
-            color: var(--anomaly-text);
-        }
-
-        .row-empty {
-            background-color: var(--empty-bg);
-        }
-
-        .row-empty td {
-            color: var(--empty-text);
-            font-weight: 500;
-        }
-
-        .attendance-table .row-holiday {
-            background-color: var(--primary-light);
-            color: var(--primary-dark);
-        }
-
-        .attendance-table .row-holiday td {
-            color: var(--primary-dark);
-        }
-
-        .error {
-            color: var(--danger);
-        }
-
-        #loginScreen .content-inner {
-            max-width: 420px;
-            margin: 0 auto;
-        }
-
-        /* Top Actions */
-        .top-actions {
-            display: flex;
-            gap: 15px;
-        }
-
-        .btn-icon-only {
-            background: transparent;
-            color: white;
-            border: none;
-            padding: 8px 12px;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: background 0.2s;
-            height: auto;
-        }
-
-        .btn-icon-only:hover {
-            background: rgba(255, 255, 255, 0.15);
-        }
-
-        .page-size-selector {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .page-size-selector select {
-            width: auto;
-            padding: 6px 10px;
-        }
-
-        /* Hamburger button hidden by default on desktop */
-        .hamburger-btn {
-            display: none;
-            background: transparent;
-            border: none;
-            color: white;
-            padding: 8px;
-            cursor: pointer;
-            z-index: 101;
-            /* Reset global button styles */
-            width: auto;
-            margin: 0;
-            min-width: 0;
-        }
-
-        /* Custom Modal */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.6);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-            backdrop-filter: blur(3px);
-        }
-
-        .modal-overlay.active {
-            display: flex;
-        }
-
-        .modal-content {
-            background: var(--card-bg);
-            padding: 24px;
-            border-radius: 8px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
-            width: 90%;
-            max-width: 400px;
-            color: var(--text-dark);
-            animation: modalFadeIn 0.2s ease-out;
-        }
-
-        @keyframes modalFadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .modal-title {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 12px;
-            color: var(--text-dark);
-        }
-
-        .modal-body {
-            font-size: 14px;
-            color: var(--text-light);
-            margin-bottom: 24px;
-        }
-
-        .modal-actions {
-            display: flex;
-            justify-content: flex-end;
-            gap: 12px;
-        }
-
-        .modal-btn {
-            padding: 8px 16px;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            border: none;
-        }
-
-        .modal-btn.cancel {
-            background: var(--bg);
-            color: var(--text-dark);
-            border: 1px solid var(--border);
-        }
-
-        .modal-btn.confirm {
-            background: var(--primary);
-            color: white;
-        }
-
-        /* Responsive Mobile Layout */
-        @media (max-width: 768px) {
-            body {
-                padding: 10px;
-            }
-
-            .content {
-                padding: 15px 10px;
-            }
-
-            .header {
-                flex-direction: row;
-                align-items: center;
-                justify-content: flex-start;
-                /* Align left */
-                position: relative;
-            }
-
-            .hamburger-btn {
-                display: block;
-                order: -1;
-                /* Move to the left of the title */
-                margin-right: 15px;
-                /* Spacing from title */
-                margin-left: -10px;
-                /* Pull further to the left edge */
-                padding: 12px;
-                /* Bigger touch target */
-            }
-
-            .header-title {
-                flex: 1;
-                text-align: left !important;
-            }
-
-            .top-actions {
-                display: none !important;
-                /* Hide default stack layout */
-                position: absolute;
-                top: 100%;
-                left: 0;
-                right: 0;
-                background: var(--card-bg);
-                flex-direction: column;
-                padding: 15px;
-                box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
-                z-index: 100;
-                border-radius: 0 0 12px 12px;
-                border: 1px solid var(--border);
-                border-top: none;
-                gap: 8px;
-            }
-
-            .top-actions.show-mobile-menu {
-                display: flex !important;
-                /* Display when toggled */
-                animation: slideDown 0.2s ease-out;
-            }
-
-            @keyframes slideDown {
-                from {
-                    opacity: 0;
-                    transform: translateY(-10px);
-                }
-
-                to {
-                    opacity: 1;
-                    transform: translateY(0);
-                }
-            }
-
-            .top-actions .btn-icon-only {
-                color: var(--text-dark);
-                /* Dark text for white dropdown */
-                justify-content: flex-start;
-            }
-
-            .top-actions .btn-icon-only svg {
-                stroke: var(--text-dark);
-            }
-
-            .top-actions .btn-logout {
-                color: white;
-                /* Keep logout button visible */
-            }
-
-            .btn-icon-only {
-                width: 100%;
-                /* Take full width on mobile */
-                justify-content: center;
-                font-size: 14px;
-                padding: 12px 10px;
-                /* larger tap target */
-            }
-
-            .btn-logout {
-                width: 100%;
-                margin-top: 5px;
-                padding: 12px 10px;
-            }
-
-            .filters-bar {
-                flex-direction: column;
-                align-items: stretch;
-                padding: 15px;
-            }
-
-            /* Date Picker alignment on mobile */
-            .filter-item>div {
-                flex-direction: column;
-            }
-
-            #calendarPickerBtn {
-                width: 100%;
-                /* Make calendar button full width under the nav */
-                margin-top: 10px;
-            }
-
-            .filter-item {
-                flex: unset;
-                width: 100%;
-            }
-
-            .filter-actions {
-                width: 100%;
-                margin-top: 10px;
-            }
-
-            .filter-actions button {
-                width: 100%;
-                padding: 12px;
-            }
-
-            .month-nav button {
-                padding: 12px 10px;
-            }
-
-            .month-nav-text {
-                font-size: 0.95rem;
-                /* slightly larger for readability */
-                padding: 12px 10px;
-            }
-
-            .pagination {
-                flex-wrap: wrap;
-                justify-content: center;
-                gap: 10px;
-            }
-
-            .page-size-selector {
-                width: 100%;
-                justify-content: center;
-                margin-bottom: 10px;
-            }
-
-            .modal-content {
-                padding: 20px 15px;
-            }
-
-            /* Sticky columns for horizontal scrolling */
-            .attendance-table th:nth-child(1),
-            .attendance-table td:nth-child(1) {
-                position: sticky;
-                left: 0;
-                z-index: 2;
-                background-color: var(--card-bg);
-                min-width: 105px;
-                max-width: 105px;
-                padding-left: 10px;
-                padding-right: 10px;
-                white-space: pre-wrap;
-            }
-
-            .attendance-table thead th:nth-child(1) {
-                z-index: 12;
-                background-color: var(--header-bg);
-            }
-
-            .attendance-table th:nth-child(2),
-            .attendance-table td:nth-child(2) {
-                position: sticky;
-                left: 105px;
-                z-index: 2;
-                background-color: var(--card-bg);
-                min-width: 120px;
-                max-width: 120px;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                box-shadow: 2px 0 5px rgba(0, 0, 0, 0.08);
-                padding-left: 10px;
-                padding-right: 10px;
-            }
-
-            .attendance-table thead th:nth-child(2) {
-                z-index: 12;
-                background-color: var(--header-bg);
-            }
-
-            /* Background resets for sticky hover/states */
-            .attendance-table tbody tr.row-anomaly td:nth-child(1),
-            .attendance-table tbody tr.row-anomaly td:nth-child(2) {
-                background-color: var(--anomaly-bg);
-            }
-
-            .attendance-table tbody tr.row-empty td:nth-child(1),
-            .attendance-table tbody tr.row-empty td:nth-child(2) {
-                background-color: var(--empty-bg);
-            }
-
-            .attendance-table tbody tr:hover td:nth-child(1),
-            .attendance-table tbody tr:hover td:nth-child(2) {
-                background-color: var(--table-row-hover);
-            }
-
-            @media print {
-
-                .sidebar,
-                .top-bar,
-                .filters-section,
-                .tab-navigation,
-                .pagination,
-                .actions-bar,
-                .btn,
-                .no-print {
-                    display: none !important;
-                }
-
-                .main-content {
-                    margin: 0 !important;
-                    padding: 0 !important;
-                    width: 100% !important;
-                }
-
-                .table-container {
-                    box-shadow: none !important;
-                    border: none !important;
-                    margin: 0 !important;
-                    width: 100% !important;
-                }
-
-                .attendance-table {
-                    font-size: 10px !important;
-                }
-
-                body {
-                    background: white !important;
-                    color: black !important;
-                }
-
-                h2 {
-                    margin-top: 0 !important;
-                }
-            }
-    </style>
+    <link rel="stylesheet" href="admin.css">
 </head>
 
 <body>
@@ -1037,7 +27,6 @@
             </div>
         </div>
     </div>
-    </div>
 
     <!-- Manual Clock Modal -->
     <div class="modal-overlay" id="manualClockModal">
@@ -1051,12 +40,12 @@
                 </div>
                 <div class="form-group" style="margin-top: 10px;">
                     <label>Data</label>
-                    <input type="date" id="mcDate"
+                    <input type="text" id="mcDate"
                         style="width: 100%; padding: 8px; border: 1px solid var(--input-border); border-radius: 4px;">
                 </div>
                 <div class="form-group" style="margin-top: 10px;">
                     <label>Ora</label>
-                    <input type="time" id="mcTime"
+                    <input type="text" id="mcTime"
                         style="width: 100%; padding: 8px; border: 1px solid var(--input-border); border-radius: 4px;">
                 </div>
                 <div class="form-group" style="margin-top: 10px;">
@@ -1075,6 +64,89 @@
             <div class="modal-actions" style="margin-top: 20px;">
                 <button class="modal-btn cancel" onclick="closeManualClockModal()">Annulla</button>
                 <button class="modal-btn confirm" onclick="submitManualClock()">Salva</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Manual Clock Modal -->
+    <div class="modal-overlay" id="editClockModal">
+        <div class="modal-content">
+            <div class="modal-title">Modifica Marcatura Manuale</div>
+            <div class="modal-body" style="text-align: left;">
+                <input type="hidden" id="editClockId">
+                <div class="form-group">
+                    <label>Data</label>
+                    <input type="text" id="editClockDate"
+                        style="width: 100%; padding: 8px; border: 1px solid var(--input-border); border-radius: 4px;">
+                </div>
+                <div class="form-group" style="margin-top: 10px;">
+                    <label>Ora</label>
+                    <input type="text" id="editClockTime"
+                        style="width: 100%; padding: 8px; border: 1px solid var(--input-border); border-radius: 4px;">
+                </div>
+                <div class="form-group" style="margin-top: 10px;">
+                    <label>Tipo Marcatura</label>
+                    <select id="editClockAction"
+                        style="width: 100%; padding: 8px; border: 1px solid var(--input-border); border-radius: 4px;">
+                        <option value="In">Entrata</option>
+                        <option value="I_pausa">Inizio Pausa</option>
+                        <option value="F_pausa">Fine Pausa</option>
+                        <option value="Out">Uscita</option>
+                        <option value="U_trasf">Inizio Trasferta</option>
+                        <option value="R_trasf">Ritorno Trasferta</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-actions" style="margin-top: 20px;">
+                <button class="modal-btn cancel" onclick="closeEditClockModal()">Annulla</button>
+                <button class="modal-btn confirm" onclick="submitEditClock()">Salva Modifiche</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Holidays Modal -->
+    <div class="modal-overlay" id="customHolidaysModal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-title">Gestione Chiusure Aziendali (Festività )</div>
+            <div class="modal-body" style="text-align: left;">
+                <div style="margin-bottom: 20px;">
+                    <p style="margin-bottom: 10px; color: var(--text-secondary); font-size: 13px;">Le date qui
+                        inserite
+                        saranno considerate come festività  (0 ore teoriche, evidenziate in blu) e non genereranno
+                        anomalie in caso di assenza.</p>
+                    <div style="display: flex; gap: 10px; align-items: flex-end;">
+                        <div class="form-group" style="margin-bottom: 0; flex: 1;">
+                            <label>Data</label>
+                            <input type="text" id="chDate" placeholder="Seleziona data..."
+                                style="padding: 8px; border: 1px solid var(--input-border); border-radius: 4px;">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0; flex: 2;">
+                            <label>Descrizione</label>
+                            <input type="text" id="chDesc" placeholder="Es: Chiusura estiva"
+                                style="padding: 8px; border: 1px solid var(--input-border); border-radius: 4px;">
+                        </div>
+                        <button class="btn-primary" onclick="addCustomHoliday()"
+                            style="width: auto; height: 36px; padding: 0 15px; margin-bottom: 2px;">Aggiungi</button>
+                    </div>
+                </div>
+
+                <div class="table-container" style="max-height: 250px; overflow-y: auto;">
+                    <table class="attendance-table" style="min-width: 100%;">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Descrizione</th>
+                                <th style="text-align: center;">Azioni</th>
+                            </tr>
+                        </thead>
+                        <tbody id="customHolidaysBody">
+                            <!-- Popolato trammite JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-actions" style="margin-top: 20px;">
+                <button class="modal-btn cancel" onclick="closeCustomHolidaysModal()">Chiudi</button>
             </div>
         </div>
     </div>
@@ -1104,6 +176,23 @@
                         <polyline points="12 6 12 12 16 14"></polyline>
                     </svg>
                     Aggiungi Marcatura
+                </button>
+                <button class="btn-icon-only" onclick="openCustomHolidaysModal()" title="Gestisci Chiusure Aziendali"
+                    style="font-size:14px; padding: 8px 12px; font-weight:500; display:flex; gap:6px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                        <path d="M8 14h.01"></path>
+                        <path d="M12 14h.01"></path>
+                        <path d="M16 14h.01"></path>
+                        <path d="M8 18h.01"></path>
+                        <path d="M12 18h.01"></path>
+                        <path d="M16 18h.01"></path>
+                    </svg>
+                    Gestisci Festività 
                 </button>
                 <button class="btn-icon-only" onclick="downloadCSVReport()" title="Scarica Report in CSV"
                     style="font-size:14px; padding: 8px 12px; font-weight:500; display:flex; gap:6px;">
@@ -1165,19 +254,21 @@
                                     </svg>
                                 </button>
                             </div>
-                            <button class="btn-icon-only" id="calendarPickerBtn" title="Scegli Range Date"
-                                style="border-radius: 4px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text-dark); height: 56px; width: 56px; margin: 0; padding: 0; display: flex; align-items: center; justify-content: center;">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                                    <line x1="16" y1="2" x2="16" y2="6"></line>
-                                    <line x1="8" y1="2" x2="8" y2="6"></line>
-                                    <line x1="3" y1="10" x2="21" y2="10"></line>
-                                </svg>
-                            </button>
+                            <div style="position: relative; display: flex;">
+                                <button class="btn-icon-only" id="calendarPickerBtn" title="Scegli Range Date"
+                                    style="border-radius: 4px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text-dark); height: 56px; width: 56px; margin: 0; padding: 0; display: flex; align-items: center; justify-content: center;">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                                    </svg>
+                                </button>
+                                <input type="text" id="hiddenMonthPicker"
+                                    style="width: 0; height: 0; padding: 0; border: none; opacity: 0; position: absolute; bottom: 0; right: 0; pointer-events: none; z-index: -1;">
+                            </div>
                         </div>
-                        <input type="text" id="hiddenMonthPicker"
-                            style="display:none; position:absolute; visibility:hidden;">
                     </div>
                     <div class="filter-item">
                         <label>Dipendente</label>
@@ -1311,7 +402,8 @@
                         </thead>
                         <tbody id="periodSummaryBody">
                             <tr>
-                                <td colspan="7" style="text-align:center; color:#999; padding:20px;">Nessun dato</td>
+                                <td colspan="7" style="text-align:center; color:#999; padding:20px;">Nessun dato
+                                </td>
                             </tr>
                         </tbody>
                     </table>
@@ -1343,6 +435,8 @@
         let globalProcessedData = []; // All records including empty ones
         let globalFilteredData = [];  // Data currently matching the search filter
         let flatpickrInstance = null;
+        let mcDateInstance = null;
+        let mcTimeInstance = null;
         let currentFilterDate = new Date(); // Track current month for navigation
         let customRangeStart = null; // Set when user picks a specific date range
         let customRangeEnd = null;
@@ -1429,6 +523,7 @@
                 mode: "range",
                 dateFormat: "Y-m-d", // Internal format
                 positionElement: calendarBtn,
+                position: "below right",
                 onChange: function (selectedDates, dateStr, instance) {
                     if (selectedDates.length === 2) {
                         customRangeStart = selectedDates[0];
@@ -1465,6 +560,22 @@
             if (document.getElementById('filterSearch')) {
                 document.getElementById('filterSearch').value = '';
             }
+
+            // Init Manual Clock Pickers
+            mcDateInstance = flatpickr("#mcDate", {
+                locale: "it",
+                dateFormat: "d/m/Y",
+                defaultDate: new Date()
+            });
+
+            mcTimeInstance = flatpickr("#mcTime", {
+                locale: "it",
+                enableTime: true,
+                noCalendar: true,
+                dateFormat: "H:i",
+                time_24hr: true,
+                defaultDate: new Date()
+            });
         }
 
         function updateMonthDisplay() {
@@ -1656,16 +767,17 @@
 
                         if (res.ok) {
                             // Update lists
+                            showToast(isApprove ? "Marcatura approvata!" : "Marcatura rifiutata!", "success");
                             loadPendingValidations();
                             if (action === 'approve') {
                                 loadAdminAttendances(); // Refresh main table
                             }
                         } else {
                             const data = await res.json();
-                            alert("Errore: " + (data.message || res.statusText));
+                            showToast("Errore: " + (data.message || res.statusText), "error");
                         }
                     } catch (err) {
-                        alert("Errore di connessione al server");
+                        showToast("Errore di connessione al server", "error");
                     }
                 } // Chiude arrow function
             ); // Chiude showCustomConfirm
@@ -1685,11 +797,8 @@
 
             // Set default date and time to now
             const now = new Date();
-            const offsetMs = now.getTimezoneOffset() * 60 * 1000;
-            const localISOTime = (new Date(now.getTime() - offsetMs)).toISOString().slice(0, 16);
-
-            document.getElementById('mcDate').value = localISOTime.split('T')[0];
-            document.getElementById('mcTime').value = localISOTime.split('T')[1];
+            if (mcDateInstance) mcDateInstance.setDate(now);
+            if (mcTimeInstance) mcTimeInstance.setDate(now);
 
             document.getElementById('manualClockModal').classList.add('active');
         }
@@ -1700,12 +809,24 @@
 
         async function submitManualClock() {
             const employeeId = document.getElementById('mcEmployee').value;
-            const dateStr = document.getElementById('mcDate').value;
-            const timeStr = document.getElementById('mcTime').value;
+
+            // Get values from flatpickr
+            let dateStr = "";
+            let timeStr = "";
+
+            if (mcDateInstance && mcDateInstance.selectedDates[0]) {
+                // Return YYYY-MM-DD for backend
+                dateStr = mcDateInstance.formatDate(mcDateInstance.selectedDates[0], "Y-m-d");
+            }
+            if (mcTimeInstance && mcTimeInstance.selectedDates[0]) {
+                // Return HH:mm for backend
+                timeStr = mcTimeInstance.formatDate(mcTimeInstance.selectedDates[0], "H:i");
+            }
+
             const action = document.getElementById('mcAction').value;
 
             if (!employeeId || !dateStr || !timeStr || !action) {
-                alert("Compila tutti i campi");
+                showToast("Compila tutti i campi", "error");
                 return;
             }
 
@@ -1728,13 +849,14 @@
 
                 if (res.ok) {
                     closeManualClockModal();
+                    showToast("Marcatura manuale aggiunta con successo!", "success");
                     loadAdminAttendances(); // Refresh data
                 } else {
                     const data = await res.json();
-                    alert("Errore: " + (data.message || res.statusText));
+                    showToast("Errore: " + (data.message || res.statusText), "error");
                 }
             } catch (err) {
-                alert("Errore di connessione al server");
+                showToast("Errore di connessione al server", "error");
             }
         }
 
@@ -1771,7 +893,7 @@
         // --- PDF Generation ---
         function downloadPDFReport() {
             if (globalFilteredData.length === 0) {
-                alert("Nessun record da esportare!");
+                showToast("Nessun record da esportare!", "error");
                 return;
             }
 
@@ -1827,7 +949,10 @@
                 globalFilteredData.forEach(dayData => {
                     const ds = dayData.dateKey.split('-');
                     let displayDate = `${ds[2]}/${ds[1]}/${ds[0]}`;
-                    if (dayData.isHoliday) displayDate += ' (Festivo)';
+                    if (dayData.isHoliday) {
+                        const customDesc = getCustomHolidayDescription(dayData.dateKey);
+                        displayDate += ` (${customDesc ? escapeHtml(customDesc) : 'Festivo'})`;
+                    }
 
                     if (dayData.isEmpty) {
                         tableRows.push([
@@ -1865,13 +990,13 @@
                 tableColumn = ["ID Dip.", "Nome Dipendente", "Ore Effettive", "Ore Teoriche", "Bilancio Ore", "Giorni Effettivi", "Giorni Teorici"];
 
                 const empSummary = {};
+                const periodTheo = getPeriodTheoretical();
                 globalFilteredData.forEach(day => {
                     if (!empSummary[day.empId]) {
-                        empSummary[day.empId] = { id: day.empId, name: day.empDisplay, workedMins: 0, theoreticalMins: 0, workedDays: 0, theoreticalDays: 0 };
+                        empSummary[day.empId] = { id: day.empId, name: day.empDisplay, workedMins: 0, theoreticalMins: periodTheo.theoreticalMins, workedDays: 0, theoreticalDays: periodTheo.theoreticalDays };
                     }
                     const workedMins = calculateWorkedMinutes(day);
                     if (workedMins > 0) { empSummary[day.empId].workedMins += workedMins; empSummary[day.empId].workedDays++; }
-                    if (!day.isWeekend && !day.isHoliday) { empSummary[day.empId].theoreticalMins += 480; empSummary[day.empId].theoreticalDays++; }
                 });
 
                 const summaryArray = Object.values(empSummary).sort((a, b) => parseInt(a.id) - parseInt(b.id));
@@ -1917,7 +1042,7 @@
         // --- CSV Generation ---
         function downloadCSVReport() {
             if (globalFilteredData.length === 0) {
-                alert("Nessun record da esportare!");
+                showToast("Nessun record da esportare!", "error");
                 return;
             }
 
@@ -1934,7 +1059,10 @@
                 globalFilteredData.forEach(dayData => {
                     const ds = dayData.dateKey.split('-');
                     let displayDate = `${ds[2]}/${ds[1]}/${ds[0]}`;
-                    if (dayData.isHoliday) displayDate += ' (Festivo)';
+                    if (dayData.isHoliday) {
+                        const customDesc = getCustomHolidayDescription(dayData.dateKey);
+                        displayDate += ` (${customDesc ? escapeHtml(customDesc) : 'Festivo'})`;
+                    }
 
                     if (dayData.isEmpty) {
                         csvRows.push([
@@ -1973,13 +1101,13 @@
                 csvRows.push(tableColumn.join(";"));
 
                 const empSummary = {};
+                const periodTheo = getPeriodTheoretical();
                 globalFilteredData.forEach(day => {
                     if (!empSummary[day.empId]) {
-                        empSummary[day.empId] = { id: day.empId, name: day.empDisplay, workedMins: 0, theoreticalMins: 0, workedDays: 0, theoreticalDays: 0 };
+                        empSummary[day.empId] = { id: day.empId, name: day.empDisplay, workedMins: 0, theoreticalMins: periodTheo.theoreticalMins, workedDays: 0, theoreticalDays: periodTheo.theoreticalDays };
                     }
                     const workedMins = calculateWorkedMinutes(day);
                     if (workedMins > 0) { empSummary[day.empId].workedMins += workedMins; empSummary[day.empId].workedDays++; }
-                    if (!day.isWeekend && !day.isHoliday) { empSummary[day.empId].theoreticalMins += 480; empSummary[day.empId].theoreticalDays++; }
                 });
 
                 const summaryArray = Object.values(empSummary).sort((a, b) => parseInt(a.id) - parseInt(b.id));
@@ -2022,6 +1150,29 @@
                 currentDate.setDate(currentDate.getDate() + 1);
             }
             return dateArray;
+        }
+
+        function getPeriodTheoretical() {
+            let firstDay, lastDay;
+            if (customRangeStart && customRangeEnd) {
+                firstDay = customRangeStart;
+                lastDay = customRangeEnd;
+            } else {
+                const year = currentFilterDate.getFullYear();
+                const month = currentFilterDate.getMonth();
+                firstDay = new Date(year, month, 1);
+                lastDay = new Date(year, month + 1, 0);
+            }
+            const rangeDays = getDatesInRange(firstDay, lastDay);
+            let theoreticalMins = 0;
+            let theoreticalDays = 0;
+            rangeDays.forEach(day => {
+                if (!day.isWeekend && !day.isHoliday) {
+                    theoreticalMins += 480;
+                    theoreticalDays++;
+                }
+            });
+            return { theoreticalMins, theoreticalDays };
         }
 
         // --- Load & render table ---
@@ -2157,6 +1308,7 @@
                             ritorno_trasferta: null,
                             totalMarkingsCount: 0,
                             dedupCount: 0,
+                            extraMarks: [], // Collect markings that don't fit into fixed columns
                             rawRecords: [], // Collect all raw records for two-pass dedup
                             isEmpty: false,
                             isWeekend: dateObj.getDay() === 0 || dateObj.getDay() === 6,
@@ -2167,6 +1319,8 @@
 
                     const mappedAction = ACTION_MAP[r.action] || r.action;
                     groupedMap[dailyKey].rawRecords.push({
+                        id: r.id, // Save the actual database ID for edit operations
+                        source: r.source, // Save the origin (manual_web, web, device)
                         tsMs: dateObj.getTime(),
                         mappedAction: mappedAction,
                         timeStr: dateObj.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
@@ -2185,42 +1339,38 @@
                 // Ordina per timestamp
                 group.rawRecords.sort((a, b) => a.tsMs - b.tsMs);
 
-                // Identifica i record duplicati (stessa azione già assegnata, entro 10 min da un'altra marcatura diversa)
+                // Identifica i record duplicati (stessa azione già  assegnata, entro 10 min)
+                // Le azioni DIVERSE entro 10 min sono valide in quanto correttive o ammissibili (es. ritorno trasferta + inizio pausa)
                 const validFlags = new Array(group.rawRecords.length).fill(true);
 
                 for (let i = 0; i < group.rawRecords.length; i++) {
                     const rec = group.rawRecords[i];
-                    // Controlla se questa azione è già stata assegnata da un record precedente valido
+                    // Controlla se questa STESSA azione à¨ già  stata registrata da un record precedente valido
                     let alreadyAssigned = false;
                     for (let j = 0; j < i; j++) {
                         if (validFlags[j] && group.rawRecords[j].mappedAction === rec.mappedAction) {
                             if (rec.mappedAction === 'uscita') {
-                                // Per 'uscita' teniamo l'ultimo. Se il precedente è entro 10 min,
-                                // è un duplicato → escludiamo il precedente dal conteggio
+                                // Per 'uscita' teniamo l'ultimo. Se il precedente à¨ entro 10 min,
+                                // à¨ un duplicato -> annulliamo il precedente dal conteggio e teniamo questo nuovo
                                 if (Math.abs(rec.tsMs - group.rawRecords[j].tsMs) <= DEDUP_THRESHOLD_MS) {
                                     validFlags[j] = false;
                                     group.dedupCount++;
                                 }
                             } else {
-                                alreadyAssigned = true;
-                                break;
+                                // Per tutte le altre marcature (entrata, resi etc..), 
+                                // teniamo il primo valido. Se questo à¨ entro 10 min dallo stesso tipo precedente..
+                                if (Math.abs(rec.tsMs - group.rawRecords[j].tsMs) <= DEDUP_THRESHOLD_MS) {
+                                    alreadyAssigned = true;
+                                    break;
+                                }
                             }
                         }
                     }
 
                     if (alreadyAssigned) {
-                        // È un duplicato. Controlla se è entro 10 min da un'ALTRA marcatura diversa
-                        const hasNearbyDifferent = group.rawRecords.some((other, idx) =>
-                            idx !== i &&
-                            other.mappedAction !== rec.mappedAction &&
-                            Math.abs(rec.tsMs - other.tsMs) <= DEDUP_THRESHOLD_MS
-                        );
-
-                        if (hasNearbyDifferent) {
-                            // Probabile errore di codice: ignorare
-                            validFlags[i] = false;
-                            group.dedupCount++;
-                        }
+                        // àˆ un duplicato puro della STESSA marcatura entro 10 min. Ignorare.
+                        validFlags[i] = false;
+                        group.dedupCount++;
                     }
                 }
 
@@ -2232,27 +1382,36 @@
                         group.totalMarkingsCount++;
                     }
 
-                    // Assegnazione orari (solo da record validi)
+                    // Assegnazione orari e ID (solo da record validi)
                     if (validFlags[i] && group.hasOwnProperty(rec.mappedAction)) {
                         if (rec.mappedAction === 'entrata' && !group.entrata) {
                             group.entrata = rec.timeStr;
+                            group.entrata_id = rec.id; group.entrata_source = rec.source;
                             group.entrata_lat = rec.lat; group.entrata_lon = rec.lon;
                         } else if (rec.mappedAction === 'uscita') {
                             group.uscita = rec.timeStr; // Keep the latest
+                            group.uscita_id = rec.id; group.uscita_source = rec.source;
                             group.uscita_lat = rec.lat; group.uscita_lon = rec.lon;
                         } else if (!group[rec.mappedAction]) {
                             group[rec.mappedAction] = rec.timeStr;
+                            group[rec.mappedAction + '_id'] = rec.id; group[rec.mappedAction + '_source'] = rec.source;
                             group[rec.mappedAction + '_lat'] = rec.lat; group[rec.mappedAction + '_lon'] = rec.lon;
+                        } else {
+                            // Already has this type of mark, add to extraMarks for visibility
+                            group.extraMarks.push({
+                                action: rec.mappedAction,
+                                time: rec.timeStr
+                            });
                         }
                     }
                 }
 
-                // Terza passata: rileva marcature "orfane" (metà coppia senza l'altra metà)
-                // MA solo se la marcatura vicina è dello STESSO tipo logico.
+                // Terza passata: rileva marcature "orfane" (metà  coppia senza l'altra metà )
+                // MA solo se la marcatura vicina à¨ dello STESSO tipo logico.
                 // Tipo "inizio": entrata, inizio_pausa, inizio_trasferta
                 // Tipo "fine": uscita, fine_pausa, ritorno_trasferta
-                // Due azioni "inizio" vicine con una orfana → errore di codice
-                // Una "fine" seguita da un "inizio" → sequenza legittima (es. ritorno trasf. + inizio pausa)
+                // Due azioni "inizio" vicine con una orfana ↑’ errore di codice
+                // Una "fine" seguita da un "inizio" ↑’ sequenza legittima (es. ritorno trasf. + inizio pausa)
                 const startActions = new Set(['entrata', 'inizio_pausa', 'inizio_trasferta']);
                 const endActions = new Set(['uscita', 'fine_pausa', 'ritorno_trasferta']);
                 const actionPairs = {
@@ -2269,11 +1428,11 @@
                     const pairedAction = actionPairs[rec.mappedAction];
                     if (!pairedAction) continue; // entrata/uscita non hanno coppia obbligatoria
 
-                    // Controlla se la coppia è compilata
+                    // Controlla se la coppia à¨ compilata
                     if (group[pairedAction]) continue; // La coppia esiste, tutto ok
 
-                    // La coppia manca. È orfana.
-                    // Determina se è tipo "inizio" o "fine"
+                    // La coppia manca. àˆ orfana.
+                    // Determina se à¨ tipo "inizio" o "fine"
                     const isStart = startActions.has(rec.mappedAction);
                     const isEnd = endActions.has(rec.mappedAction);
 
@@ -2288,7 +1447,7 @@
                     );
 
                     if (hasNearbySameType) {
-                        // Orfana vicina ad un'azione dello stesso tipo → errore di codice
+                        // Orfana vicina ad un'azione dello stesso tipo ↑’ errore di codice
                         validFlags[i] = false;
                         group.dedupCount++;
                         group.totalMarkingsCount--;
@@ -2408,29 +1567,25 @@
             const tbody = document.getElementById('periodSummaryBody');
             const empSummary = {};
 
+            const periodTheo = getPeriodTheoretical();
+
             globalFilteredData.forEach(day => {
                 if (!empSummary[day.empId]) {
                     empSummary[day.empId] = {
                         id: day.empId,
                         name: day.empDisplay,
                         workedMins: 0,
-                        theoreticalMins: 0,
+                        theoreticalMins: periodTheo.theoreticalMins,
                         workedDays: 0,
-                        theoreticalDays: 0
+                        theoreticalDays: periodTheo.theoreticalDays
                     };
                 }
 
                 const workedMins = calculateWorkedMinutes(day);
-                const isWorkDay = !day.isWeekend && !day.isHoliday;
 
                 if (workedMins > 0) {
                     empSummary[day.empId].workedMins += workedMins;
                     empSummary[day.empId].workedDays++;
-                }
-
-                if (isWorkDay) {
-                    empSummary[day.empId].theoreticalMins += 480;
-                    empSummary[day.empId].theoreticalDays++;
                 }
             });
 
@@ -2489,7 +1644,10 @@
                 // Formatta la data
                 const ds = dayData.dateKey.split('-');
                 let displayDate = `${ds[2]}/${ds[1]}/${ds[0]}`;
-                if (dayData.isHoliday) displayDate += ` <span class="badge-holiday">Festivo</span>`;
+                if (dayData.isHoliday) {
+                    const customDesc = getCustomHolidayDescription(dayData.dateKey);
+                    displayDate += ` <span class="badge-holiday">${customDesc ? escapeHtml(customDesc) : 'Festivo'}</span>`;
+                }
 
                 // Calcolo ore lavorate e anomalie
                 let hoursDisplay = '—';
@@ -2535,6 +1693,14 @@
                     anomalyReasons.push('Fine pausa senza inizio pausa');
                 }
 
+                // Controllo: marcature extra (nascoste perché le colonne sono già piene)
+                if (dayData.extraMarks && dayData.extraMarks.length > 0) {
+                    dayData.extraMarks.forEach(em => {
+                        const actionName = (ACTION_MAP[em.action] || em.action).replace('_', ' ');
+                        anomalyReasons.push(`Marcatura EXTRA nascosta: ${actionName} alle ${em.time}`);
+                    });
+                }
+
 
                 const workedMins = calculateWorkedMinutes(dayData);
                 if (workedMins > 0) {
@@ -2558,25 +1724,29 @@
                 }
 
                 const isAnomaly = anomalyReasons.length > 0;
-                const tooltipText = anomalyReasons.join(' · ');
+                const tooltipText = anomalyReasons.join(' Â· ');
 
-                function renderTime(timeStr, lat, lon) {
+                function renderTime(timeStr, lat, lon, recordId, source, mappedAction, dateKey) {
                     if (!timeStr) return '—';
+                    let extras = '';
                     if (lat && lon) {
-                        return `${timeStr} <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" title="Apri Posizione GPS" style="text-decoration:none; display:inline-block; margin-left:4px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: text-bottom;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg></a>`;
+                        extras += ` <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" title="Apri Posizione GPS" style="text-decoration:none; display:inline-block; margin-left:4px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: text-bottom;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg></a>`;
                     }
-                    return timeStr;
+                    if (source === 'manual_web' && recordId) {
+                        extras += ` <a href="javascript:void(0)" onclick="openEditClockModal(${recordId}, '${timeStr}', '${mappedAction}', '${dateKey}')" title="Modifica marcatura manuale" style="text-decoration:none; display:inline-block; margin-left:4px; cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: text-bottom;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></a>`;
+                    }
+                    return timeStr + extras;
                 }
 
                 html += `<tr class="${isAnomaly ? 'row-anomaly' : ''} ${dayData.isHoliday ? 'row-holiday' : ''}">
                     <td class="date-cell">${displayDate}</td>
                     <td class="emp-cell">${dayData.empDisplay}</td>
-                    <td>${renderTime(dayData.entrata, dayData.entrata_lat, dayData.entrata_lon)}</td>
-                    <td>${renderTime(dayData.inizio_pausa, dayData.inizio_pausa_lat, dayData.inizio_pausa_lon)}</td>
-                    <td>${renderTime(dayData.fine_pausa, dayData.fine_pausa_lat, dayData.fine_pausa_lon)}</td>
-                    <td>${renderTime(dayData.uscita, dayData.uscita_lat, dayData.uscita_lon)}</td>
-                    <td>${renderTime(dayData.inizio_trasferta, dayData.inizio_trasferta_lat, dayData.inizio_trasferta_lon)}</td>
-                    <td>${renderTime(dayData.ritorno_trasferta, dayData.ritorno_trasferta_lat, dayData.ritorno_trasferta_lon)}</td>
+                    <td>${renderTime(dayData.entrata, dayData.entrata_lat, dayData.entrata_lon, dayData.entrata_id, dayData.entrata_source, 'entrata', dayData.dateKey)}</td>
+                    <td>${renderTime(dayData.inizio_pausa, dayData.inizio_pausa_lat, dayData.inizio_pausa_lon, dayData.inizio_pausa_id, dayData.inizio_pausa_source, 'inizio_pausa', dayData.dateKey)}</td>
+                    <td>${renderTime(dayData.fine_pausa, dayData.fine_pausa_lat, dayData.fine_pausa_lon, dayData.fine_pausa_id, dayData.fine_pausa_source, 'fine_pausa', dayData.dateKey)}</td>
+                    <td>${renderTime(dayData.uscita, dayData.uscita_lat, dayData.uscita_lon, dayData.uscita_id, dayData.uscita_source, 'uscita', dayData.dateKey)}</td>
+                    <td>${renderTime(dayData.inizio_trasferta, dayData.inizio_trasferta_lat, dayData.inizio_trasferta_lon, dayData.inizio_trasferta_id, dayData.inizio_trasferta_source, 'inizio_trasferta', dayData.dateKey)}</td>
+                    <td>${renderTime(dayData.ritorno_trasferta, dayData.ritorno_trasferta_lat, dayData.ritorno_trasferta_lon, dayData.ritorno_trasferta_id, dayData.ritorno_trasferta_source, 'ritorno_trasferta', dayData.dateKey)}</td>
                     <td class="hours-cell">${hoursDisplay} ${isAnomaly ? makeWarningSvg(tooltipText) : ''}</td>
                     <td class="balance-cell ${balanceClass}">${balanceDisplay}</td>
                 </tr>`;
@@ -2585,7 +1755,7 @@
             tbody.innerHTML = html;
 
             if (totalPages > 1 || itemsPerPage === 999999) {
-                // Se c'è solo una pagina ma stiamo visualizzando "Tutti", mostriamo i count
+                // Se c'à¨ solo una pagina ma stiamo visualizzando "Tutti", mostriamo i count
                 paginationControls.style.display = 'flex';
                 document.getElementById('pageInfo').textContent = `${currentPage} / ${totalPages}`;
                 document.getElementById('btnPrevPage').disabled = (currentPage === 1);
@@ -2662,11 +1832,14 @@
             return h + ':' + String(m).padStart(2, '0');
         }
 
+        let customHolidaysList = [];
+
         function isHoliday(date) {
             const m = date.getMonth() + 1;
             const d = date.getDate();
             const y = date.getFullYear();
             const mmdd = String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+            const yyyymmdd = y + '-' + mmdd;
 
             const fixedHolidays = [
                 '01-01', '01-06', '04-25', '05-01', '06-02', '08-15', '11-01', '12-08', '12-25', '12-26'
@@ -2682,7 +1855,153 @@
             };
             if (variableHolidays[y] && variableHolidays[y].includes(mmdd)) return true;
 
+            // Check custom holidays
+            if (customHolidaysList.some(h => h.date === yyyymmdd)) {
+                return true;
+            }
+
             return false;
+        }
+
+        function getCustomHolidayDescription(dateKey) {
+            const custom = customHolidaysList.find(h => h.date === dateKey);
+            return custom ? (custom.description || "Chiusura aziendale") : null;
+        }
+
+        let chDateInstance = null;
+
+        function openCustomHolidaysModal() {
+            document.getElementById('customHolidaysModal').classList.add('active');
+            if (!chDateInstance) {
+                chDateInstance = flatpickr("#chDate", {
+                    locale: "it",
+                    dateFormat: "d/m/Y",
+                    defaultDate: "today"
+                });
+            }
+            loadCustomHolidays();
+        }
+
+        function closeCustomHolidaysModal() {
+            document.getElementById('customHolidaysModal').classList.remove('active');
+            document.getElementById('chDesc').value = '';
+            // Ricarichiamo le presenze in caso le festività  siano cambiate, per aggiornare i conteggi
+            if (globalProcessedData.length > 0) {
+                loadAdminAttendances();
+            }
+        }
+
+        async function loadCustomHolidays() {
+            try {
+                const res = await fetch('/api/custom-holidays');
+                if (res.ok) {
+                    customHolidaysList = await res.json();
+                    renderCustomHolidaysList();
+                }
+            } catch (err) {
+                console.error("Errore caricamento chiusure aziendali", err);
+            }
+        }
+
+        function renderCustomHolidaysList() {
+            const tbody = document.getElementById('customHolidaysBody');
+            tbody.innerHTML = '';
+            if (!customHolidaysList || customHolidaysList.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#999; padding: 15px;">Nessuna chiusura aziendale registrata.</td></tr>';
+                return;
+            }
+            customHolidaysList.forEach(h => {
+                const dateObj = new Date(h.date);
+                const displayDate = isNaN(dateObj) ? h.date : dateObj.toLocaleDateString('it-IT');
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="font-weight: 500;">${displayDate}</td>
+                    <td>${escapeHtml(h.description || 'Chiusura')}</td>
+                    <td style="text-align: center;">
+                        <button class="btn-icon-only" style="color: var(--danger); background: transparent; box-shadow: none;" onclick="deleteCustomHoliday(${h.id})" title="Elimina">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function addCustomHoliday() {
+            let dateStr = "";
+            if (chDateInstance && chDateInstance.selectedDates[0]) {
+                dateStr = chDateInstance.formatDate(chDateInstance.selectedDates[0], "Y-m-d");
+            }
+            const desc = document.getElementById('chDesc').value;
+            if (!dateStr) {
+                showToast("Selezionare una data", "warning");
+                return;
+            }
+
+            showCustomConfirm(
+                `Sei sicuro di voler impostare una chiusura aziendale per il giorno ${chDateInstance.formatDate(chDateInstance.selectedDates[0], "d/m/Y")}?`,
+                "Conferma Chiusura",
+                "Conferma",
+                "var(--success)",
+                async () => {
+                    try {
+                        const res = await fetch('/api/custom-holidays', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ adminId: parseInt(storedAdminId), date: dateStr, description: desc })
+                        });
+                        if (res.ok) {
+                            document.getElementById('chDesc').value = '';
+                            showToast("Chiusura aziendale aggiunta!", "success");
+                            await loadCustomHolidays(); // reload global array and table
+                        } else {
+                            const text = await res.text();
+                            showToast("Errore inserimento: " + text, "error");
+                        }
+                    } catch (err) {
+                        console.error("Errore aggiunta", err);
+                    }
+                }
+            );
+        }
+
+        async function deleteCustomHoliday(id) {
+            showCustomConfirm(
+                "Sei sicuro di voler eliminare questa chiusura aziendale?",
+                "Elimina Chiusura",
+                "Elimina",
+                "var(--danger)",
+                async () => {
+                    try {
+                        const res = await fetch(`/api/custom-holidays?id=${id}&adminId=${storedAdminId}`, { method: 'DELETE' });
+                        if (res.ok) {
+                            showToast("Chiusura aziendale eliminata!", "success");
+                            await loadCustomHolidays();
+                        } else {
+                            const text = await res.text();
+                            showToast("Errore eliminazione: " + text, "error");
+                        }
+                    } catch (err) {
+                        console.error("Errore eliminazione", err);
+                    }
+                }
+            );
+        }
+
+        async function loadInitialData() {
+            await loadCustomHolidays();
+            // ... the rest of init flow should be triggered AFTER custom holidays are loaded
+        }
+
+        function escapeHtml(unsafe) {
+            return (unsafe || "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
         }
 
         // --- Mobile Menu Toggle ---
@@ -2707,6 +2026,193 @@
                 }
             }
         });
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            if (!storedAdminId) {
+                window.location.href = '/';
+                return;
+            }
+
+            // Init flatpickr per range admin
+            flatpickrInstance = flatpickr("#hiddenMonthPicker", {
+                mode: "range",
+                dateFormat: "Y-m-d",
+                locale: "it",
+                positionElement: document.getElementById('calendarPickerBtn'),
+                position: "below right",
+                onChange: function (selectedDates, dateStr, instance) {
+                    if (selectedDates.length === 2) {
+                        customRangeStart = selectedDates[0];
+                        customRangeEnd = selectedDates[1];
+                        updateMonthDisplay();
+                        loadAdminAttendances();
+                    }
+                }
+            });
+
+            document.getElementById('calendarPickerBtn').addEventListener('click', () => {
+                flatpickrInstance.open();
+            });
+
+            // Populate employees dropdown
+            await populateEmployees();
+
+            // Load custom holidays first, then attendances
+            await loadCustomHolidays();
+
+            updateMonthDisplay();
+            loadAdminAttendances();
+            loadPendingValidations();
+
+            // Setup polling per badge validazioni
+            setInterval(loadPendingValidations, 30000);
+        });
+        // --- Edit Modal Functions ---
+        let editDateInstance = null;
+        let editTimeInstance = null;
+
+        // Reverse map: from mapped action back to raw action value for the select
+        const MAPPED_TO_RAW = {
+            'entrata': 'In', 'uscita': 'Out',
+            'inizio_pausa': 'I_pausa', 'fine_pausa': 'F_pausa',
+            'inizio_trasferta': 'U_trasf', 'ritorno_trasferta': 'R_trasf'
+        };
+
+        function openEditClockModal(recordId, timeStr, mappedAction, dateKey) {
+            document.getElementById('editClockId').value = recordId;
+
+            // Convert mappedAction to raw select value
+            const rawAction = MAPPED_TO_RAW[mappedAction] || mappedAction;
+            document.getElementById('editClockAction').value = rawAction;
+
+            // Parse dateKey (YYYY-MM-DD) for flatpickr
+            const ds = dateKey.split('-');
+            const dateObj = new Date(parseInt(ds[0]), parseInt(ds[1]) - 1, parseInt(ds[2]));
+
+            // Parse timeStr (HH:mm)
+            const timeParts = timeStr.split(':');
+            const timeObj = new Date();
+            timeObj.setHours(parseInt(timeParts[0]), parseInt(timeParts[1]), 0, 0);
+
+            // Init or update flatpickr instances
+            if (editDateInstance) {
+                editDateInstance.destroy();
+            }
+            editDateInstance = flatpickr('#editClockDate', {
+                locale: 'it',
+                dateFormat: 'd/m/Y',
+                defaultDate: dateObj
+            });
+
+            if (editTimeInstance) {
+                editTimeInstance.destroy();
+            }
+            editTimeInstance = flatpickr('#editClockTime', {
+                locale: 'it',
+                enableTime: true,
+                noCalendar: true,
+                dateFormat: 'H:i',
+                time_24hr: true,
+                defaultDate: timeObj
+            });
+
+            document.getElementById('editClockModal').classList.add('active');
+        }
+
+        function closeEditClockModal() {
+            document.getElementById('editClockModal').classList.remove('active');
+        }
+
+        async function submitEditClock() {
+            const recordId = parseInt(document.getElementById('editClockId').value);
+            const action = document.getElementById('editClockAction').value;
+
+            let dateStr = '';
+            let timeStr = '';
+
+            if (editDateInstance && editDateInstance.selectedDates[0]) {
+                dateStr = editDateInstance.formatDate(editDateInstance.selectedDates[0], 'Y-m-d');
+            }
+            if (editTimeInstance && editTimeInstance.selectedDates[0]) {
+                timeStr = editTimeInstance.formatDate(editTimeInstance.selectedDates[0], 'H:i');
+            }
+
+            if (!dateStr || !timeStr || !action) {
+                showToast('Compila tutti i campi', 'error');
+                return;
+            }
+
+            const payload = {
+                adminId: parseInt(storedAdminId) || 0,
+                id: recordId,
+                date: dateStr,
+                time: timeStr,
+                action: action
+            };
+
+            try {
+                const res = await fetch('/api/admin/manual-clock', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.status === 401) { logout(); return; }
+
+                if (res.ok) {
+                    closeEditClockModal();
+                    showToast("Marcatura modificata con successo!", "success");
+                    loadAdminAttendances(); // Refresh data
+                } else {
+                    const data = await res.json();
+                    showToast('Errore: ' + (data.message || res.statusText), 'error');
+                }
+            } catch (err) {
+                showToast('Errore di connessione al server', 'error');
+            }
+        }
+        // --- Toast Notifications ---
+        function showToast(message, type = 'info') {
+            let container = document.getElementById('toastContainer');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'toastContainer';
+                container.className = 'toast-container';
+                document.body.appendChild(container);
+            }
+
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+
+            let iconSvg = '';
+            if (type === 'success') {
+                iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>';
+            } else if (type === 'error') {
+                iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
+            } else {
+                iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
+            }
+
+            toast.innerHTML = `
+                <div class="toast-icon">${iconSvg}</div>
+                <div class="toast-message">${escapeHtml(message)}</div>
+            `;
+
+            container.appendChild(toast);
+
+            // Trigger reflow to enable transition
+            toast.offsetHeight;
+            toast.classList.add('show');
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.parentNode.removeChild(toast);
+                    }
+                }, 300); // Wait for transition
+            }, 3000); // 3 seconds visible
+        }
     </script>
 </body>
 

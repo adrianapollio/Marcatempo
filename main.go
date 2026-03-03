@@ -386,6 +386,13 @@ func handleAdminManualClock(w http.ResponseWriter, r *http.Request) {
 		statusCode = 1
 	}
 
+	// Controllo duplicato dal dispositivo terminale
+	if GetRecordHasDeviceEquivalent(data.EmployeeID, data.Date, data.Action) {
+		log.Printf("MANUAL CLOCK BLOCKED: Dipendente %d ha già una marcatura dispositivo di questo tipo il %s", data.EmployeeID, data.Date)
+		http.Error(w, "Esiste già una marcatura proveniente dal dispositivo per questa azione nella data indicata", http.StatusBadRequest)
+		return
+	}
+
 	employeeName := GetEmployeeName(data.EmployeeID)
 	if employeeName == "" {
 		employeeName = fmt.Sprintf("Utente %d", data.EmployeeID)
@@ -408,6 +415,161 @@ func handleAdminManualClock(w http.ResponseWriter, r *http.Request) {
 		"status":  "success",
 		"message": "Marcatura manuale inserita con successo",
 	})
+}
+
+// EditManualClockData struttura per aggiornare una marcatura esistente
+type EditManualClockData struct {
+	AdminID int    `json:"adminId"`
+	ID      int    `json:"id"`
+	Date    string `json:"date"`
+	Time    string `json:"time"`
+	Action  string `json:"action"`
+}
+
+// handleEditAdminManualClock modifica una marcatura ESCLUSIVAMENTE manual_web
+func handleEditAdminManualClock(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		http.Error(w, "Metodo non consentito", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var data EditManualClockData
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+		log.Printf("EDIT MANUAL CLOCK DECODE ERR: %v", err)
+		http.Error(w, "Errore payload JSON", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("EDIT MANUAL CLOCK REQ: %+v", data)
+
+	// Verifica se l'adminId è valido
+	if !IsEmployeeAdmin(data.AdminID) {
+		log.Printf("EDIT MANUAL CLOCK UNAUTH: AdminID %d non è admin", data.AdminID)
+		http.Error(w, "Privilegi insufficienti", http.StatusUnauthorized)
+		return
+	}
+
+	record, err := GetRecordByID(data.ID)
+	if err != nil {
+		log.Printf("EDIT MANUAL CLOCK NOT FOUND: ID %d", data.ID)
+		http.Error(w, "Record non trovato", http.StatusNotFound)
+		return
+	}
+
+	if record.Source != "manual_web" {
+		log.Printf("EDIT MANUAL CLOCK FORBIDDEN SOURCE: ID %d source %s", data.ID, record.Source)
+		http.Error(w, "Solo le marcature inserite manualmente (dal web) possono essere modificate", http.StatusForbidden)
+		return
+	}
+
+	// Parse date and time
+	dateTimeStr := fmt.Sprintf("%s %s:00", data.Date, data.Time)
+	timestamp, err := time.ParseInLocation("2006-01-02 15:04:05", dateTimeStr, time.Local)
+	if err != nil {
+		log.Printf("EDIT MANUAL CLOCK TIME PARSE ERR: %v", err)
+		http.Error(w, "Formato data/ora non valido", http.StatusBadRequest)
+		return
+	}
+
+	statusCode := 0
+	if data.Action == "Out" || data.Action == "out" || data.Action == "F_pausa" || data.Action == "R_trasf" || data.Action == "uscita" || data.Action == "fine_pausa" || data.Action == "ritorno_trasferta" {
+		statusCode = 1
+	}
+
+	// Controllo duplicato dal dispositivo terminale (per il giorno impostato)
+	// Essendo un edit, se il record fosse manual_web non c'è rischio di collisione con se stesso,
+	// ma la GetRecordHasDeviceEquivalent verifica i log con source = 'device' e questo va bene.
+	if GetRecordHasDeviceEquivalent(record.EmployeeID, data.Date, data.Action) {
+		log.Printf("EDIT MANUAL CLOCK BLOCKED: Dipendente %d ha già una marcatura dispositivo il %s", record.EmployeeID, data.Date)
+		http.Error(w, "Esiste già una marcatura proveniente dal dispositivo per questa azione nella data indicata", http.StatusBadRequest)
+		return
+	}
+
+	err = UpdateManualRecord(data.ID, timestamp, data.Action, statusCode)
+	if err != nil {
+		log.Printf("Errore aggiornamento marcatura manuale ID %d: %v", data.ID, err)
+		http.Error(w, "Errore aggiornamento nel database", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "success",
+		"message": "Marcatura manuale modificata con successo",
+	})
+}
+
+// handleCustomHolidays gestisce le festività aziendali personalizzate (GET, POST, DELETE)
+func handleCustomHolidays(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	switch r.Method {
+	case http.MethodGet:
+		holidays, err := GetCustomHolidays()
+		if err != nil {
+			log.Printf("Errore lettura festività personalizzate: %v", err)
+			http.Error(w, "Errore estrazione dati", http.StatusInternalServerError)
+			return
+		}
+		if holidays == nil {
+			holidays = []CustomHoliday{}
+		}
+		json.NewEncoder(w).Encode(holidays)
+
+	case http.MethodPost:
+		var data struct {
+			AdminID     int    `json:"adminId"`
+			Date        string `json:"date"`        // YYYY-MM-DD
+			Description string `json:"description"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+			http.Error(w, "Errore payload JSON", http.StatusBadRequest)
+			return
+		}
+
+		if !IsEmployeeAdmin(data.AdminID) {
+			http.Error(w, "Privilegi insufficienti", http.StatusUnauthorized)
+			return
+		}
+
+		if data.Date == "" {
+			http.Error(w, "La data è obbligatoria", http.StatusBadRequest)
+			return
+		}
+
+		if err := AddCustomHoliday(data.Date, data.Description); err != nil {
+			log.Printf("Errore inserimento festività personalizzata: %v", err)
+			http.Error(w, "Errore salvataggio nel database", http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Festività aggiunta"})
+
+	case http.MethodDelete:
+		adminIDStr := r.URL.Query().Get("adminId")
+		idStr := r.URL.Query().Get("id")
+
+		adminID, _ := strconv.Atoi(adminIDStr)
+		id, _ := strconv.Atoi(idStr)
+
+		if !IsEmployeeAdmin(adminID) {
+			http.Error(w, "Privilegi insufficienti", http.StatusUnauthorized)
+			return
+		}
+
+		if err := DeleteCustomHoliday(id); err != nil {
+			log.Printf("Errore eliminazione festività personalizzata: %v", err)
+			http.Error(w, "Errore eliminazione dal database", http.StatusInternalServerError)
+			return
+		}
+
+		json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Festività eliminata"})
+
+	default:
+		http.Error(w, "Metodo non consentito", http.StatusMethodNotAllowed)
+	}
 }
 
 func main() {
@@ -433,11 +595,29 @@ func main() {
 	http.HandleFunc("/api/admin/pending-validations", handlePendingValidations)
 	http.HandleFunc("/api/admin/approve-validation", handleApproveValidation)
 	http.HandleFunc("/api/admin/reject-validation", handleRejectValidation)
-	http.HandleFunc("/api/admin/manual-clock", handleAdminManualClock)
+	http.HandleFunc("/api/admin/manual-clock", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			handleAdminManualClock(w, r)
+		} else if r.Method == http.MethodPut {
+			handleEditAdminManualClock(w, r)
+		} else {
+			http.Error(w, "Metodo non consentito", http.StatusMethodNotAllowed)
+		}
+	})
+	http.HandleFunc("/api/custom-holidays", handleCustomHolidays)
+
 
 	// Servire dashboard admin
 	http.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "admin.html")
+	})
+
+	// Servire i file CSS
+	http.HandleFunc("/admin.css", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "admin.css")
+	})
+	http.HandleFunc("/index.css", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "index.css")
 	})
 
 	// Servire il frontend index.html

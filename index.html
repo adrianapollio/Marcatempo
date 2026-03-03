@@ -9,743 +9,7 @@
     <!-- Flatpickr CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link rel="stylesheet" type="text/css" href="https://npmcdn.com/flatpickr/dist/themes/airbnb.css">
-    <style>
-        :root {
-            --primary: #0056b3;
-            --primary-light: #e8f0fe;
-            --secondary: #e9ecef;
-            --success: #28a745;
-            --success-light: #d4edda;
-            --danger: #dc3545;
-            --danger-light: #f8d7da;
-            --warning: #f0ad4e;
-            --info: #17a2b8;
-            --info-light: #d1ecf1;
-            --travel: #6f42c1;
-            --travel-light: #e8dff5;
-            --text-dark: #333;
-            --text-light: #6c757d;
-            --bg: #f4f7f6;
-            --card-bg: #ffffff;
-            --border: #dee2e6;
-            --input-bg: #ffffff;
-            --input-border: #dadce0;
-            --input-text: #202124;
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Roboto', 'Helvetica', 'Arial', sans-serif;
-            background-color: var(--bg);
-            display: flex;
-            align-items: flex-start;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            padding: 20px;
-        }
-
-        .container {
-            background: var(--card-bg);
-            border-radius: 16px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-            width: 100%;
-            max-width: 98%;
-            overflow: hidden;
-            position: relative;
-        }
-
-        .header {
-            background: linear-gradient(135deg, var(--primary) 0%, #003d82 100%);
-            color: white;
-            padding: 16px 24px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .header-title {
-            text-align: left;
-            flex: 1;
-            /* allow it to take up remaining space next to hamburger */
-        }
-
-        .header-title h2 {
-            margin: 0;
-            font-size: 1.25rem;
-            font-weight: 500;
-            line-height: 1.6;
-            letter-spacing: 0.0075em;
-        }
-
-        .header-title p {
-            margin: 0;
-            color: rgba(255, 255, 255, 0.8);
-            font-size: 0.875rem;
-        }
-
-        .header-actions {
-            display: none;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .header-actions .btn-header {
-            background: transparent;
-            color: white;
-            border: none;
-            padding: 8px 12px;
-            font-size: 14px;
-            font-weight: 500;
-            border-radius: 6px;
-            width: auto;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-
-        .header-actions .btn-header:hover {
-            background: rgba(255, 255, 255, 0.15);
-        }
-
-        .header-actions .btn-header svg {
-            width: 16px;
-            height: 16px;
-        }
-
-        /* Hamburger button hidden by default on desktop */
-        .hamburger-btn {
-            display: none;
-            background: transparent;
-            border: none;
-            color: white;
-            padding: 8px;
-            cursor: pointer;
-            z-index: 101;
-            /* Reset global button styles */
-            width: auto;
-            margin: 0;
-            min-width: 0;
-        }
-
-        .content {
-            padding: 30px;
-        }
-
-        /* Form Elements */
-        .form-group {
-            margin-bottom: 24px;
-            text-align: left;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: var(--text-dark);
-        }
-
-        /* Remove number input spinners */
-        input[type="number"]::-webkit-outer-spin-button,
-        input[type="number"]::-webkit-inner-spin-button {
-            -webkit-appearance: none;
-            appearance: none;
-            margin: 0;
-        }
-
-        input[type="number"] {
-            -moz-appearance: textfield;
-            appearance: textfield;
-        }
-
-        input[type="text"],
-        input[type="number"],
-        input[type="password"] {
-            width: 100%;
-            padding: 16px 18px;
-            border: 1px solid var(--input-border);
-            border-radius: 8px;
-            font-size: 18px;
-            font-family: inherit;
-            background-color: var(--input-bg);
-            color: var(--text-dark);
-            transition: border-color 0.2s, box-shadow 0.2s;
-        }
-
-        input:focus {
-            border-color: var(--primary);
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(0, 86, 179, 0.15);
-        }
-
-        /* Password field wrapper */
-        .password-wrapper {
-            position: relative;
-        }
-
-        .password-wrapper input {
-            padding-right: 48px;
-        }
-
-        .password-toggle {
-            position: absolute;
-            right: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            margin-top: 2px;
-            /* Slight adjustment because of the new input margin-top */
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 4px;
-            color: var(--text-light);
-            width: auto;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: color 0.2s;
-        }
-
-        .password-toggle:hover {
-            color: var(--primary);
-        }
-
-        .password-toggle:active {
-            transform: translateY(-50%) scale(0.95);
-        }
-
-        .password-toggle svg {
-            width: 22px;
-            height: 22px;
-        }
-
-        /* Buttons */
-        button {
-            width: 100%;
-            padding: 16px;
-            margin-top: 8px;
-            /* Added margin-top to separate button from inputs */
-            font-size: 18px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            font-family: inherit;
-            transition: transform 0.1s, opacity 0.2s;
-        }
-
-        button:active {
-            transform: scale(0.98);
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--primary), #003d82);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            opacity: 0.9;
-        }
-
-        .actions-grid button .btn-icon {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .actions-grid button .btn-icon svg {
-            width: 24px;
-            height: 24px;
-            stroke: currentColor;
-            stroke-width: 2;
-            fill: none;
-            stroke-linecap: round;
-            stroke-linejoin: round;
-        }
-
-        /* Screens */
-        #loginScreen,
-        #dashboardScreen {
-            display: none;
-        }
-
-        .active-screen {
-            display: block !important;
-            animation: fadeIn 0.3s ease-in-out;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        /* Dashboard specific */
-        .welcome {
-            text-align: center;
-            margin-bottom: 25px;
-        }
-
-        .welcome h3 {
-            margin: 0;
-            color: var(--primary);
-            font-size: 24px;
-        }
-
-        /* 6-button actions grid */
-        .actions-grid {
-            display: grid;
-            grid-template-columns: repeat(6, 1fr);
-            gap: 10px;
-            margin-top: 20px;
-            margin-bottom: 20px;
-        }
-
-        .actions-grid button {
-            margin: 0;
-            padding: 24px 12px;
-            font-size: 18px;
-            font-weight: 600;
-            border-radius: 10px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 8px;
-            transition: transform 0.15s, box-shadow 0.15s;
-        }
-
-        .actions-grid button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-
-        .btn-entrata {
-            background: var(--success);
-            color: white;
-        }
-
-        .btn-inizio-pausa {
-            background: var(--warning);
-            color: white;
-        }
-
-        .btn-fine-pausa {
-            background: #e8a735;
-            color: white;
-        }
-
-        .btn-uscita {
-            background: var(--danger);
-            color: white;
-        }
-
-        .btn-inizio-trasferta {
-            background: var(--travel);
-            color: white;
-        }
-
-        .btn-ritorno-trasferta {
-            background: #8b5fd4;
-            color: white;
-        }
-
-        #clockStatus {
-            text-align: center;
-            font-size: 18px;
-            margin-bottom: 15px;
-            font-weight: bold;
-            min-height: 24px;
-        }
-
-        .error {
-            color: var(--danger);
-        }
-
-        .success {
-            color: var(--success);
-        }
-
-        /* ---- Monthly Attendance Table ---- */
-        .section-title {
-            font-size: 18px;
-            color: var(--text-light);
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 10px;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 8px;
-        }
-
-        .month-nav {
-            height: 56px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 15px;
-            background: var(--primary-light);
-            border-radius: 12px;
-            padding: 8px;
-        }
-
-        .month-nav button {
-            width: 40px;
-            height: 40px;
-            padding: 0;
-            margin: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: var(--primary);
-            color: white;
-            border-radius: 8px;
-            transition: opacity 0.2s, transform 0.1s;
-        }
-
-        .month-nav button:active {
-            transform: scale(0.9);
-        }
-
-        .month-nav button svg {
-            width: 20px;
-            height: 20px;
-            stroke-width: 3px;
-        }
-
-        .month-nav span {
-            font-size: 18px;
-            font-weight: 600;
-            color: var(--text-dark);
-            user-select: none;
-        }
-
-        .table-container {
-            overflow-x: auto;
-            border-radius: 10px;
-            border: 1px solid var(--border);
-        }
-
-        .attendance-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 16px;
-            min-width: 700px;
-        }
-
-        .attendance-table thead th {
-            background: var(--primary);
-            color: white;
-            padding: 14px 12px;
-            text-align: center;
-            font-weight: 600;
-            font-size: 16px;
-            white-space: nowrap;
-            position: sticky;
-            top: 0;
-        }
-
-        .attendance-table tbody td {
-            padding: 10px;
-            text-align: center;
-            border-bottom: 1px solid var(--border);
-            white-space: nowrap;
-            color: var(--text-dark);
-        }
-
-        .attendance-table tbody tr:hover {
-            background: var(--primary-light);
-        }
-
-        .attendance-table tbody tr.weekend:hover {
-            background: rgba(0, 0, 0, 0.04);
-        }
-
-        .attendance-table tbody tr.row-absence {
-            background: #ffebee;
-            /* Light red for absences */
-        }
-
-        .attendance-table tbody tr.row-anomaly {
-            background: #fff3e0;
-            /* Light orange for anomalies */
-        }
-
-        .attendance-table tbody tr.row-holiday {
-            background: #e3f2fd;
-            /* Light blue for holidays */
-        }
-
-        .attendance-table tbody tr.row-holiday:hover {
-            background: #bbdefb;
-        }
-
-        .attendance-table tbody tr.row-absence:hover {
-            background: #ffcdd2;
-        }
-
-        .attendance-table tbody tr.row-anomaly:hover {
-            background: #ffe0b2;
-        }
-
-        [data-theme="dark"] .attendance-table tbody tr.row-absence {
-            background: #c6282822;
-        }
-
-        [data-theme="dark"] .attendance-table tbody tr.row-anomaly {
-            background: #ef6c0022;
-        }
-
-        [data-theme="dark"] .attendance-table tbody tr.row-holiday {
-            background: #0d47a122;
-        }
-
-        .badge-holiday {
-            display: inline-block;
-            margin-left: 8px;
-            padding: 2px 8px;
-            font-size: 0.7rem;
-            font-weight: 600;
-            color: var(--primary);
-            border: 1px solid var(--primary);
-            border-radius: 12px;
-            background: #fff;
-            text-transform: uppercase;
-            vertical-align: middle;
-            line-height: 1;
-        }
-
-        [data-theme="dark"] .badge-holiday {
-            background: transparent;
-            color: #64b5f6;
-            border-color: #64b5f6;
-        }
-
-        .attendance-table .date-cell {
-            font-weight: 600;
-            text-align: left;
-            padding-left: 12px;
-            min-width: 120px;
-        }
-
-        .attendance-table .hours-cell {
-            font-weight: 700;
-            color: var(--primary);
-        }
-
-        .attendance-table .hours-cell.incomplete {
-            color: var(--warning);
-        }
-
-        /* Monthly summary */
-        .monthly-summary {
-            display: flex;
-            gap: 15px;
-            margin-top: 15px;
-            flex-wrap: wrap;
-        }
-
-        .summary-card {
-            flex: 1;
-            min-width: 120px;
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 15px;
-            text-align: center;
-        }
-
-        .summary-card .label {
-            font-size: 14px;
-            color: var(--text-light);
-            text-transform: uppercase;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-        }
-
-        .summary-card .value {
-            font-size: 32px;
-            font-weight: 700;
-            margin-top: 5px;
-        }
-
-        .summary-card .value.positive {
-            color: var(--success);
-        }
-
-        .summary-card .value.negative {
-            color: var(--danger);
-        }
-
-        .summary-card .value.neutral {
-            color: var(--primary);
-        }
-
-        .summary-card .sub {
-            font-size: 13px;
-            color: var(--text-light);
-            margin-top: 3px;
-        }
-
-        /* Login screen narrower */
-        #loginScreen .content-inner {
-            max-width: 420px;
-            margin: 0 auto;
-        }
-
-        /* Responsive */
-        @media (max-width: 600px) {
-            body {
-                padding: 10px;
-            }
-
-            .content {
-                padding: 20px 15px;
-            }
-
-            .header {
-                flex-direction: row;
-                align-items: center;
-                justify-content: flex-start;
-                /* Align left */
-                position: relative;
-            }
-
-            .hamburger-btn {
-                display: block;
-                order: -1;
-                margin-right: 15px;
-                margin-left: -5px;
-                padding: 12px;
-            }
-
-            .header-title {
-                flex: 1;
-                text-align: left !important;
-            }
-
-            .header-actions {
-                display: none !important;
-                /* Hide default flex layout, overrides inline JS styles */
-                position: absolute;
-                top: 100%;
-                left: 0;
-                right: 0;
-                background: var(--card-bg);
-                flex-direction: column;
-                padding: 15px;
-                box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
-                z-index: 100;
-                border-radius: 0 0 12px 12px;
-                border: 1px solid var(--border);
-                border-top: none;
-            }
-
-            .header-actions.show-mobile-menu {
-                display: flex !important;
-                /* Display when toggled */
-                animation: slideDown 0.2s ease-out;
-            }
-
-            @keyframes slideDown {
-                from {
-                    opacity: 0;
-                    transform: translateY(-10px);
-                }
-
-                to {
-                    opacity: 1;
-                    transform: translateY(0);
-                }
-            }
-
-            .header-actions .btn-header {
-                width: 100%;
-                justify-content: flex-start;
-                padding: 12px 16px;
-                color: var(--text-dark);
-                /* Dark text for white dropdown */
-            }
-
-            .header-actions .btn-header svg {
-                stroke: var(--text-dark);
-            }
-
-            .header-actions .btn-header[style*="background:#dc3545"] {
-                color: white;
-                /* Keep logout button visible */
-            }
-
-            .actions-grid {
-                grid-template-columns: repeat(3, 1fr);
-            }
-
-            .actions-grid button {
-                font-size: 13px;
-                padding: 12px 6px;
-                gap: 5px;
-            }
-
-            .monthly-summary {
-                flex-direction: column;
-            }
-
-            .month-nav button {
-                padding: 8px 12px;
-                font-size: 20px;
-            }
-
-            .month-nav span {
-                font-size: 16px;
-            }
-
-            /* Sticky columns for horizontal scrolling */
-            .attendance-table th:nth-child(1),
-            .attendance-table td:nth-child(1) {
-                position: sticky;
-                left: 0;
-                z-index: 2;
-                background-color: var(--card-bg);
-                min-width: 105px;
-                max-width: 105px;
-                box-shadow: 2px 0 5px rgba(0, 0, 0, 0.08);
-                /* slight right shadow to separate sticky content */
-            }
-
-            .attendance-table thead th:nth-child(1) {
-                z-index: 12;
-                background-color: var(--primary);
-            }
-
-            .attendance-table tbody tr:hover td:nth-child(1) {
-                background-color: var(--primary-light);
-            }
-
-            .attendance-table tbody tr.weekend td:nth-child(1) {
-                background-color: rgba(0, 0, 0, 0.04);
-            }
-
-            .attendance-table tbody tr.weekend:hover td:nth-child(1) {
-                background-color: rgba(0, 0, 0, 0.04);
-            }
-        }
-
-        @media (max-width: 480px) {
-            .actions-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="index.css">
 </head>
 
 <body>
@@ -846,9 +110,13 @@
 
                 <div class="actions-grid">
                     <button class="btn-entrata" onclick="clock('entrata')">
-                        <span class="btn-icon"><svg viewBox="0 0 24 24">
-                                <polyline points="22 2 13.5 21 10 12 2 9.5 22 2"></polyline>
-                            </svg></span>
+                        <span class="btn-icon">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+                                <polyline points="10 17 15 12 10 7"></polyline>
+                                <line x1="15" y1="12" x2="3" y2="12"></line>
+                            </svg>
+                        </span>
                         Entrata
                     </button>
                     <button class="btn-uscita" onclick="clock('uscita')">
@@ -909,18 +177,21 @@
                             </svg>
                         </button>
                     </div>
-                    <button id="calendarPickerBtn" title="Scegli Range Date"
-                        style="width: 56px; height: 56px; margin: 0; flex-shrink: 0; background: var(--primary); color: white; border: none; border-radius: 12px; padding: 0; cursor: pointer; display: flex; align-items: center; justify-content: center;">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                            <line x1="16" y1="2" x2="16" y2="6"></line>
-                            <line x1="8" y1="2" x2="8" y2="6"></line>
-                            <line x1="3" y1="10" x2="21" y2="10"></line>
-                        </svg>
-                    </button>
+                    <div style="position: relative; display: flex;">
+                        <button id="calendarPickerBtn" title="Scegli Range Date"
+                            style="width: 50px; height: 50px; margin: 0; flex-shrink: 0; background: var(--primary); color: white; border: none; border-radius: 12px; padding: 0; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                            </svg>
+                        </button>
+                        <input type="text" id="hiddenMonthPicker"
+                            style="width: 0; height: 0; padding: 0; border: none; opacity: 0; position: absolute; bottom: 0; right: 0; pointer-events: none; z-index: -1;">
+                    </div>
                 </div>
-                <input type="text" id="hiddenMonthPicker" style="display:none; position:absolute; visibility:hidden;">
 
                 <div class="table-container">
                     <table class="attendance-table">
@@ -1038,6 +309,7 @@
                 mode: "range",
                 dateFormat: "Y-m-d",
                 positionElement: calendarBtn,
+                position: "below right",
                 onChange: function (selectedDates, dateStr, instance) {
                     if (selectedDates.length === 2) {
                         customRangeStart = selectedDates[0];
@@ -1251,16 +523,19 @@
                     } else {
                         statusEl.textContent = (actionLabels[action] || action) + ' Registrata!';
                         statusEl.className = 'success';
+                        showToast((actionLabels[action] || action) + ' Registrata!', 'success');
                         setTimeout(() => { statusEl.textContent = ''; }, 3000);
                         loadMonthlyAttendances();
                     }
                 } else {
                     statusEl.textContent = 'Errore dal Server';
                     statusEl.className = 'error';
+                    showToast('Errore durante la timbratura dal server.', 'error');
                 }
             } catch (error) {
                 statusEl.textContent = 'Errore di connessione.';
                 statusEl.className = 'error';
+                showToast('Errore di connessione durante la timbratura.', 'error');
             }
         }
 
@@ -1341,31 +616,85 @@
             const sortArrow = document.getElementById('sortArrow');
             if (sortArrow) sortArrow.textContent = currentSortOrder === 'asc' ? '↓' : '↑';
 
-            // 1. Group records by date
+            // 1. Group records by date with deduplication logic
+            const DEDUP_THRESHOLD_MS = 10 * 60 * 1000; // 10 minuti
             const dailyMap = {};
+
+            // Prima passata: organizziamo i record in rawRecords per ogni giorno
             records.forEach(r => {
                 const dateObj = new Date(r.timestamp);
                 const dateKey = toLocalDateKey(dateObj);
                 if (!dailyMap[dateKey]) {
                     dailyMap[dateKey] = {
                         entrata: null, inizio_pausa: null, fine_pausa: null, uscita: null, inizio_trasferta: null, ritorno_trasferta: null,
-                        totalMarkingsCount: 0
+                        totalMarkingsCount: 0,
+                        extraMarks: [],
+                        rawRecords: []
                     };
                 }
                 const mappedAction = ACTION_MAP[r.action] || r.action;
-                if (dailyMap[dateKey].hasOwnProperty(mappedAction)) {
-                    dailyMap[dateKey].totalMarkingsCount++;
+                dailyMap[dateKey].rawRecords.push({
+                    tsMs: dateObj.getTime(),
+                    mappedAction: mappedAction,
+                    timeStr: dateObj.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+                });
+            });
 
-                    const timeStr = dateObj.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-                    if (mappedAction === 'entrata' && !dailyMap[dateKey].entrata) {
-                        dailyMap[dateKey].entrata = timeStr;
-                    } else if (mappedAction === 'uscita') {
-                        dailyMap[dateKey].uscita = timeStr;
-                    } else if (!dailyMap[dateKey][mappedAction]) {
-                        dailyMap[dateKey][mappedAction] = timeStr;
+            // Seconda passata: deduplicazione e assegnazione
+            Object.values(dailyMap).forEach(dayData => {
+                if (dayData.rawRecords.length === 0) return;
+
+                dayData.rawRecords.sort((a, b) => a.tsMs - b.tsMs);
+                const validFlags = new Array(dayData.rawRecords.length).fill(true);
+
+                for (let i = 0; i < dayData.rawRecords.length; i++) {
+                    const rec = dayData.rawRecords[i];
+                    let alreadyAssigned = false;
+                    for (let j = 0; j < i; j++) {
+                        if (validFlags[j] && dayData.rawRecords[j].mappedAction === rec.mappedAction) {
+                            if (rec.mappedAction === 'uscita') {
+                                // Per l'uscita teniamo l'ultima, invalidiamo la precedente se è entro 10 min
+                                if (Math.abs(rec.tsMs - dayData.rawRecords[j].tsMs) <= DEDUP_THRESHOLD_MS) {
+                                    validFlags[j] = false;
+                                }
+                            } else {
+                                // Per le altre (entrata, resi etc), teniamo la prima valida
+                                if (Math.abs(rec.tsMs - dayData.rawRecords[j].tsMs) <= DEDUP_THRESHOLD_MS) {
+                                    alreadyAssigned = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (alreadyAssigned) {
+                        validFlags[i] = false;
+                    }
+                }
+
+                for (let i = 0; i < dayData.rawRecords.length; i++) {
+                    if (!validFlags[i]) continue;
+
+                    const rec = dayData.rawRecords[i];
+                    if (dayData.hasOwnProperty(rec.mappedAction)) {
+                        dayData.totalMarkingsCount++;
+                        if (rec.mappedAction === 'entrata' && !dayData.entrata) {
+                            dayData.entrata = rec.timeStr;
+                        } else if (rec.mappedAction === 'uscita') {
+                            dayData.uscita = rec.timeStr; // Keep the latest
+                        } else if (!dayData[rec.mappedAction]) {
+                            dayData[rec.mappedAction] = rec.timeStr;
+                        } else {
+                            // Extra hidden mark
+                            dayData.extraMarks.push({
+                                action: rec.mappedAction,
+                                time: rec.timeStr
+                            });
+                        }
                     }
                 }
             });
+
 
             // 2. Determine Date Range
             let startDay, endDay;
@@ -1403,9 +732,14 @@
                 const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
                 const isHolidayToday = isHoliday(currentDate);
                 const dayData = dailyMap[dateKey] || {};
-
                 let dateLabel = DAY_NAMES[dayOfWeek] + ' ' + String(currentDate.getDate()).padStart(2, '0') + '/' + String(currentDate.getMonth() + 1).padStart(2, '0');
-                if (isHolidayToday) dateLabel += ` <span class="badge-holiday">Festivo</span>`;
+
+                if (isHolidayToday) {
+                    let holidayName = "Festivo";
+                    const customDesc = getCustomHolidayDescription(currentDate);
+                    if (customDesc) holidayName = escapeHtml(customDesc);
+                    dateLabel += ` <span class="badge-holiday">${holidayName}</span>`;
+                }
 
                 let hoursDisplay = '—';
                 let hoursClass = '';
@@ -1472,6 +806,13 @@
                     anomalyReasons.push('Fine pausa senza inizio pausa');
                 }
 
+                if (dayData.extraMarks && dayData.extraMarks.length > 0) {
+                    dayData.extraMarks.forEach(em => {
+                        const actName = (ACTION_MAP[em.action] || em.action).replace('_', ' ');
+                        anomalyReasons.push(`Marcatura EXTRA nascosta: ${actName} alle ${em.time}`);
+                    });
+                }
+
                 if (workedMins > 0) {
                     dailyMinutes = workedMins;
                     totalWorkedMinutes += workedMins;
@@ -1493,6 +834,9 @@
                 } else if (!isWeekend && !isHolidayToday) {
                     hoursDisplay = '0:00';
                     balanceDisplay = '-8:00';
+                    if (anomalyReasons.length > 0) {
+                        hoursDisplay += ' ' + makeWarningSvg(anomalyReasons.join(' · '));
+                    }
                 }
 
                 if (!isWeekend || Object.keys(dayData).length > 0) {
@@ -1561,7 +905,7 @@
         // --- Export CSV / PDF ---
         function downloadCSVReport() {
             if (!globalEmployeeRecords || globalEmployeeRecords.length === 0) {
-                alert("Nessun record da esportare!");
+                showToast("Nessun record da esportare!", "error");
                 return;
             }
 
@@ -1604,7 +948,7 @@
 
         function downloadPDFReport() {
             if (!globalEmployeeRecords || globalEmployeeRecords.length === 0) {
-                alert("Nessun record da esportare!");
+                showToast("Nessun record da esportare!", "error");
                 return;
             }
 
@@ -1673,6 +1017,8 @@
             return h + ':' + String(m).padStart(2, '0');
         }
 
+        let customHolidaysList = [];
+
         function isHoliday(date) {
             const m = date.getMonth() + 1;
             const d = date.getDate();
@@ -1707,12 +1053,92 @@
             const yyyymmdd = y + '-' + mmdd;
             if (variableHolidays[y] && variableHolidays[y].includes(mmdd)) return true;
 
+            // Check custom holidays
+            if (customHolidaysList.some(h => h.date === yyyymmdd)) {
+                return true;
+            }
+
             return false;
         }
 
+        function getCustomHolidayDescription(date) {
+            const m = date.getMonth() + 1;
+            const d = date.getDate();
+            const y = date.getFullYear();
+            const mmdd = String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+            const yyyymmdd = y + '-' + mmdd;
+            const custom = customHolidaysList.find(h => h.date === yyyymmdd);
+            return custom ? (custom.description || "Chiusura aziendale") : null;
+        }
+
+        async function fetchCustomHolidays() {
+            try {
+                const res = await fetch('/api/custom-holidays');
+                if (res.ok) {
+                    customHolidaysList = await res.json();
+                }
+            } catch (err) {
+                console.error("Errore recupero custom holidays", err);
+            }
+        }
+
+        function escapeHtml(unsafe) {
+            return (unsafe || "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // --- Toast Notifications ---
+        function showToast(message, type = 'info') {
+            let container = document.getElementById('toastContainer');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'toastContainer';
+                container.className = 'toast-container';
+                document.body.appendChild(container);
+            }
+
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+
+            let iconSvg = '';
+            if (type === 'success') {
+                iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>';
+            } else if (type === 'error') {
+                iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
+            } else {
+                iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
+            }
+
+            toast.innerHTML = `
+                <div class="toast-icon">${iconSvg}</div>
+                <div class="toast-message">${escapeHtml(message)}</div>
+            `;
+
+            container.appendChild(toast);
+
+            // Trigger reflow to enable transition
+            toast.offsetHeight;
+            toast.classList.add('show');
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.parentNode.removeChild(toast);
+                    }
+                }, 300); // Wait for transition
+            }, 3000); // 3 seconds visible
+        }
+
         // --- Initialization ---
-        window.addEventListener('DOMContentLoaded', () => {
+        window.addEventListener('DOMContentLoaded', async () => {
             initFlatpickr(); // Initialize immediately when DOM is ready
+
+            await fetchCustomHolidays(); // Load custom holidays before doing anything else that relies on calculations
 
             if (currentEmpId && currentPin) {
                 showDashboard();
