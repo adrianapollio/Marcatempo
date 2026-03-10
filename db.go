@@ -50,9 +50,16 @@ var DB *sql.DB
 // InitDB apre la connessione ed esegue l'inizializzazione della tabella
 func InitDB() {
 	var err error
-	DB, err = sql.Open("sqlite", "attendance.db")
+	// modernc.org/sqlite DSN supporta i parametri pragma
+	DB, err = sql.Open("sqlite", "attendance.db?_pragma=busy_timeout(5000)")
 	if err != nil {
 		log.Fatalf("Impossibile aprire il database SQLite: %v", err)
+	}
+
+	// Abilita Write-Ahead Logging per migliorare la concorrenza
+	_, err = DB.Exec("PRAGMA journal_mode=WAL;")
+	if err != nil {
+		log.Printf("Attenzione: impossibile impostare WAL mode: %v", err)
 	}
 
 	// Tabella locale sqlite per centralizzare i dati del marcatempo

@@ -1,0 +1,9 @@
+.git
+marcatempo.exe
+fix_swap.exe
+tmp_build/
+tmp_build.exe
+attendance.db
+attendance.db-shm
+attendance.db-wal
+.vscode/

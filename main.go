@@ -123,12 +123,15 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("[DEBUG] Tentativo login ID: %d", data.EmployeeID)
 	if VerifyPIN(data.EmployeeID, data.PIN) {
 		name := GetEmployeeName(data.EmployeeID)
 		isAdmin := IsEmployeeAdmin(data.EmployeeID)
+		log.Printf("[DEBUG] Login riuscito: %s (Admin: %v)", name, isAdmin)
 		response := map[string]interface{}{"success": true, "name": name, "isAdmin": isAdmin}
 		json.NewEncoder(w).Encode(response)
 	} else {
+		log.Printf("[DEBUG] Login fallito per ID: %d (PIN errato o DB busy)", data.EmployeeID)
 		http.Error(w, "PIN errato", http.StatusUnauthorized)
 	}
 }

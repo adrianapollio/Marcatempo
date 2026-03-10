@@ -248,7 +248,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
 
     <script>
-        console.log("--- [DEBUG] PAGE LOAD: PORTALE DIPENDENTI ---");
         let currentEmpId = localStorage.getItem('empId');
         let currentPin = localStorage.getItem('empPin');
         let currentName = localStorage.getItem('empName');
@@ -388,7 +387,6 @@
         }
 
         function showDashboard() {
-            console.log("[DEBUG] Caricamento Dashboard. Admin status:", isAdmin);
             document.getElementById('loginScreen').classList.remove('active-screen');
             document.getElementById('dashboardScreen').classList.add('active-screen');
             document.getElementById('headerActions').style.display = 'flex';
