@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -34,6 +35,66 @@ type ManualClockData struct {
 type LoginData struct {
 	EmployeeID int    `json:"employeeId"`
 	PIN        string `json:"pin"`
+}
+
+// Device info for synchronization
+type AnvizDevice struct {
+	IP string
+	ID uint32
+}
+
+var devices = []AnvizDevice{
+	{"192.168.1.245", 1},
+	{"192.168.1.246", 2},
+}
+
+// handleSyncNow triggers a manual synchronization with all configured Anviz devices
+func handleSyncNow(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Metodo non consentito", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// In a real app, verify admin privileges here
+	log.Println("Manuale: Richiesta sincronizzazione Anviz avviata dall'admin...")
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	results := make(map[string]string)
+
+	for _, d := range devices {
+		wg.Add(1)
+		go func(ip string, id uint32) {
+			defer wg.Done()
+			err := syncFromDevice(ip, id)
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				results[ip] = "ERRORE: " + err.Error()
+			} else {
+				results[ip] = "OK"
+			}
+		}(d.IP, d.ID)
+	}
+	wg.Wait()
+
+	// Build a summary message
+	summary := "Esito sincronizzazione:\n"
+	successCount := 0
+	for ip, status := range results {
+		summary += fmt.Sprintf("- %s: %s\n", ip, status)
+		if status == "OK" {
+			successCount++
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "success",
+		"message": summary,
+		"results": results,
+		"success": successCount == len(devices),
+	})
 }
 
 
@@ -583,8 +644,9 @@ func main() {
 
 	// 2. Avvia Goroutine lavoratore in background per Anviz (uno per ogni IP)
 	// NOTA: il DeviceID tipicamente di default è 1.	// Avvia i worker TCP per ciascun orologio fisico in Goroutine con DeviceID corretto
-	go SyncAnvizWorker("192.168.1.245", 1) // L'orologio in cui c'è testuale la pwd 12345
-	go SyncAnvizWorker("192.168.1.246", 2) // L'orologio 246 da cui è stata rimossa la pwd e ha ID 2
+	for _, d := range devices {
+		go SyncAnvizWorker(d.IP, d.ID)
+	}
 
 	// 3. Registrazione API Endpoints
 	http.HandleFunc("/api/clock", handleClock)
@@ -608,6 +670,7 @@ func main() {
 		}
 	})
 	http.HandleFunc("/api/custom-holidays", handleCustomHolidays)
+	http.HandleFunc("/api/admin/sync-now", handleSyncNow)
 
 
 	// Servire dashboard admin

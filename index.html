@@ -748,42 +748,74 @@
                 let dailyMinutes = 0;
                 let balanceDisplay = '—';
 
-                // Calculation: sum segments (morning, afternoon, travel)
+                // Calculation:
                 const t = (timeStr) => timeStr ? timeToMinutes(timeStr) : null;
                 const e = t(dayData.entrata);
                 const iP = t(dayData.inizio_pausa);
                 const fP = t(dayData.fine_pausa);
-                const u = t(dayData.uscita);
+                let u = t(dayData.uscita);
                 const iT = t(dayData.inizio_trasferta);
-                const rT = t(dayData.ritorno_trasferta);
+                let rT = t(dayData.ritorno_trasferta);
 
-                let workedMins = 0;
-                let segmentsFound = false;
+                const today = new Date();
+                const todayStr = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+                const isToday = dateKey === todayStr;
+                const nowMins = today.getHours() * 60 + today.getMinutes();
 
-                // 1. Morning Segment (E -> iP)
-                if (e !== null && iP !== null && iP > e) {
-                    workedMins += (iP - e);
-                    segmentsFound = true;
-                }
-                // 2. Afternoon Segment (fP -> U)
-                if (fP !== null && u !== null && u > fP) {
-                    workedMins += (u - fP);
-                    segmentsFound = true;
-                }
-                // 3. Travel Segment (iT -> rT)
-                if (iT !== null && rT !== null && rT > iT) {
-                    workedMins += (rT - iT);
-                    segmentsFound = true;
-                }
-
-                // Fallback: simple day (E -> U) without pause markers or with partial ones
-                if (!segmentsFound && e !== null && u !== null && u > e) {
-                    workedMins = (u - e);
-                    // Subtract valid pause if any
-                    if (iP !== null && fP !== null && fP > iP) {
-                        workedMins -= (fP - iP);
+                // Handle Uscita missing
+                if (e !== null && u === null) {
+                    if (iT !== null && rT === null && isToday) {
+                        u = nowMins; 
+                    } else if (iT !== null && rT === null && !isToday) {
+                        u = e + 480; 
+                    } else {
+                        u = e + 480; 
                     }
                 }
+
+                // Handle Ritorno Trasferta missing
+                if (iT !== null && rT === null) {
+                    if (isToday) {
+                        rT = nowMins;
+                    } else {
+                        rT = iT + 480; 
+                    }
+                }
+
+                let workedMins = 0;
+
+                if (e !== null && u !== null && u > e) {
+                    // Base worked minutes from start to end
+                    workedMins = u - e;
+                    
+                    // Pause Logic
+                    if (iP !== null && fP !== null && fP > iP) {
+                        // Scenario 1: Both pause markers present
+                        workedMins -= (fP - iP);
+                    } else if ((iP !== null && fP === null) || (iP === null && fP !== null)) {
+                        // Scenario 2: Partial pause marker
+                        workedMins -= 60;
+                    } else if (iP === null && fP === null && workedMins > 360) {
+                        // Scenario 3: No pause marker, but worked > 6h
+                        workedMins -= 60;
+                    }
+                } else {
+                    // Fallback for missing IN or OUT (handled by u assignment above)
+                    if (e !== null && iP !== null && iP > e) {
+                        workedMins += (iP - e);
+                    }
+                    if (fP !== null && u !== null && u > fP) {
+                        workedMins += (u - fP);
+                    }
+                }
+
+                // Travel Segment (iT -> rT) is added separately if it exists
+                if (iT !== null && rT !== null && rT > iT) {
+                    workedMins += (rT - iT);
+                }
+
+                // Fallback for negative limits
+                if (workedMins < 0) workedMins = 0;
 
                 let anomalyReasons = [];
                 const makeWarningSvg = (tooltip) => {
@@ -792,20 +824,31 @@
                 };
 
                 // Anomaly detection
-                if (dayData.totalMarkingsCount % 2 !== 0) {
-                    anomalyReasons.push(`Numero dispari di timbrature (${dayData.totalMarkingsCount})`);
-                }
                 if (!dayData.entrata && dayData.totalMarkingsCount > 0) {
-                    anomalyReasons.push('Manca la timbratura di entrata');
+                    anomalyReasons.push('Entrata mancante');
                 }
                 if (!dayData.uscita && dayData.totalMarkingsCount > 0) {
-                    anomalyReasons.push('Manca la timbratura di uscita');
+                    anomalyReasons.push('Uscita mancante');
                 }
                 if (dayData.inizio_pausa && !dayData.fine_pausa) {
-                    anomalyReasons.push('Inizio pausa senza fine pausa');
+                    anomalyReasons.push('Fine pausa mancante');
                 }
                 if (!dayData.inizio_pausa && dayData.fine_pausa) {
-                    anomalyReasons.push('Fine pausa senza inizio pausa');
+                    anomalyReasons.push('Inizio pausa mancante');
+                }
+                if (dayData.inizio_trasferta && !dayData.ritorno_trasferta && dayData.uscita) {
+                    anomalyReasons.push('Ritorno trasferta mancante');
+                }
+                if (!dayData.inizio_trasferta && dayData.ritorno_trasferta) {
+                    anomalyReasons.push('Inizio trasferta mancante');
+                }
+
+                // Generico warning sulle timbrature dispari solo se non abbiamo già trovato problemi specifici
+                // e se il ciclo principale (entrata/uscita) non è completo.
+                if (dayData.totalMarkingsCount % 2 !== 0 && anomalyReasons.length === 0) {
+                    if (!dayData.entrata || !dayData.uscita) {
+                        anomalyReasons.push(`Timbrature dispari (${dayData.totalMarkingsCount})`);
+                    }
                 }
 
                 if (dayData.extraMarks && dayData.extraMarks.length > 0) {
@@ -817,7 +860,12 @@
 
                 if (workedMins > 0) {
                     dailyMinutes = workedMins;
-                    totalWorkedMinutes += workedMins;
+                    
+                    // Solo se non è OGGI, oppure se è oggi ed è stata segnata l'USCITA, sommiamo al totale complessivo
+                    const isToday = (dateKey === new Date().toISOString().split('T')[0]);
+                    if (!isToday || (isToday && dayData.uscita)) {
+                        totalWorkedMinutes += workedMins;
+                    }
                     hoursDisplay = minutesToHHMM(workedMins);
                     hoursClass = 'hours-cell';
                     const theoreticalMins = isHolidayToday ? 0 : 480;
@@ -825,19 +873,26 @@
                     balanceDisplay = diffMins >= 0 ? '+' + minutesToHHMM(diffMins) : '-' + minutesToHHMM(Math.abs(diffMins));
 
                     if (anomalyReasons.length > 0) {
-                        hoursDisplay += ' ' + makeWarningSvg(anomalyReasons.join(' · '));
+                        hoursDisplay += ' ' + makeWarningSvg(anomalyReasons.join(' | '));
                     }
                 } else if (dayData.entrata && !dayData.uscita) {
                     hoursDisplay = '...';
                     hoursClass = 'hours-cell incomplete';
                     if (anomalyReasons.length > 0) {
-                        hoursDisplay += ' ' + makeWarningSvg(anomalyReasons.join(' · '));
+                        hoursDisplay += ' ' + makeWarningSvg(anomalyReasons.join(' | '));
                     }
                 } else if (!isWeekend && !isHolidayToday) {
-                    hoursDisplay = '0:00';
-                    balanceDisplay = '-8:00';
-                    if (anomalyReasons.length > 0) {
-                        hoursDisplay += ' ' + makeWarningSvg(anomalyReasons.join(' · '));
+                    const todayNode = new Date();
+                    const todayStrNode = new Date(todayNode.getTime() - todayNode.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+                    if (dateKey > todayStrNode) {
+                        hoursDisplay = '—';
+                        balanceDisplay = '—';
+                    } else {
+                        hoursDisplay = '0:00';
+                        balanceDisplay = '-8:00';
+                        if (anomalyReasons.length > 0) {
+                            hoursDisplay += ' ' + makeWarningSvg(anomalyReasons.join(' · '));
+                        }
                     }
                 }
 
@@ -854,7 +909,9 @@
                 if (!isWeekend || isHolidayToday || Object.keys(dayData).length > 0 || (customRangeStart && customRangeStart.getTime() === customRangeEnd.getTime())) {
                     let trClass = isWeekend ? 'weekend' : '';
                     if (isHolidayToday) trClass += ' row-holiday';
-                    if (!isWeekend && !isHolidayToday && workedMins === 0 && (!dayData.entrata)) trClass += ' row-absence';
+                    const todayNode2 = new Date();
+                    const todayStrNode2 = new Date(todayNode2.getTime() - todayNode2.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+                    if (!isWeekend && !isHolidayToday && workedMins === 0 && (!dayData.entrata) && dateKey <= todayStrNode2) trClass += ' row-absence';
                     if (anomalyReasons.length > 0) trClass += ' row-anomaly';
 
                     html += `<tr class="${trClass.trim()}">
@@ -874,16 +931,36 @@
                 html = '<tr><td colspan="8" style="text-align:center; color:#999; padding:20px;">Nessun dato trovato</td></tr>';
             }
             tbody.innerHTML = html;
-            updateMonthlySummary(totalWorkedMinutes, startDay, endDay);
+            let isTodayFinished = false;
+            const todayStr = toLocalDateKey(new Date());
+            const todayDayData = dailyMap[todayStr];
+            if (todayDayData && todayDayData.uscita) {
+                isTodayFinished = true;
+            }
+
+            updateMonthlySummary(totalWorkedMinutes, startDay, endDay, isTodayFinished);
         }
 
-        function updateMonthlySummary(workedMinutes, startDay, endDay) {
+        function updateMonthlySummary(workedMinutes, startDay, endDay, isTodayFinished) {
             // Calculate theoretical hours: 8h per business day (Mon-Fri) excluding holidays
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
             let businessDays = 0;
             let current = new Date(startDay);
             while (current <= endDay) {
-                const dow = current.getDay();
-                if (dow !== 0 && dow !== 6 && !isHoliday(current)) businessDays++;
+                // If it's today, we only count it if it's finished
+                if (current.getTime() === today.getTime()) {
+                    if (isTodayFinished) {
+                        const dow = current.getDay();
+                        if (dow !== 0 && dow !== 6 && !isHoliday(current)) businessDays++;
+                    }
+                    break; // Don't go into the future
+                }
+                
+                if (current < today) {
+                    const dow = current.getDay();
+                    if (dow !== 0 && dow !== 6 && !isHoliday(current)) businessDays++;
+                }
                 current.setDate(current.getDate() + 1);
             }
             const theoreticalMinutes = businessDays * 8 * 60;

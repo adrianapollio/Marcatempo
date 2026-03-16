@@ -1,21 +1,28 @@
 services:
   marcatempo:
+    build: .
     image: zibola/marcatempo:latest
     container_name: marcatempo_app
     volumes:
-      # Monta il database SQLite per renderlo persistente tra i riavvii del container.
-      # Assicurati che il file attendance.db esista nella cartella principale (dove si trova questo file)
-      - ./attendance.db:/app/attendance.db
+      - ./data:/app/data
     restart: unless-stopped
     environment:
       - TZ=Europe/Rome
       - PORT=8080
+      - DB_PATH=/app/data/attendance.db
+    # Usiamo host mode per evitare problemi di routing interno
     network_mode: "host"
 
   nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
     image: zibola/marcatempo-nginx:latest
     container_name: marcatempo_proxy
     network_mode: "host"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
     depends_on:
       - marcatempo
     restart: unless-stopped

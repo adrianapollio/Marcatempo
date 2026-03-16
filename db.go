@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -50,8 +51,12 @@ var DB *sql.DB
 // InitDB apre la connessione ed esegue l'inizializzazione della tabella
 func InitDB() {
 	var err error
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "attendance.db"
+	}
 	// modernc.org/sqlite DSN supporta i parametri pragma
-	DB, err = sql.Open("sqlite", "attendance.db?_pragma=busy_timeout(5000)")
+	DB, err = sql.Open("sqlite", dbPath+"?_pragma=busy_timeout(5000)")
 	if err != nil {
 		log.Fatalf("Impossibile aprire il database SQLite: %v", err)
 	}

@@ -12,7 +12,8 @@ import (
 
 const (
 	AnvizSTX     = 0xA5
-	AnvizCommand = 0x40 // Comando TC_B (Download All Attendance Records) oppure 0x4C (Download New Attendance Records)
+	AnvizCommand      = 0x40 // Comando TC_B (Download All Attendance Records) oppure 0x4C (Download New Attendance Records)
+	AnvizCommandClear = 0x4E // Comando TC_C (Clear New Attendance Records)
 )
 
 // CCITT reversed table polynomial 0x8408 (Anviz table 0x1189 etc)
@@ -204,8 +205,8 @@ func parseAnvizResponse(res []byte, ip string) {
 				3: "F_pausa",
 				4: "U_trasf",
 				5: "R_trasf",
-				6: "I_break",
-				7: "F_break",
+				6: "I_pausa",
+				7: "F_pausa",
 			}
 			action := statusMap[statusCode]
 			if action == "" {
@@ -285,27 +286,27 @@ func parseAnvizResponse(res []byte, ip string) {
 
 // SyncAnvizWorker è il worker che fa il polling all'hardware a scadenza temporale.
 func SyncAnvizWorker(ip string, deviceID uint32) {
-	ticker := time.NewTicker(1 * time.Hour)
+	ticker := time.NewTicker(30 * time.Minute)
 	defer ticker.Stop()
 
 	// Tentativo di sync iniziale all'avvio dell'app!
-	syncFromDevice(ip, deviceID)
+	_ = syncFromDevice(ip, deviceID)
 
 	for {
 		<-ticker.C
-		syncFromDevice(ip, deviceID)
+		_ = syncFromDevice(ip, deviceID)
 	}
 }
 
 // syncFromDevice esegue una socket net.Dial vera verso l'hardware e implementa timeout in caso esso sia offline
-func syncFromDevice(ip string, deviceID uint32) {
+func syncFromDevice(ip string, deviceID uint32) error {
 	log.Printf("TCP Worker: Tentativo di sincronizzazione con l'Anviz IP %s...", ip)
 
 	// Usiamo DialTimeout per non bloccare la Goroutine per sempre se Anviz è spento\network issue.
 	conn, err := net.DialTimeout("tcp", ip+":5010", 5*time.Second)
 	if err != nil {
 		log.Printf("TCP Worker: l'Anviz (%s) sembra spento e irraggiungibile: %v", ip, err)
-		return
+		return fmt.Errorf("dispositivo %s irraggiungibile", ip)
 	}
 	defer conn.Close()
 
@@ -316,14 +317,14 @@ func syncFromDevice(ip string, deviceID uint32) {
 	_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 	if _, err := conn.Write(loginPacket); err != nil {
 		log.Printf("TCP Worker: Errore durante tcp write (login): %v", err)
-		return
+		return fmt.Errorf("errore comunicazione login %s", ip)
 	}
 
 	// Leggiamo la risposta del login
 	loginRes := readFullAnvizPacket(conn)
 	if loginRes == nil {
 		log.Printf("TCP Worker: Timeout lettura login Anviz %s", ip)
-		return
+		return fmt.Errorf("timeout login %s", ip)
 	}
 	// Se la risposta al login (indice 6 RET Code) non è 0x00, proseguiamo comunque (su alcuni FW la pwd vuota non serve login)
 	if loginRes[6] != 0x00 {
@@ -365,7 +366,7 @@ func syncFromDevice(ip string, deviceID uint32) {
 
 	// --- 2. Scaricamento Presenze (Command 0x40) ---
 	// Mode: 1 (All Records), 2 (New Records), 0 (Next chunk of previous command)
-	mode := byte(0x01)
+	mode := byte(0x02)
 	limit := byte(0x19) // 25 records alla volta (max supportato da molti vecchi firmware in un colpo)
 
 	for {
@@ -390,15 +391,36 @@ func syncFromDevice(ip string, deviceID uint32) {
 			// Per i pacchetti successivi la mode deve diventare 0 (Next Page)
 			mode = 0x00
 		} else {
-			if recordRes != nil {
-				log.Printf("TCP Worker: Errore o fine recod 0x40 %s (RET: 0x%X)", ip, recordRes[6])
-			} else {
-				log.Printf("TCP Worker: Timeout o pacchetto 0x40 corrotto %s", ip)
-			}
 			break
 		}
 	}
 
+	// --- 3. Clear New Records (Command 0x4E) ---
+	// Se abbiamo scaricato con successo (arrivando alla fine del loop sopra),
+	// inviamo il comando per resettare il puntatore "nuovi record" sull'hardware.
+	if mode == 0x00 { // Significa che eravamo nel loop di "scaricamento pagine successive"
+		log.Printf("TCP Worker: Invio comando CLEAR per resettare puntatore nuovi record su %s", ip)
+		clearPacket := BuildAnvizPacket(deviceID, AnvizCommandClear, nil)
+		_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		if _, err := conn.Write(clearPacket); err != nil {
+			log.Printf("TCP Worker: Errore durante tcp write (clear): %v", err)
+		} else {
+			clearRes := readFullAnvizPacket(conn)
+			if clearRes != nil && clearRes[6] == 0x00 {
+				log.Printf("TCP Worker: Puntatore nuovi record resettato con successo su %s", ip)
+			} else {
+				if clearRes != nil {
+					log.Printf("TCP Worker: Dispositivo ha rifiutato il comando clear su %s (RET: 0x%X)", ip, clearRes[6])
+				} else {
+					log.Printf("TCP Worker: Timeout comando clear su %s", ip)
+				}
+			}
+		}
+	} else {
+		log.Printf("TCP Worker: Nessun nuovo record scaricato o loop interrotto, salto comando CLEAR su %s", ip)
+	}
+
 	// Opzionalmente si dovrebbe inviare COMMAND CLEAR (TC_C es. 0x4E) dopo lettura corretta.
 	log.Println("TCP Worker: Sincronizzazione conclusa con l'Anviz.")
+	return nil
 }

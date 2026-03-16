@@ -168,6 +168,17 @@
             </button>
 
             <div class="top-actions" id="topActions" style="display:flex; align-items:center;">
+                <button class="btn-icon-only" onclick="triggerSync()" id="syncBtn" title="Sincronizza con i dispositivi Anviz"
+                    style="font-size:14px; padding: 8px 12px; font-weight:500; display:flex; gap:6px;">
+                    <svg id="syncIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 2v6h-6"></path>
+                        <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
+                        <path d="M3 22v-6h6"></path>
+                        <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
+                    </svg>
+                    Sincronizza Dispositivi
+                </button>
                 <button class="btn-icon-only" onclick="openManualClockModal()" title="Aggiungi Marcatura Manuale"
                     style="font-size:14px; padding: 8px 12px; font-weight:500; display:flex; gap:6px;">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -235,55 +246,69 @@
             <div id="dashboardScreen" class="active-screen">
 
                 <div class="filters-bar">
-                    <div class="filter-item" style="flex: 2;">
-                        <label>Periodo di Riferimento</label>
-                        <div style="display: flex; gap: 10px; align-items: center;">
-                            <div class="month-nav" style="flex: 1;">
-                                <button onclick="prevMonth()" title="Mese Precedente">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
-                                        stroke-linecap="round" stroke-linejoin="round">
-                                        <polyline points="15 18 9 12 15 6"></polyline>
-                                    </svg>
-                                </button>
-                                <div class="month-nav-text" id="currentMonthDisplay" style="min-width: 140px;">
-                                    Caricamento...</div>
-                                <button onclick="nextMonth()" title="Mese Successivo">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
-                                        stroke-linecap="round" stroke-linejoin="round">
-                                        <polyline points="9 18 15 12 9 6"></polyline>
-                                    </svg>
-                                </button>
-                            </div>
-                            <div style="position: relative; display: flex;">
-                                <button class="btn-icon-only" id="calendarPickerBtn" title="Scegli Range Date"
-                                    style="border-radius: 4px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text-dark); height: 56px; width: 56px; margin: 0; padding: 0; display: flex; align-items: center; justify-content: center;">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                                        <line x1="16" y1="2" x2="16" y2="6"></line>
-                                        <line x1="8" y1="2" x2="8" y2="6"></line>
-                                        <line x1="3" y1="10" x2="21" y2="10"></line>
-                                    </svg>
-                                </button>
-                                <input type="text" id="hiddenMonthPicker"
-                                    style="width: 0; height: 0; padding: 0; border: none; opacity: 0; position: absolute; bottom: 0; right: 0; pointer-events: none; z-index: -1;">
+                    <div style="display: flex; flex-wrap: wrap; gap: 15px; width: 100%; align-items: flex-end;">
+                        <div class="filter-item" style="flex: 2; min-width: 280px;">
+                            <label>Periodo di Riferimento</label>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <div class="month-nav" style="flex: 1;">
+                                    <button onclick="prevMonth()" title="Mese Precedente">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                                            stroke-linecap="round" stroke-linejoin="round">
+                                            <polyline points="15 18 9 12 15 6"></polyline>
+                                        </svg>
+                                    </button>
+                                    <div class="month-nav-text" id="currentMonthDisplay" style="min-width: 140px;">
+                                        Caricamento...</div>
+                                    <button onclick="nextMonth()" title="Mese Successivo">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                                            stroke-linecap="round" stroke-linejoin="round">
+                                            <polyline points="9 18 15 12 9 6"></polyline>
+                                        </svg>
+                                    </button>
+                                </div>
+                                <div style="position: relative; display: flex;">
+                                    <button class="btn-icon-only" id="calendarPickerBtn" title="Scegli Range Date"
+                                        style="border-radius: 4px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text-dark); height: 56px; width: 56px; margin: 0; padding: 0; display: flex; align-items: center; justify-content: center;">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                                        </svg>
+                                    </button>
+                                    <input type="text" id="hiddenMonthPicker"
+                                        style="width: 0; height: 0; padding: 0; border: none; opacity: 0; position: absolute; bottom: 0; right: 0; pointer-events: none; z-index: -1;">
+                                </div>
                             </div>
                         </div>
+                        <div class="filter-item">
+                            <label>Dipendente</label>
+                            <select id="filterEmp" onchange="loadAdminAttendances()">
+                                <option value="">Tutti i dipendenti</option>
+                                <!-- Popolato da JS -->
+                            </select>
+                        </div>
+                        <div class="filter-item">
+                            <label>Cerca</label>
+                            <input type="text" id="filterSearch" placeholder="Cerca nome o ID..."
+                                oninput="filterLocalRecords()">
+                        </div>
                     </div>
-                    <div class="filter-item">
-                        <label>Dipendente</label>
-                        <select id="filterEmp" onchange="loadAdminAttendances()">
-                            <option value="">Tutti i dipendenti</option>
-                            <!-- Popolato da JS -->
-                        </select>
-                    </div>
-                    <div class="filter-item">
-                        <label>Cerca</label>
-                        <input type="text" id="filterSearch" placeholder="Cerca nome o ID..."
-                            oninput="filterLocalRecords()">
-                    </div>
-                    <div class="filter-actions" style="flex: 0; align-items:flex-end;">
-                        <button class="btn-secondary" onclick="resetFilters()">Reset Filtri</button>
+
+                    <div style="display: flex; flex-wrap: wrap; gap: 20px; width: 100%; align-items: center; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(0,0,0,0.06);">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 0; font-size: 14px; font-weight: 600; color: var(--text-dark);">
+                            <input type="checkbox" id="filterAnomaly" onchange="filterLocalRecords()" style="width: 18px; height: 18px; cursor: pointer;">
+                            Solo Anomalie
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 0; font-size: 14px; font-weight: 600; color: var(--text-dark);">
+                            <input type="checkbox" id="filterAbsence" onchange="filterLocalRecords()" style="width: 18px; height: 18px; cursor: pointer;">
+                            Solo Assenze
+                        </label>
+                        
+                        <div style="flex-grow: 1;"></div>
+                        
+                        <button class="btn-secondary" onclick="resetFilters()" style="white-space: nowrap;">Reset Filtri</button>
                     </div>
                 </div>
 
@@ -481,23 +506,25 @@
             displayCurrentPage();
         }
 
+        // Mappa dalle azioni RAW (di database/dispositivo) alle chiavi interne dell'oggetto dayData
         const ACTION_MAP = {
-            'in': 'entrata',
-            'out': 'uscita',
-            'In': 'entrata',
-            'Out': 'uscita',
-            'I_pausa': 'inizio_pausa',
-            'F_pausa': 'fine_pausa',
-            'U_trasf': 'inizio_trasferta',
-            'R_trasf': 'ritorno_trasferta',
-            'I_break': 'inizio_pausa', // Mapped to pausa for display purposes
-            'F_break': 'fine_pausa',
-            'entrata': 'entrata',
-            'inizio_pausa': 'inizio_pausa',
-            'fine_pausa': 'fine_pausa',
-            'uscita': 'uscita',
-            'inizio_trasferta': 'inizio_trasferta',
-            'ritorno_trasferta': 'ritorno_trasferta'
+            'in': 'entrata', 'In': 'entrata', 'ENTRATA': 'entrata',
+            'out': 'uscita', 'Out': 'uscita', 'USCITA': 'uscita',
+            'I_pausa': 'inizio_pausa', 'inizio_pausa': 'inizio_pausa', 'I_PAUSA': 'inizio_pausa',
+            'F_pausa': 'fine_pausa', 'fine_pausa': 'fine_pausa', 'F_PAUSA': 'fine_pausa',
+            'U_trasf': 'inizio_trasferta', 'inizio_trasferta': 'inizio_trasferta', 'U_TRASFER': 'inizio_trasferta',
+            'R_trasf': 'ritorno_trasferta', 'ritorno_trasferta': 'ritorno_trasferta', 'R_TRASFER': 'ritorno_trasferta',
+            'I_break': 'inizio_pausa', 'F_break': 'fine_pausa' // Altri casi legacy
+        };
+
+        // Mappa dalle chiavi interne (entrata, uscita...) ai nomi visualizzati nell'interfaccia
+        const DISPLAY_ACTION_MAP = {
+            'entrata': 'Ingresso',
+            'uscita': 'Uscita',
+            'inizio_pausa': 'Pausa (I)',
+            'fine_pausa': 'Pausa (F)',
+            'inizio_trasferta': 'Trasferta (U)',
+            'ritorno_trasferta': 'Trasferta (R)'
         };
 
         // Initialize App
@@ -847,17 +874,24 @@
                 });
 
                 if (res.status === 401) { logout(); return; }
-
                 if (res.ok) {
                     closeManualClockModal();
-                    showToast("Marcatura manuale aggiunta con successo!", "success");
+                    showToast("Marcatura inserita con successo!", "success");
                     loadAdminAttendances(); // Refresh data
                 } else {
-                    const data = await res.json();
-                    showToast("Errore: " + (data.message || res.statusText), "error");
+                    const errorText = await res.text();
+                    let errorMessage = res.statusText;
+                    try {
+                        const errorData = JSON.parse(errorText);
+                        errorMessage = errorData.message || errorMessage;
+                    } catch (e) {
+                        if (errorText.length < 100) errorMessage = errorText;
+                    }
+                    showToast('Errore: ' + errorMessage, 'error');
                 }
             } catch (err) {
-                showToast("Errore di connessione al server", "error");
+                console.error("Manual Clock Error:", err);
+                showToast('Errore di connessione al server', 'error');
             }
         }
 
@@ -870,6 +904,8 @@
             initFiltersDefaults();
             document.getElementById('filterEmp').value = "";
             document.getElementById('filterSearch').value = "";
+            if (document.getElementById('filterAnomaly')) document.getElementById('filterAnomaly').checked = false;
+            if (document.getElementById('filterAbsence')) document.getElementById('filterAbsence').checked = false;
             loadAdminAttendances();
         }
 
@@ -997,7 +1033,17 @@
                         empSummary[day.empId] = { id: day.empId, name: day.empDisplay, workedMins: 0, theoreticalMins: periodTheo.theoreticalMins, workedDays: 0, theoreticalDays: periodTheo.theoreticalDays };
                     }
                     const workedMins = calculateWorkedMinutes(day);
-                    if (workedMins > 0) { empSummary[day.empId].workedMins += workedMins; empSummary[day.empId].workedDays++; }
+                    if (workedMins > 0) { 
+                        const isToday = (day.dateKey === new Date().toISOString().split('T')[0]);
+                        if (isToday && !day.isWeekend && !day.isHoliday && day.uscita) {
+                            empSummary[day.empId].theoreticalMins += 480;
+                            empSummary[day.empId].theoreticalDays++;
+                        }
+                        if (!isToday || (isToday && day.uscita)) {
+                            empSummary[day.empId].workedMins += workedMins; 
+                            empSummary[day.empId].workedDays++; 
+                        }
+                    }
                 });
 
                 const summaryArray = Object.values(empSummary).sort((a, b) => parseInt(a.id) - parseInt(b.id));
@@ -1108,7 +1154,17 @@
                         empSummary[day.empId] = { id: day.empId, name: day.empDisplay, workedMins: 0, theoreticalMins: periodTheo.theoreticalMins, workedDays: 0, theoreticalDays: periodTheo.theoreticalDays };
                     }
                     const workedMins = calculateWorkedMinutes(day);
-                    if (workedMins > 0) { empSummary[day.empId].workedMins += workedMins; empSummary[day.empId].workedDays++; }
+                    if (workedMins > 0) { 
+                        const isToday = (day.dateKey === new Date().toISOString().split('T')[0]);
+                        if (isToday && !day.isWeekend && !day.isHoliday && day.uscita) {
+                            empSummary[day.empId].theoreticalMins += 480;
+                            empSummary[day.empId].theoreticalDays++;
+                        }
+                        if (!isToday || (isToday && day.uscita)) {
+                            empSummary[day.empId].workedMins += workedMins; 
+                            empSummary[day.empId].workedDays++; 
+                        }
+                    }
                 });
 
                 const summaryArray = Object.values(empSummary).sort((a, b) => parseInt(a.id) - parseInt(b.id));
@@ -1165,10 +1221,15 @@
                 lastDay = new Date(year, month + 1, 0);
             }
             const rangeDays = getDatesInRange(firstDay, lastDay);
+
+            // Limit theoretical calculation to current day
+            const today = new Date();
+            const todayStr = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+
             let theoreticalMins = 0;
             let theoreticalDays = 0;
             rangeDays.forEach(day => {
-                if (!day.isWeekend && !day.isHoliday) {
+                if (!day.isWeekend && !day.isHoliday && day.dateKey < todayStr) {
                     theoreticalMins += 480;
                     theoreticalDays++;
                 }
@@ -1538,16 +1599,34 @@
         function filterLocalRecords() {
             const tbody = document.getElementById('attendanceBody');
             const searchQuery = document.getElementById('filterSearch') ? document.getElementById('filterSearch').value.toLowerCase().trim() : '';
+            const onlyAnomaly = document.getElementById('filterAnomaly') ? document.getElementById('filterAnomaly').checked : false;
+            const onlyAbsence = document.getElementById('filterAbsence') ? document.getElementById('filterAbsence').checked : false;
 
             globalFilteredData = [];
 
             globalProcessedData.forEach(dayData => {
+                // Search filter
                 if (searchQuery) {
                     const idStr = String(dayData.empId);
-                    if (!dayData.empDisplay.toLowerCase().includes(searchQuery) && !idStr.includes(searchQuery)) {
-                        return; // Salta
+                    const nameLower = dayData.empDisplay.toLowerCase();
+                    const matchName = nameLower.startsWith(searchQuery);
+
+                    if (!matchName && !idStr.includes(searchQuery)) {
+                        return; // Skip
                     }
                 }
+
+                // Anomaly/Absence filters
+                if (onlyAnomaly || onlyAbsence) {
+                    const anomalyInfo = checkAnomaly(dayData);
+                    let shouldShow = false;
+
+                    if (onlyAnomaly && anomalyInfo.isAnomaly) shouldShow = true;
+                    if (onlyAbsence && dayData.isEmpty) shouldShow = true;
+
+                    if (!shouldShow) return; // Skip
+                }
+
                 globalFilteredData.push(dayData);
             });
 
@@ -1583,10 +1662,20 @@
                 }
 
                 const workedMins = calculateWorkedMinutes(day);
+                const isToday = (day.dateKey === new Date().toISOString().split('T')[0]);
+
+                // Se è OGGI ed è finita (uscita presente), aggiungiamo le 8 ore teoriche al totale di questo dipendente
+                if (isToday && !day.isWeekend && !day.isHoliday && day.uscita) {
+                    empSummary[day.empId].theoreticalMins += 480;
+                    empSummary[day.empId].theoreticalDays++;
+                }
 
                 if (workedMins > 0) {
-                    empSummary[day.empId].workedMins += workedMins;
-                    empSummary[day.empId].workedDays++;
+                    // Includiamo le ore lavorate nei totali solo se non è OGGI, oppure se oggi è finita
+                    if (!isToday || (isToday && day.uscita)) {
+                        empSummary[day.empId].workedMins += workedMins;
+                        empSummary[day.empId].workedDays++;
+                    }
                 }
             });
 
@@ -1624,6 +1713,59 @@
             tbody.innerHTML = html;
         }
 
+        function checkAnomaly(dayData) {
+            let anomalyReasons = [];
+
+            if (!dayData.isEmpty) {
+                // Controllo: numero dispari di timbrature
+                if (dayData.totalMarkingsCount % 2 !== 0) {
+                    anomalyReasons.push(`Timbrature dispari (${dayData.totalMarkingsCount})`);
+                }
+                // Controllo: manca entrata o uscita
+                if (!dayData.entrata && dayData.totalMarkingsCount > 0) {
+                    anomalyReasons.push('Entrata mancante');
+                }
+                if (!dayData.uscita && dayData.totalMarkingsCount > 0) {
+                    anomalyReasons.push('Uscita mancante');
+                }
+                // Controllo: pausa incompleta
+                if (dayData.inizio_pausa && !dayData.fine_pausa) {
+                    anomalyReasons.push('Fine pausa mancante');
+                }
+                if (!dayData.inizio_pausa && dayData.fine_pausa) {
+                    anomalyReasons.push('Inizio pausa mancante');
+                }
+                // Controllo: trasferta incompleta
+                if (dayData.inizio_trasferta && !dayData.ritorno_trasferta && dayData.uscita) {
+                    anomalyReasons.push('Ritorno trasferta mancante');
+                }
+                if (!dayData.inizio_trasferta && dayData.ritorno_trasferta) {
+                    anomalyReasons.push('Inizio trasferta mancante');
+                }
+
+                // Controllo: marcature extra o sconosciute
+                if (dayData.extraMarks && dayData.extraMarks.length > 0) {
+                    dayData.extraMarks.forEach(em => {
+                        const internalKey = ACTION_MAP[em.action] || em.action;
+                        const actionLabel = DISPLAY_ACTION_MAP[internalKey] || internalKey.replace('_', ' ');
+                        anomalyReasons.push(`Marcatura EXTRA o sconosciuta: ${actionLabel} alle ${em.time}`);
+                    });
+                }
+
+                const workedMins = calculateWorkedMinutes(dayData);
+                if (workedMins <= 0 && !dayData.isHoliday) {
+                    anomalyReasons.push('Ore lavorate non rilevate o nulle');
+                }
+            }
+
+            return {
+                isAnomaly: anomalyReasons.length > 0,
+                isAbsence: dayData.isEmpty && !dayData.isHoliday,
+                reasons: anomalyReasons,
+                tooltip: anomalyReasons.join(' | ')
+            };
+        }
+
         function displayCurrentPage() {
             const tbody = document.getElementById('attendanceBody');
             const paginationControls = document.getElementById('paginationControls');
@@ -1654,11 +1796,14 @@
                 let hoursDisplay = '—';
                 let balanceDisplay = '—';
                 let balanceClass = 'neutral';
-                let anomalyReasons = [];
+                
+                const anomalyInfo = checkAnomaly(dayData);
+                const isAnomaly = anomalyInfo.isAnomaly;
+                const tooltipText = anomalyInfo.tooltip;
 
                 // Funzione helper per generare SVG warning con tooltip
                 function makeWarningSvg(tooltip) {
-                    const escapedTooltip = tooltip.replace(/"/g, '&amp;quot;').replace(/'/g, '&#39;');
+                    const escapedTooltip = tooltip.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
                     return `<span title="${escapedTooltip}" style="cursor:help; display:inline-flex; vertical-align:middle; margin-left:4px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></span>`;
                 }
 
@@ -1669,39 +1814,11 @@
                         <td class="date-cell">${displayDate}</td>
                         <td class="emp-cell">${dayData.empDisplay}</td>
                         <td colspan="6">Nessuna timbratura</td>
-                        <td class="hours-cell">0:00 ${makeWarningSvg(emptyTooltip)}</td>
+                        <td class="hours-cell">0:00 ${dayData.isHoliday ? '' : makeWarningSvg(emptyTooltip)}</td>
                         <td class="balance-cell negative">${dayData.isHoliday ? '+0:00' : '-8:00'}</td>
                     </tr>`;
                     return; // Passa al prossimo ciclo
                 }
-
-                // Controllo: numero dispari di timbrature
-                if (dayData.totalMarkingsCount % 2 !== 0) {
-                    anomalyReasons.push(`Numero dispari di timbrature (${dayData.totalMarkingsCount})`);
-                }
-                // Controllo: manca entrata o uscita
-                if (!dayData.entrata && dayData.totalMarkingsCount > 0) {
-                    anomalyReasons.push('Manca la timbratura di entrata');
-                }
-                if (!dayData.uscita && dayData.totalMarkingsCount > 0) {
-                    anomalyReasons.push('Manca la timbratura di uscita');
-                }
-                // Controllo: pausa incompleta
-                if (dayData.inizio_pausa && !dayData.fine_pausa) {
-                    anomalyReasons.push('Inizio pausa senza fine pausa');
-                }
-                if (!dayData.inizio_pausa && dayData.fine_pausa) {
-                    anomalyReasons.push('Fine pausa senza inizio pausa');
-                }
-
-                // Controllo: marcature extra (nascoste perché le colonne sono già piene)
-                if (dayData.extraMarks && dayData.extraMarks.length > 0) {
-                    dayData.extraMarks.forEach(em => {
-                        const actionName = (ACTION_MAP[em.action] || em.action).replace('_', ' ');
-                        anomalyReasons.push(`Marcatura EXTRA nascosta: ${actionName} alle ${em.time}`);
-                    });
-                }
-
 
                 const workedMins = calculateWorkedMinutes(dayData);
                 if (workedMins > 0) {
@@ -1720,12 +1837,7 @@
                     hoursDisplay = '0:00';
                     balanceDisplay = '+0:00';
                     balanceClass = 'neutral';
-                } else {
-                    anomalyReasons.push('Ore lavorate negative o nulle');
                 }
-
-                const isAnomaly = anomalyReasons.length > 0;
-                const tooltipText = anomalyReasons.join(' Â· ');
 
                 function renderTime(timeStr, lat, lon, recordId, source, mappedAction, dateKey) {
                     if (!timeStr) return '—';
@@ -1793,37 +1905,74 @@
             const e = t(dayData.entrata);
             const iP = t(dayData.inizio_pausa);
             const fP = t(dayData.fine_pausa);
-            const u = t(dayData.uscita);
+            let u = t(dayData.uscita);
             const iT = t(dayData.inizio_trasferta);
-            const rT = t(dayData.ritorno_trasferta);
+            let rT = t(dayData.ritorno_trasferta);
+
+            const today = new Date();
+            const todayStr = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+            const isToday = dayData.dateKey === todayStr;
+            const nowMins = today.getHours() * 60 + today.getMinutes();
 
             let workedMins = 0;
-            let segmentsFound = false;
 
-            // 1. Morning Segment (E -> iP)
-            if (e !== null && iP !== null && iP > e) {
-                workedMins += (iP - e);
-                segmentsFound = true;
-            }
-            // 2. Afternoon Segment (fP -> U)
-            if (fP !== null && u !== null && u > fP) {
-                workedMins += (u - fP);
-                segmentsFound = true;
-            }
-            // 3. Travel Segment (iT -> rT)
-            if (iT !== null && rT !== null && rT > iT) {
-                workedMins += (rT - iT);
-                segmentsFound = true;
-            }
-
-            // Fallback: simple day (E -> U) without pause markers or with partial ones
-            if (!segmentsFound && e !== null && u !== null && u > e) {
-                workedMins = (u - e);
-                // Subtract valid pause if any
-                if (iP !== null && fP !== null && fP > iP) {
-                    workedMins -= (fP - iP);
+            // Handle Uscita missing
+            if (e !== null && u === null) {
+                // If it's a Trasferta, we might want real-time, but only if Trasferta is active.
+                // If it's a regular shift, we cap at 8h.
+                // However, the user said "8 ore" for regular shift.
+                // If Trasferta is active (iT != null && rT == null), we use real-time if today.
+                if (iT !== null && rT === null && isToday) {
+                    u = nowMins; 
+                } else if (iT !== null && rT === null && !isToday) {
+                    u = e + 480; // Default 8h for past days Trasferta if no finish
+                } else {
+                    u = e + 480; // Default 8h for regular shift
                 }
             }
+
+            // Handle Ritorno Trasferta missing
+            if (iT !== null && rT === null) {
+                if (isToday) {
+                    rT = nowMins;
+                } else {
+                    rT = iT + 480; // Cap Trasferta segment at 8h for past days if open
+                }
+            }
+
+            if (e !== null && u !== null && u > e) {
+                // Base worked minutes from start to end
+                workedMins = u - e;
+                
+                // Pause Logic
+                if (iP !== null && fP !== null && fP > iP) {
+                    // Scenario 1: Both pause markers present
+                    workedMins -= (fP - iP);
+                } else if ((iP !== null && fP === null) || (iP === null && fP !== null)) {
+                    // Scenario 2: Partial pause marker (forgot to clock in or out for break)
+                    workedMins -= 60;
+                } else if (iP === null && fP === null && workedMins > 360) {
+                    // Scenario 3: No pause marker, but worked over 6 hours
+                    workedMins -= 60;
+                }
+            } else {
+                // Fallback for missing IN or OUT (should be handled by u assignment above, but keeping for safety)
+                if (e !== null && iP !== null && iP > e) {
+                    workedMins += (iP - e);
+                }
+                if (fP !== null && u !== null && u > fP) {
+                    workedMins += (u - fP);
+                }
+            }
+
+            // Travel Segment (iT -> rT) is added separately if it exists
+            if (iT !== null && rT !== null && rT > iT) {
+                workedMins += (rT - iT);
+            }
+
+            // Fallback for negative limits
+            if (workedMins < 0) workedMins = 0;
+
             return workedMins;
         }
 
@@ -2165,11 +2314,65 @@
                     showToast("Marcatura modificata con successo!", "success");
                     loadAdminAttendances(); // Refresh data
                 } else {
-                    const data = await res.json();
-                    showToast('Errore: ' + (data.message || res.statusText), 'error');
+                    const errorText = await res.text();
+                    let errorMessage = res.statusText;
+                    try {
+                        const errorData = JSON.parse(errorText);
+                        errorMessage = errorData.message || errorMessage;
+                    } catch (e) {
+                        if (errorText.length < 100) errorMessage = errorText;
+                    }
+                    showToast('Errore: ' + errorMessage, 'error');
                 }
             } catch (err) {
+                console.error("Edit Clock Error:", err);
                 showToast('Errore di connessione al server', 'error');
+            }
+        }
+        async function triggerSync() {
+            const btn = document.getElementById('syncBtn');
+            const icon = document.getElementById('syncIcon');
+            
+            if (!btn || !icon) return;
+
+            // Set loading state
+            btn.disabled = true;
+            icon.classList.add('rotating');
+            btn.style.opacity = '0.7';
+
+            try {
+                const res = await fetch('/api/admin/sync-now', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (res.status === 401) { logout(); return; }
+
+                if (res.ok) {
+                    const data = await res.json();
+                    const toastType = data.success ? "success" : "warning";
+                    showToast(data.message || "Sincronizzazione completata", toastType);
+                    loadAdminAttendances(); // Refresh the table to see new data
+                } else {
+                    const errorText = await res.text();
+                    let errorMessage = res.statusText;
+                    try {
+                        const errorData = JSON.parse(errorText);
+                        errorMessage = errorData.message || errorMessage;
+                    } catch (e) {
+                        // Not JSON, use the raw text if short, or statusText
+                        if (errorText.length < 100) errorMessage = errorText;
+                    }
+                    showToast('Errore sincronizzazione: ' + errorMessage, 'error');
+                }
+            } catch (err) {
+                console.error("Sync Error Details:", err);
+                showToast('Errore di connessione durante la sincronizzazione', 'error');
+            } finally {
+                // Restore UI state
+                btn.disabled = false;
+                icon.classList.remove('rotating');
+                btn.style.opacity = '1';
             }
         }
         // --- Toast Notifications ---
@@ -2196,7 +2399,7 @@
 
             toast.innerHTML = `
                 <div class="toast-icon">${iconSvg}</div>
-                <div class="toast-message">${escapeHtml(message)}</div>
+                <div class="toast-message">${escapeHtml(message).replace(/\n/g, '<br>')}</div>
             `;
 
             container.appendChild(toast);

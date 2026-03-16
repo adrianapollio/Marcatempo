@@ -16,6 +16,12 @@ COPY . .
 # Compila l'applicazione disabilitando CGO (visto che usi modernc.org/sqlite che non lo richiede)
 RUN CGO_ENABLED=0 GOOS=linux go build -o marcatempo .
 
+# Compila anche il tool per impostare l'admin
+RUN CGO_ENABLED=0 GOOS=linux go build -o make_admin scripts/make_admin.go
+
+# Compila lo script per inserire marcature device-like
+RUN CGO_ENABLED=0 GOOS=linux go build -o insert_device_record scripts/insert_device_record.go
+
 # Crea l'immagine finale basata su Debian slim (molto più compatibile con modernc.org/sqlite)
 FROM debian:bookworm-slim
 
@@ -25,8 +31,10 @@ ENV TZ=Europe/Rome
 
 WORKDIR /app
 
-# Copia l'eseguibile compilato dallo stage precedente
+# Copia gli eseguibili compilati dallo stage precedente
 COPY --from=builder /app/marcatempo .
+COPY --from=builder /app/make_admin .
+COPY --from=builder /app/insert_device_record .
 
 # Copia i file statici necessari per il frontend
 COPY admin.html admin.css index.html index.css ./

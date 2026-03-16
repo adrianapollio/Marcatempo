@@ -16,10 +16,16 @@ func main() {
 	}
 	empID := os.Args[1]
 
-	// Apre il database attendance.db nella cartella corrente (Marcatempo)
-	db, err := sql.Open("sqlite", "attendance.db")
+	// Controlla se è impostato DB_PATH (es. in Docker)
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "attendance.db"
+	}
+
+	// Apre il database
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
-		log.Fatalf("Impossibile aprire il DB: %v", err)
+		log.Fatalf("Impossibile aprire il DB (%s): %v", dbPath, err)
 	}
 	defer db.Close()
 
