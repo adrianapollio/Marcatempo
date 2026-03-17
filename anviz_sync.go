@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -22,6 +23,61 @@ func (s *SyncStats) Add(other SyncStats) {
 	s.Inserted += other.Inserted
 	s.Duplicates += other.Duplicates
 	s.Errors += other.Errors
+}
+
+func decodeAttendanceAction(recordBytes []byte) (int, string) {
+	statusMap := map[int]string{
+		0: "In",
+		1: "Out",
+		2: "I_pausa",
+		3: "F_pausa",
+		4: "U_trasf",
+		5: "R_trasf",
+		6: "I_break",
+		7: "F_break",
+	}
+
+	statusCandidates := []int{}
+	if len(recordBytes) > 8 {
+		statusCandidates = append(statusCandidates, int(recordBytes[8]))
+	}
+	if len(recordBytes) > 9 {
+		statusCandidates = append(statusCandidates, int(recordBytes[9]))
+	}
+
+	for _, candidate := range statusCandidates {
+		if action, ok := statusMap[candidate]; ok {
+			return candidate, action
+		}
+	}
+
+	if len(statusCandidates) > 0 {
+		return statusCandidates[0], fmt.Sprintf("unknown_%d", statusCandidates[0])
+	}
+
+	return -1, "unknown"
+}
+
+func summarizeAttendanceRecordBytes(recordBytes []byte) string {
+	if len(recordBytes) == 0 {
+		return ""
+	}
+
+	status8 := "n/a"
+	status9 := "n/a"
+	if len(recordBytes) > 8 {
+		status8 = fmt.Sprintf("%d", int(recordBytes[8]))
+	}
+	if len(recordBytes) > 9 {
+		status9 = fmt.Sprintf("%d", int(recordBytes[9]))
+	}
+
+	hexLen := len(recordBytes)
+	if hexLen > 14 {
+		hexLen = 14
+	}
+
+	return fmt.Sprintf("status8=%s status9=%s bytes=%s", status8, status9, hex.EncodeToString(recordBytes[:hexLen]))
 }
 
 const (
@@ -204,6 +260,7 @@ func parseAnvizResponse(res []byte, ip string, deviceID uint32) SyncStats {
 		
 		for i := 0; i < validRecordCount; i++ {
 			if idx+14 > len(data) {
+				log.Printf("TCP Worker: Chunk parse truncato device=%d ip=%s idx=%d len(data)=%d expected_remaining=%d", deviceID, ip, idx, len(data), validRecordCount-i)
 				stats.Errors += validRecordCount - i
 				break
 			}
@@ -218,22 +275,10 @@ func parseAnvizResponse(res []byte, ip string, deviceID uint32) SyncStats {
 			anvizEpoch := time.Date(2000, 1, 2, 0, 0, 0, 0, localTZ)
 			recordTime := anvizEpoch.Add(time.Duration(timestampSecs) * time.Second)
 
-			// Status byte (offset 9): codice di stato presenze 0-7
-			statusCode := int(recordBytes[9])
-			statusMap := map[int]string{
-				0: "In",
-				1: "Out",
-				2: "I_pausa",
-				3: "F_pausa",
-				4: "U_trasf",
-				5: "R_trasf",
-				6: "I_break",
-				7: "F_break",
-			}
-			action := statusMap[statusCode]
-			if action == "" {
-				action = fmt.Sprintf("unknown_%d", statusCode)
-			}
+			// Nei pacchetti TC_B il codice stato presenze e` normalmente nel backup/status byte.
+			// Manteniamo un fallback all'offset legacy per compatibilita` con firmware differenti.
+			statusCode, action := decodeAttendanceAction(recordBytes)
+			log.Printf("TCP Worker: Attendance record scaricato device=%d ip=%s employee=%d raw_ts=%d parsed_ts=%s action=%s status=%d %s", deviceID, ip, userID, timestampSecs, recordTime.Format(time.RFC3339), action, statusCode, summarizeAttendanceRecordBytes(recordBytes))
 
 			employeeName := GetEmployeeName(int(userID))
 			if employeeName == "" {
@@ -378,6 +423,7 @@ func syncFromDevice(ip string, deviceID uint32) (SyncStats, error) {
 	for {
 		staffReqData := []byte{staffMode}
 		staffPacket := BuildAnvizPacket(deviceID, 0x72, staffReqData)
+		log.Printf("TCP Worker: Request staff chunk device=%d ip=%s mode=0x%02X payload_len=%d", deviceID, ip, staffMode, len(staffReqData))
 
 		_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 		if _, err := conn.Write(staffPacket); err != nil {
@@ -413,6 +459,7 @@ func syncFromDevice(ip string, deviceID uint32) (SyncStats, error) {
 	for {
 		reqData := []byte{mode, limit}
 		packet := BuildAnvizPacket(deviceID, 0x40, reqData)
+		log.Printf("TCP Worker: Request attendance chunk device=%d ip=%s mode=0x%02X limit=%d", deviceID, ip, mode, limit)
 
 		_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 		if _, err := conn.Write(packet); err != nil {

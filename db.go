@@ -324,8 +324,10 @@ func insertDeviceRawRecordUsing(execer sqlExecer, deviceID uint32, employeeID in
 	)
 	if err != nil {
 		if isUniqueConstraintError(err) {
+			log.Printf("DEDUPE device_raw duplicate device=%d employee=%d raw_ts=%d action=%s status=%d timestamp=%s", deviceID, employeeID, rawDeviceTimestamp, action, statusCode, timestamp.Format(time.RFC3339))
 			return false, ErrDuplicateRecord
 		}
+		log.Printf("DEDUPE device_raw insert error device=%d employee=%d raw_ts=%d action=%s status=%d timestamp=%s err=%v", deviceID, employeeID, rawDeviceTimestamp, action, statusCode, timestamp.Format(time.RFC3339), err)
 		return false, err
 	}
 
@@ -335,8 +337,11 @@ func insertDeviceRawRecordUsing(execer sqlExecer, deviceID uint32, employeeID in
 	}
 
 	if rowsAffected == 0 {
+		log.Printf("DEDUPE device_raw duplicate(no rows) device=%d employee=%d raw_ts=%d action=%s status=%d timestamp=%s", deviceID, employeeID, rawDeviceTimestamp, action, statusCode, timestamp.Format(time.RFC3339))
 		return false, ErrDuplicateRecord
 	}
+
+	log.Printf("DEDUPE device_raw inserted device=%d employee=%d raw_ts=%d action=%s status=%d timestamp=%s", deviceID, employeeID, rawDeviceTimestamp, action, statusCode, timestamp.Format(time.RFC3339))
 
 	return true, nil
 }
@@ -418,8 +423,10 @@ func insertRecordWithDeviceMetaUsing(execer sqlExecer, employeeID int, employeeN
 	res, err := execer.Exec(query, employeeID, employeeName, timestamp.Format(time.RFC3339), action, statusCode, source, deviceIDValue, rawDeviceTimestampValue, lat, lon)
 	if err != nil {
 		if isUniqueConstraintError(err) {
+			log.Printf("DEDUPE records duplicate source=%s employee=%d timestamp=%s action=%s status=%d device=%v raw_ts=%v", source, employeeID, timestamp.Format(time.RFC3339), action, statusCode, deviceIDValue, rawDeviceTimestampValue)
 			return false, ErrDuplicateRecord
 		}
+		log.Printf("DEDUPE records insert error source=%s employee=%d timestamp=%s action=%s status=%d device=%v raw_ts=%v err=%v", source, employeeID, timestamp.Format(time.RFC3339), action, statusCode, deviceIDValue, rawDeviceTimestampValue, err)
 		return false, err
 	}
 
@@ -429,8 +436,11 @@ func insertRecordWithDeviceMetaUsing(execer sqlExecer, employeeID int, employeeN
 	}
 
 	if rowsAffected == 0 {
+		log.Printf("DEDUPE records duplicate(no rows) source=%s employee=%d timestamp=%s action=%s status=%d device=%v raw_ts=%v", source, employeeID, timestamp.Format(time.RFC3339), action, statusCode, deviceIDValue, rawDeviceTimestampValue)
 		return false, ErrDuplicateRecord
 	}
+
+	log.Printf("DEDUPE records inserted source=%s employee=%d timestamp=%s action=%s status=%d device=%v raw_ts=%v", source, employeeID, timestamp.Format(time.RFC3339), action, statusCode, deviceIDValue, rawDeviceTimestampValue)
 
 	return true, nil
 }
@@ -444,8 +454,11 @@ func InsertRecord(employeeID int, employeeName string, timestamp time.Time, acti
 // InsertDeviceRecord salva una timbratura hardware includendo identificativo terminale
 // e timestamp raw del protocollo Anviz per la deduplica lato device.
 func InsertDeviceRecord(deviceID uint32, employeeID int, employeeName string, timestamp time.Time, rawDeviceTimestamp uint32, action string, statusCode int) (bool, error) {
+	log.Printf("DEDUPE pipeline start device=%d employee=%d timestamp=%s raw_ts=%d action=%s status=%d", deviceID, employeeID, timestamp.Format(time.RFC3339), rawDeviceTimestamp, action, statusCode)
+
 	tx, err := DB.Begin()
 	if err != nil {
+		log.Printf("DEDUPE pipeline tx begin error device=%d employee=%d raw_ts=%d err=%v", deviceID, employeeID, rawDeviceTimestamp, err)
 		return false, err
 	}
 	defer func() {
@@ -454,23 +467,37 @@ func InsertDeviceRecord(deviceID uint32, employeeID int, employeeName string, ti
 
 	rawInserted, err := insertDeviceRawRecordUsing(tx, deviceID, employeeID, employeeName, timestamp, rawDeviceTimestamp, action, statusCode)
 	if err != nil {
+		log.Printf("DEDUPE pipeline raw step failed device=%d employee=%d raw_ts=%d action=%s status=%d err=%v", deviceID, employeeID, rawDeviceTimestamp, action, statusCode, err)
 		return false, err
 	}
 
 	adopted, err := adoptLegacyDeviceRecordUsing(tx, deviceID, employeeID, timestamp, rawDeviceTimestamp, statusCode)
 	if err != nil {
+		log.Printf("DEDUPE pipeline legacy adopt error device=%d employee=%d raw_ts=%d status=%d err=%v", deviceID, employeeID, rawDeviceTimestamp, statusCode, err)
 		return false, err
 	}
+	if adopted {
+		log.Printf("DEDUPE pipeline legacy adopted device=%d employee=%d raw_ts=%d status=%d timestamp=%s", deviceID, employeeID, rawDeviceTimestamp, statusCode, timestamp.Format(time.RFC3339))
+	}
 	if !adopted {
-		_, err = insertRecordWithDeviceMetaUsing(tx, employeeID, employeeName, timestamp, action, statusCode, "device", &deviceID, &rawDeviceTimestamp, nil, nil)
+		insertedFinal, err := insertRecordWithDeviceMetaUsing(tx, employeeID, employeeName, timestamp, action, statusCode, "device", &deviceID, &rawDeviceTimestamp, nil, nil)
 		if err != nil && err != ErrDuplicateRecord {
+			log.Printf("DEDUPE pipeline final insert error device=%d employee=%d raw_ts=%d action=%s status=%d err=%v", deviceID, employeeID, rawDeviceTimestamp, action, statusCode, err)
 			return false, err
+		}
+		if err == ErrDuplicateRecord || !insertedFinal {
+			log.Printf("DEDUPE pipeline final duplicate device=%d employee=%d raw_ts=%d action=%s status=%d timestamp=%s", deviceID, employeeID, rawDeviceTimestamp, action, statusCode, timestamp.Format(time.RFC3339))
+		} else {
+			log.Printf("DEDUPE pipeline final inserted device=%d employee=%d raw_ts=%d action=%s status=%d timestamp=%s", deviceID, employeeID, rawDeviceTimestamp, action, statusCode, timestamp.Format(time.RFC3339))
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
+		log.Printf("DEDUPE pipeline commit error device=%d employee=%d raw_ts=%d action=%s status=%d err=%v", deviceID, employeeID, rawDeviceTimestamp, action, statusCode, err)
 		return false, err
 	}
+
+	log.Printf("DEDUPE pipeline commit ok device=%d employee=%d raw_ts=%d action=%s status=%d raw_inserted=%v adopted=%v", deviceID, employeeID, rawDeviceTimestamp, action, statusCode, rawInserted, adopted)
 
 	return rawInserted, nil
 }
@@ -652,6 +679,8 @@ func parseNullableRFC3339(value sql.NullString) (*time.Time, error) {
 }
 
 func GetDeviceAggregates() ([]DeviceAggregate, error) {
+	backfillDeviceRawRecords()
+
 	aggregates := map[int]*DeviceAggregate{}
 
 	rawRows, err := DB.Query(`
@@ -733,10 +762,58 @@ func GetLegacyUnassignedDeviceRecordCount() (int, error) {
 	return count, err
 }
 
+func getRecentDeviceRawRecordsFromFinalRecords(limit int) ([]DeviceRawDiagnostic, error) {
+	rows, err := DB.Query(`
+		SELECT device_id, employee_id, employee_name, raw_device_timestamp, timestamp, action, status_code
+		FROM records
+		WHERE source = 'device'
+		ORDER BY timestamp DESC, id DESC
+		LIMIT ?
+	`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var records []DeviceRawDiagnostic
+	for rows.Next() {
+		var record DeviceRawDiagnostic
+		var deviceID sql.NullInt64
+		var rawDeviceTS sql.NullInt64
+		var timestampStr string
+		if err := rows.Scan(&deviceID, &record.EmployeeID, &record.EmployeeName, &rawDeviceTS, &timestampStr, &record.Action, &record.StatusCode); err != nil {
+			return nil, err
+		}
+
+		if deviceID.Valid {
+			record.DeviceID = int(deviceID.Int64)
+		}
+
+		parsedTimestamp, err := time.Parse(time.RFC3339, timestampStr)
+		if err != nil {
+			continue
+		}
+		record.ParsedTimestamp = parsedTimestamp
+		record.ImportedAt = parsedTimestamp
+
+		if rawDeviceTS.Valid {
+			record.RawDeviceTimestamp = rawDeviceTS.Int64
+		} else if derived, err := rawDeviceTimestampFromTime(parsedTimestamp); err == nil {
+			record.RawDeviceTimestamp = int64(derived)
+		}
+
+		records = append(records, record)
+	}
+
+	return records, rows.Err()
+}
+
 func GetRecentDeviceRawRecords(limit int) ([]DeviceRawDiagnostic, error) {
 	if limit <= 0 {
 		limit = 25
 	}
+
+	backfillDeviceRawRecords()
 
 	rows, err := DB.Query(`
 		SELECT device_id, employee_id, employee_name, raw_device_timestamp, parsed_timestamp, action, status_code, imported_at
@@ -768,7 +845,15 @@ func GetRecentDeviceRawRecords(limit int) ([]DeviceRawDiagnostic, error) {
 		records = append(records, record)
 	}
 
-	return records, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if len(records) == 0 {
+		return getRecentDeviceRawRecordsFromFinalRecords(limit)
+	}
+
+	return records, nil
 }
 
 // scanRecords è un helper interno per unificare la scansione dei record dal dataset SQLite
