@@ -14,13 +14,14 @@ Per ogni ciclo di sincronizzazione, il worker esegue i seguenti passaggi:
 1.  **Connessione e Login (0x38)**: Tenta di autenticarsi con il dispositivo usando una password (default vuota).
 2.  **Sincronizzazione Staff (0x72)**: Scarica i profili dei dipendenti per assicurarsi che i nomi siano aggiornati nel database locale.
 3.  **Scaricamento Presenze (0x40)**:
-    *   **Modalità "New Records" (0x02)**: Il sistema richiede al dispositivo solo i record che non sono ancora stati scaricati.
-    *   **Gestione Paginazione**: Se ci sono molti record (più di 25), il sistema richiede le "pagine successive" (0x00) finché non ha esaurito i dati dal buffer del dispositivo.
-4.  **Reset Puntatore (0x4E)**: Una volta scaricati i dati con successo, invia il comando `CLEAR NEW RECORDS`. Questo dice al terminale: "Ho ricevuto tutto, la prossima volta dammi solo quello che succede da ora in poi".
+    *   **Modalità "All Records" (0x01)**: Il sistema richiede l'intero archivio presenze del dispositivo a ogni sincronizzazione.
+    *   **Gestione Paginazione**: Se ci sono molti record (più di 25), il sistema richiede le "pagine successive" (0x00) finché non ha esaurito i dati disponibili.
+4.  **Nessun Reset Puntatore (0x4E)**: Il worker non invia più `CLEAR NEW RECORDS`. In questo modo la sincronizzazione non dipende dallo stato interno del puntatore "new records" del device ed evita perdite di marcature in caso di firmware o rete instabili.
 
 ## 3. Riconoscimento Nuovi Record e Sicurezza
-*   **Deduplicazione**: Anche se il comando "New Records" fallisse e il dispositivo reinviasse dati vecchi, il database SQLite ha un **indice UNICO** sulla coppia `(employee_id, timestamp)`. 
-*   **Protezione**: Il sistema usa una clausola `INSERT OR IGNORE`. Se un record esiste già, viene semplicemente saltato senza creare duplicati o errori.
+*   **Deduplicazione Raw**: Ogni record hardware viene prima salvato in `device_raw_records` con unicità su `(device_id, employee_id, raw_device_timestamp, status_code)`.
+*   **Deduplicazione Finale**: La tabella `records` separa le regole di unicità tra sorgente hardware e sorgente web/manuale. Per i record device la chiave è `(device_id, employee_id, raw_device_timestamp, status_code)`; per i record web/manuali la chiave è `(employee_id, timestamp, action)`.
+*   **Protezione**: Se un record è già stato ingestito, viene conteggiato come duplicato e saltato senza creare nuovi inserimenti.
 *   **Timezone**: I dati vengono interpretati direttamente in `Europe/Rome`.
 
 ## 4. Possibili Problemi e Soluzioni

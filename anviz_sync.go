@@ -406,9 +406,9 @@ func syncFromDevice(ip string, deviceID uint32) (SyncStats, error) {
 
 	// --- 2. Scaricamento Presenze (Command 0x40) ---
 	// Mode: 1 (All Records), 2 (New Records), 0 (Next chunk of previous command)
-	mode := byte(0x02)
+	// Usiamo sempre "All Records" per non dipendere dallo stato del puntatore nuovi record del device.
+	mode := byte(0x01)
 	limit := byte(0x19) // 25 records alla volta (max supportato da molti vecchi firmware in un colpo)
-	allRecordsDown := false
 
 	for {
 		reqData := []byte{mode, limit}
@@ -430,7 +430,6 @@ func syncFromDevice(ip string, deviceID uint32) (SyncStats, error) {
 
 			// Se il server ci ha restituito meno di 25 record, significa che li abbiamo esauriti tutti
 			if count < 25 {
-				allRecordsDown = true
 				break
 			}
 			// Per i pacchetti successivi la mode deve diventare 0 (Next Page)
@@ -443,30 +442,6 @@ func syncFromDevice(ip string, deviceID uint32) (SyncStats, error) {
 			}
 			break
 		}
-	}
-
-	// --- 3. Clear New Records (Command 0x4E) ---
-	// Inviaci il comando solo se abbiamo completato con successo lo scaricamento di TUTTI i nuovi record.
-	if allRecordsDown {
-		log.Printf("TCP Worker: Invio comando CLEAR per resettare puntatore nuovi record su %s", ip)
-		clearPacket := BuildAnvizPacket(deviceID, AnvizCommandClear, nil)
-		_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		if _, err := conn.Write(clearPacket); err != nil {
-			log.Printf("TCP Worker: Errore durante tcp write (clear): %v", err)
-		} else {
-			clearRes := readFullAnvizPacket(conn)
-			if clearRes != nil && clearRes[6] == 0x00 {
-				log.Printf("TCP Worker: Puntatore nuovi record resettato con successo su %s", ip)
-			} else {
-				if clearRes != nil {
-					log.Printf("TCP Worker: Dispositivo ha rifiutato il comando clear su %s (RET: 0x%X)", ip, clearRes[6])
-				} else {
-					log.Printf("TCP Worker: Timeout comando clear su %s", ip)
-				}
-			}
-		}
-	} else {
-		log.Printf("TCP Worker: Scaricamento incompleto o nessun record, salto comando CLEAR su %s per prevenire perdita dati", ip)
 	}
 
 	log.Printf("TCP Worker: Sync completata %s ricevuti=%d nuovi=%d duplicati=%d errori=%d", ip, stats.Received, stats.Inserted, stats.Duplicates, stats.Errors)

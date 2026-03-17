@@ -455,8 +455,9 @@
 
     <script>
         console.log("--- [DEBUG] PAGE LOAD: PANNELLO ADMIN ---");
-        let adminName = localStorage.getItem('adminName');
-        let storedAdminId = localStorage.getItem('adminId') || localStorage.getItem('empId');
+        let adminName = '';
+        let storedAdminId = '';
+        let isSystemAdminSession = false;
 
         let currentPage = 1;
         let itemsPerPage = 15;
@@ -531,36 +532,48 @@
             'ritorno_trasferta': 'Trasferta (R)'
         };
 
-        // Initialize App
-        const userIsAdmin = localStorage.getItem('isAdmin') === 'true';
-        const isSystemAdmin = localStorage.getItem('isSystemAdmin') === 'true';
+        async function restoreAdminSession() {
+            try {
+                const res = await fetch('/api/auth/session');
+                if (!res.ok) {
+                    return false;
+                }
 
-        if (userIsAdmin || isSystemAdmin) {
-            applyTheme(currentTheme);
-            initFiltersDefaults();
-            populateEmployees();
-            loadAdminAttendances();
-            loadPendingValidations();
-            
-            // Se è un system admin, mostriamo un link per tornare al pannello tecnico
-            if (isSystemAdmin) {
-                const topActions = document.getElementById('topActions');
-                const sysLink = document.createElement('button');
-                sysLink.className = 'btn-icon-only';
-                sysLink.style.background = 'var(--warning)';
-                sysLink.style.fontWeight = 'bold';
-                sysLink.innerHTML = 'Pannello Tecnico';
-                sysLink.onclick = () => window.location.href = '/system-admin';
-                topActions.prepend(sysLink);
+                const session = await res.json();
+                if (!session || (!session.isAdmin && !session.isSystemAdmin)) {
+                    return false;
+                }
+
+                adminName = session.name || '';
+                storedAdminId = session.isSystemAdmin ? '0' : String(session.employeeId || '');
+                isSystemAdminSession = session.isSystemAdmin === true;
+
+                localStorage.setItem('adminName', adminName);
+                localStorage.setItem('adminId', storedAdminId);
+                localStorage.setItem('isAdmin', session.isAdmin ? 'true' : 'false');
+                localStorage.setItem('isSystemAdmin', session.isSystemAdmin ? 'true' : 'false');
+
+                return true;
+            } catch (err) {
+                console.error('Errore ripristino sessione admin', err);
+                return false;
             }
-        } else {
-            // Se non è loggato, invece di un alert immediato, mostriamo un'opzione per il login di sistema
-            const confirmLogin = confirm("Accesso Negato. Sei un Amministratore di Sistema? \n\nPremi OK per il login tecnico o Annulla per tornare al portale.");
-            if (confirmLogin) {
-                window.location.href = "/system-admin";
-            } else {
-                window.location.href = "/";
-            }
+        }
+
+        function ensureSystemAdminLink() {
+            if (!isSystemAdminSession) return;
+
+            const topActions = document.getElementById('topActions');
+            if (!topActions || document.getElementById('systemAdminBackButton')) return;
+
+            const sysLink = document.createElement('button');
+            sysLink.id = 'systemAdminBackButton';
+            sysLink.className = 'btn-icon-only';
+            sysLink.style.background = 'var(--warning)';
+            sysLink.style.fontWeight = 'bold';
+            sysLink.textContent = 'Pannello Tecnico';
+            sysLink.onclick = () => window.location.href = '/system-admin';
+            topActions.prepend(sysLink);
         }
 
         // --- Init defaults & Flatpickr ---
@@ -918,8 +931,20 @@
             }
         }
 
-        function logout() {
-            localStorage.clear();
+        async function logout() {
+            try {
+                await fetch('/api/auth/logout', { method: 'POST' });
+            } catch (err) {
+                console.error('Logout fallito', err);
+            }
+
+            localStorage.removeItem('adminName');
+            localStorage.removeItem('adminId');
+            localStorage.removeItem('isAdmin');
+            localStorage.removeItem('isSystemAdmin');
+            localStorage.removeItem('empId');
+            localStorage.removeItem('empPin');
+            localStorage.removeItem('empName');
             window.location.href = "/";
         }
 
@@ -1318,6 +1343,69 @@
             }
         }
 
+        function pushExtraDailyMark(group, record) {
+            group.extraMarks.push({
+                action: record.mappedAction,
+                rawAction: record.rawAction,
+                time: record.timeStr
+            });
+        }
+
+        function assignDailyRecord(group, record) {
+            const key = record.mappedAction;
+            group.totalMarkingsCount++;
+
+            if (!group.hasOwnProperty(key)) {
+                pushExtraDailyMark(group, record);
+                return;
+            }
+
+            if (key === 'entrata') {
+                if (!group.entrata) {
+                    group.entrata = record.timeStr;
+                    group.entrata_id = record.id;
+                    group.entrata_source = record.source;
+                    group.entrata_lat = record.lat;
+                    group.entrata_lon = record.lon;
+                    group.entrata_rawAction = record.rawAction;
+                    return;
+                }
+
+                pushExtraDailyMark(group, record);
+                return;
+            }
+
+            if (key === 'uscita') {
+                if (group.uscita) {
+                    pushExtraDailyMark(group, {
+                        mappedAction: 'uscita',
+                        rawAction: group.uscita_rawAction || 'out',
+                        timeStr: group.uscita
+                    });
+                }
+
+                group.uscita = record.timeStr;
+                group.uscita_id = record.id;
+                group.uscita_source = record.source;
+                group.uscita_lat = record.lat;
+                group.uscita_lon = record.lon;
+                group.uscita_rawAction = record.rawAction;
+                return;
+            }
+
+            if (!group[key]) {
+                group[key] = record.timeStr;
+                group[key + '_id'] = record.id;
+                group[key + '_source'] = record.source;
+                group[key + '_lat'] = record.lat;
+                group[key + '_lon'] = record.lon;
+                group[key + '_rawAction'] = record.rawAction;
+                return;
+            }
+
+            pushExtraDailyMark(group, record);
+        }
+
         function renderAdminTable(records, currentNamesMap) {
             const tbody = document.getElementById('attendanceBody');
 
@@ -1442,156 +1530,14 @@
                 });
             }
 
-            // Seconda passata: dedup e assegnazione per ogni gruppo giornaliero
+            // Seconda passata: assegnazione conservativa delle marcature senza nasconderle con euristiche frontend.
             const DEDUP_THRESHOLD_MS = 10 * 60 * 1000; // 10 minuti
 
             Object.values(groupedMap).forEach(group => {
                 if (group.rawRecords.length === 0) return;
 
-                // Ordina per timestamp
                 group.rawRecords.sort((a, b) => a.tsMs - b.tsMs);
-
-                // Identifica i record duplicati (stessa azione già  assegnata, entro 10 min)
-                // Le azioni DIVERSE entro 10 min sono valide in quanto correttive o ammissibili (es. ritorno trasferta + inizio pausa)
-                const validFlags = new Array(group.rawRecords.length).fill(true);
-
-                for (let i = 0; i < group.rawRecords.length; i++) {
-                    const rec = group.rawRecords[i];
-                    // Controlla se questa STESSA azione à¨ già  stata registrata da un record precedente valido
-                    let alreadyAssigned = false;
-                    for (let j = 0; j < i; j++) {
-                        if (validFlags[j] && group.rawRecords[j].mappedAction === rec.mappedAction) {
-                            if (rec.mappedAction === 'uscita') {
-                                // Per 'uscita' teniamo l'ultimo. Se il precedente à¨ entro 10 min,
-                                // à¨ un duplicato -> annulliamo il precedente dal conteggio e teniamo questo nuovo
-                                if (Math.abs(rec.tsMs - group.rawRecords[j].tsMs) <= DEDUP_THRESHOLD_MS) {
-                                    group.hiddenMarks.push({
-                                        action: group.rawRecords[j].mappedAction,
-                                        rawAction: group.rawRecords[j].rawAction,
-                                        time: group.rawRecords[j].timeStr,
-                                        reason: 'Marcatura nascosta dalla deduplica frontend (uscita precedente entro 10 minuti)'
-                                    });
-                                    validFlags[j] = false;
-                                    group.dedupCount++;
-                                }
-                            } else {
-                                // Per tutte le altre marcature (entrata, resi etc..), 
-                                // teniamo il primo valido. Se questo à¨ entro 10 min dallo stesso tipo precedente..
-                                if (Math.abs(rec.tsMs - group.rawRecords[j].tsMs) <= DEDUP_THRESHOLD_MS) {
-                                    alreadyAssigned = true;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    if (alreadyAssigned) {
-                        // àˆ un duplicato puro della STESSA marcatura entro 10 min. Ignorare.
-                        group.hiddenMarks.push({
-                            action: rec.mappedAction,
-                            rawAction: rec.rawAction,
-                            time: rec.timeStr,
-                            reason: 'Marcatura nascosta dalla deduplica frontend (stessa azione entro 10 minuti)'
-                        });
-                        validFlags[i] = false;
-                        group.dedupCount++;
-                    }
-                }
-
-                // Assegna i valori dai record validi
-                for (let i = 0; i < group.rawRecords.length; i++) {
-                    const rec = group.rawRecords[i];
-
-                    if (validFlags[i]) {
-                        group.totalMarkingsCount++;
-                    }
-
-                    // Assegnazione orari e ID (solo da record validi)
-                    if (validFlags[i] && group.hasOwnProperty(rec.mappedAction)) {
-                        if (rec.mappedAction === 'entrata' && !group.entrata) {
-                            group.entrata = rec.timeStr;
-                            group.entrata_id = rec.id; group.entrata_source = rec.source;
-                            group.entrata_lat = rec.lat; group.entrata_lon = rec.lon;
-                        } else if (rec.mappedAction === 'uscita') {
-                            group.uscita = rec.timeStr; // Keep the latest
-                            group.uscita_id = rec.id; group.uscita_source = rec.source;
-                            group.uscita_lat = rec.lat; group.uscita_lon = rec.lon;
-                        } else if (!group[rec.mappedAction]) {
-                            group[rec.mappedAction] = rec.timeStr;
-                            group[rec.mappedAction + '_id'] = rec.id; group[rec.mappedAction + '_source'] = rec.source;
-                            group[rec.mappedAction + '_lat'] = rec.lat; group[rec.mappedAction + '_lon'] = rec.lon;
-                        } else {
-                            // Already has this type of mark, add to extraMarks for visibility
-                            group.extraMarks.push({
-                                action: rec.mappedAction,
-                                rawAction: rec.rawAction,
-                                time: rec.timeStr
-                            });
-                        }
-                    } else if (validFlags[i]) {
-                        // Azione non mappata a una colonna fissa: non deve sparire dalla UI.
-                        group.extraMarks.push({
-                            action: rec.mappedAction,
-                            rawAction: rec.rawAction,
-                            time: rec.timeStr
-                        });
-                    }
-                }
-
-                // Terza passata: rileva marcature "orfane" (metà  coppia senza l'altra metà )
-                // MA solo se la marcatura vicina à¨ dello STESSO tipo logico.
-                // Tipo "inizio": entrata, inizio_pausa, inizio_trasferta
-                // Tipo "fine": uscita, fine_pausa, ritorno_trasferta
-                // Due azioni "inizio" vicine con una orfana ↑’ errore di codice
-                // Una "fine" seguita da un "inizio" ↑’ sequenza legittima (es. ritorno trasf. + inizio pausa)
-                const startActions = new Set(['entrata', 'inizio_pausa', 'inizio_trasferta']);
-                const endActions = new Set(['uscita', 'fine_pausa', 'ritorno_trasferta']);
-                const actionPairs = {
-                    'inizio_pausa': 'fine_pausa',
-                    'fine_pausa': 'inizio_pausa',
-                    'inizio_trasferta': 'ritorno_trasferta',
-                    'ritorno_trasferta': 'inizio_trasferta'
-                };
-
-                for (let i = 0; i < group.rawRecords.length; i++) {
-                    if (!validFlags[i]) continue;
-
-                    const rec = group.rawRecords[i];
-                    const pairedAction = actionPairs[rec.mappedAction];
-                    if (!pairedAction) continue; // entrata/uscita non hanno coppia obbligatoria
-
-                    // Controlla se la coppia à¨ compilata
-                    if (group[pairedAction]) continue; // La coppia esiste, tutto ok
-
-                    // La coppia manca. àˆ orfana.
-                    // Determina se à¨ tipo "inizio" o "fine"
-                    const isStart = startActions.has(rec.mappedAction);
-                    const isEnd = endActions.has(rec.mappedAction);
-
-                    // Cerca un'altra marcatura valida entro 10 min dello STESSO tipo logico
-                    const hasNearbySameType = group.rawRecords.some((other, idx) =>
-                        idx !== i &&
-                        validFlags[idx] &&
-                        other.mappedAction !== rec.mappedAction &&
-                        Math.abs(rec.tsMs - other.tsMs) <= DEDUP_THRESHOLD_MS &&
-                        ((isStart && startActions.has(other.mappedAction)) ||
-                            (isEnd && endActions.has(other.mappedAction)))
-                    );
-
-                    if (hasNearbySameType) {
-                        // Orfana vicina ad un'azione dello stesso tipo ↑’ errore di codice
-                        group.hiddenMarks.push({
-                            action: rec.mappedAction,
-                            rawAction: rec.rawAction,
-                            time: rec.timeStr,
-                            reason: 'Marcatura nascosta dalla logica frontend (orfana vicina a un\'azione dello stesso tipo)'
-                        });
-                        validFlags[i] = false;
-                        group.dedupCount++;
-                        group.totalMarkingsCount--;
-                        group[rec.mappedAction] = null;
-                    }
-                }
+                group.rawRecords.forEach(rec => assignDailyRecord(group, rec));
 
             });
 
@@ -2284,10 +2230,16 @@
         });
 
         window.addEventListener('DOMContentLoaded', async () => {
-            if (!storedAdminId) {
-                window.location.href = '/';
+            const hasSession = await restoreAdminSession();
+            if (!hasSession) {
+                const confirmLogin = confirm("Accesso Negato. Sei un Amministratore di Sistema? \n\nPremi OK per il login tecnico o Annulla per tornare al portale.");
+                window.location.href = confirmLogin ? '/system-admin' : '/';
                 return;
             }
+
+            applyTheme(currentTheme);
+            initFiltersDefaults();
+            ensureSystemAdminLink();
 
             // Init flatpickr per range admin
             flatpickrInstance = flatpickr("#hiddenMonthPicker", {

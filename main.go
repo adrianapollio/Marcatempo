@@ -85,7 +85,10 @@ func handleSyncNow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In a real app, verify admin privileges here
+	if _, ok := requireAdminSession(w, r); !ok {
+		return
+	}
+
 	log.Println("Manuale: Richiesta sincronizzazione Anviz avviata dall'admin...")
 
 	var wg sync.WaitGroup
@@ -179,6 +182,10 @@ func handleAttendances(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if _, ok := requireAdminSession(w, r); !ok {
+		return
+	}
+
 	// Parametri di filtro opzionali dal Gestionale Esterno o Admin Dashboard
 	start := r.URL.Query().Get("start_date")
 	end := r.URL.Query().Get("end_date")
@@ -216,6 +223,12 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[DEBUG] Tentativo login ID: %d", data.EmployeeID)
 	if VerifyPIN(data.EmployeeID, data.PIN) {
+		if err := createEmployeeSession(w, data.EmployeeID); err != nil {
+			log.Printf("[ERROR] Creazione sessione dipendente fallita: %v", err)
+			http.Error(w, "Errore creazione sessione", http.StatusInternalServerError)
+			return
+		}
+
 		name := GetEmployeeName(data.EmployeeID)
 		isAdmin := IsEmployeeAdmin(data.EmployeeID)
 		log.Printf("[DEBUG] Login riuscito: %s (Admin: %v)", name, isAdmin)
@@ -242,6 +255,12 @@ func handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if VerifyAdminPIN(data.EmployeeID, data.PIN) {
+		if err := createEmployeeSession(w, data.EmployeeID); err != nil {
+			log.Printf("[ERROR] Creazione sessione admin fallita: %v", err)
+			http.Error(w, "Errore creazione sessione", http.StatusInternalServerError)
+			return
+		}
+
 		name := GetEmployeeName(data.EmployeeID)
 		// Ritorna esito positivo
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -268,6 +287,12 @@ func handleSystemLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if VerifySystemAdmin(data.Username, data.Password) {
+		if err := createSystemAdminSession(w, data.Username); err != nil {
+			log.Printf("[ERROR] Creazione sessione system admin fallita: %v", err)
+			http.Error(w, "Errore creazione sessione", http.StatusInternalServerError)
+			return
+		}
+
 		log.Printf("[DEBUG] Login System Admin riuscito: %s", data.Username)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": true,
@@ -287,11 +312,18 @@ func handleSystemChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	session, ok := requireSystemSession(w, r)
+	if !ok {
+		return
+	}
+
 	var data SystemChangePasswordData
 	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
 		http.Error(w, "Errore payload JSON", http.StatusBadRequest)
 		return
 	}
+
+	data.Username = session.Username
 
 	if data.Username == "" || data.NewPassword == "" {
 		http.Error(w, "Dati mancanti", http.StatusBadRequest)
@@ -319,8 +351,10 @@ func handleSystemEmployees(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verifica Super Admin (semplificato per ora richiedendo un header o assumendo che la rotta sia protetta a monte)
-	// In produzione si userebbe un token JWT o sessione
+	if _, ok := requireSystemSession(w, r); !ok {
+		return
+	}
+
 	rows, err := DB.Query("SELECT id, name, is_admin FROM employees ORDER BY id ASC")
 	if err != nil {
 		http.Error(w, "Errore database", http.StatusInternalServerError)
@@ -354,6 +388,10 @@ func handleSystemToggleAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if _, ok := requireSystemSession(w, r); !ok {
+		return
+	}
+
 	var data struct {
 		EmployeeID int  `json:"employeeId"`
 		IsAdmin    bool `json:"isAdmin"`
@@ -381,6 +419,10 @@ func handleSystemToggleAdmin(w http.ResponseWriter, r *http.Request) {
 func handleSystemDeviceDiagnostics(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Metodo non consentito", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if _, ok := requireSystemSession(w, r); !ok {
 		return
 	}
 
@@ -448,6 +490,10 @@ func handleEmployees(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if _, ok := requireAdminSession(w, r); !ok {
+		return
+	}
+
 	employees, err := GetAllEmployees()
 	if err != nil {
 		log.Printf("Errore lettura dipendenti: %v", err)
@@ -463,12 +509,8 @@ func handleEmployees(w http.ResponseWriter, r *http.Request) {
 func handleEmployeeAttendances(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	// Utilizziamo un semplice header Auth per la demo al posto di un JWT lungo
-	empIDStr := r.Header.Get("X-Employee-ID")
-	pin := r.Header.Get("X-Employee-PIN")
-
-	empID, err := strconv.Atoi(empIDStr)
-	if err != nil || !VerifyPIN(empID, pin) {
+	empID, ok := authenticatedEmployeeID(r)
+	if !ok {
 		http.Error(w, "Non Autenticato", http.StatusUnauthorized)
 		return
 	}
@@ -487,11 +529,8 @@ func handleEmployeeAttendances(w http.ResponseWriter, r *http.Request) {
 func handleEmployeeMonthlyAttendances(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	empIDStr := r.Header.Get("X-Employee-ID")
-	pin := r.Header.Get("X-Employee-PIN")
-
-	empID, err := strconv.Atoi(empIDStr)
-	if err != nil || !VerifyPIN(empID, pin) {
+	empID, ok := authenticatedEmployeeID(r)
+	if !ok {
 		http.Error(w, "Non Autenticato", http.StatusUnauthorized)
 		return
 	}
@@ -526,11 +565,8 @@ func handleEmployeeMonthlyAttendances(w http.ResponseWriter, r *http.Request) {
 func handleEmployeeRangeAttendances(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	empIDStr := r.Header.Get("X-Employee-ID")
-	pin := r.Header.Get("X-Employee-PIN")
-
-	empID, err := strconv.Atoi(empIDStr)
-	if err != nil || !VerifyPIN(empID, pin) {
+	empID, ok := authenticatedEmployeeID(r)
+	if !ok {
 		http.Error(w, "Non Autenticato", http.StatusUnauthorized)
 		return
 	}
@@ -563,6 +599,10 @@ func handlePendingValidations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if _, ok := requireAdminSession(w, r); !ok {
+		return
+	}
+
 	status := r.URL.Query().Get("status") // "pending", "approved", "rejected", o vuoto per tutte
 	validations, err := GetPendingValidations(status)
 	if err != nil {
@@ -592,13 +632,18 @@ func handleApproveValidation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	session, ok := requireAdminSession(w, r)
+	if !ok {
+		return
+	}
+
 	var data ValidationAction
 	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
 		http.Error(w, "Errore payload JSON", http.StatusBadRequest)
 		return
 	}
 
-	if err := ApproveValidation(data.ID, data.AdminID); err != nil {
+	if err := ApproveValidation(data.ID, sessionActorAdminID(session)); err != nil {
 		log.Printf("Errore approvazione validazione %d: %v", data.ID, err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -615,13 +660,18 @@ func handleRejectValidation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	session, ok := requireAdminSession(w, r)
+	if !ok {
+		return
+	}
+
 	var data ValidationAction
 	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
 		http.Error(w, "Errore payload JSON", http.StatusBadRequest)
 		return
 	}
 
-	if err := RejectValidation(data.ID, data.AdminID); err != nil {
+	if err := RejectValidation(data.ID, sessionActorAdminID(session)); err != nil {
 		log.Printf("Errore rifiuto validazione %d: %v", data.ID, err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -638,6 +688,10 @@ func handleAdminManualClock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if _, ok := requireAdminSession(w, r); !ok {
+		return
+	}
+
 	var data ManualClockData
 	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
 		log.Printf("MANUAL CLOCK DECODE ERR: %v", err)
@@ -646,13 +700,6 @@ func handleAdminManualClock(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	log.Printf("MANUAL CLOCK REQ: %+v", data)
-
-	// Verifica se l'adminId è valido
-	if data.AdminID != 0 && !IsEmployeeAdmin(data.AdminID) {
-		log.Printf("MANUAL CLOCK UNAUTH: AdminID %d non è admin", data.AdminID)
-		http.Error(w, "Privilegi insufficienti", http.StatusUnauthorized)
-		return
-	}
 
 	// Parse date and time
 	dateTimeStr := fmt.Sprintf("%s %s:00", data.Date, data.Time)
@@ -723,6 +770,10 @@ func handleEditAdminManualClock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if _, ok := requireAdminSession(w, r); !ok {
+		return
+	}
+
 	var data EditManualClockData
 	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
 		log.Printf("EDIT MANUAL CLOCK DECODE ERR: %v", err)
@@ -731,13 +782,6 @@ func handleEditAdminManualClock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("EDIT MANUAL CLOCK REQ: %+v", data)
-
-	// Verifica se l'adminId è valido
-	if data.AdminID != 0 && !IsEmployeeAdmin(data.AdminID) {
-		log.Printf("EDIT MANUAL CLOCK UNAUTH: AdminID %d non è admin", data.AdminID)
-		http.Error(w, "Privilegi insufficienti", http.StatusUnauthorized)
-		return
-	}
 
 	record, err := GetRecordByID(data.ID)
 	if err != nil {
@@ -808,6 +852,10 @@ func handleCustomHolidays(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(holidays)
 
 	case http.MethodPost:
+		if _, ok := requireAdminSession(w, r); !ok {
+			return
+		}
+
 		var data struct {
 			AdminID     int    `json:"adminId"`
 			Date        string `json:"date"`        // YYYY-MM-DD
@@ -815,11 +863,6 @@ func handleCustomHolidays(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
 			http.Error(w, "Errore payload JSON", http.StatusBadRequest)
-			return
-		}
-
-		if data.AdminID != 0 && !IsEmployeeAdmin(data.AdminID) {
-			http.Error(w, "Privilegi insufficienti", http.StatusUnauthorized)
 			return
 		}
 
@@ -838,14 +881,10 @@ func handleCustomHolidays(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Festività aggiunta"})
 
 	case http.MethodDelete:
-		adminIDStr := r.URL.Query().Get("adminId")
 		idStr := r.URL.Query().Get("id")
-
-		adminID, _ := strconv.Atoi(adminIDStr)
 		id, _ := strconv.Atoi(idStr)
 
-		if adminID != 0 && !IsEmployeeAdmin(adminID) {
-			http.Error(w, "Privilegi insufficienti", http.StatusUnauthorized)
+		if _, ok := requireAdminSession(w, r); !ok {
 			return
 		}
 
@@ -869,16 +908,7 @@ func handleAdminBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var data struct {
-		AdminID int `json:"adminId"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
-		http.Error(w, "Errore payload JSON", http.StatusBadRequest)
-		return
-	}
-
-	if data.AdminID != 0 && !IsEmployeeAdmin(data.AdminID) {
-		http.Error(w, "Privilegi insufficienti", http.StatusUnauthorized)
+	if _, ok := requireAdminSession(w, r); !ok {
 		return
 	}
 
@@ -904,6 +934,10 @@ func handleAdminBackupList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if _, ok := requireAdminSession(w, r); !ok {
+		return
+	}
+
 	backups, err := GetBackupList()
 	if err != nil {
 		log.Printf("Errore lettura lista backup: %v", err)
@@ -923,6 +957,10 @@ func handleAdminBackupList(w http.ResponseWriter, r *http.Request) {
 func handleAdminBackupDownload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Metodo non consentito", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if _, ok := requireAdminSession(w, r); !ok {
 		return
 	}
 
@@ -971,6 +1009,8 @@ func main() {
 	// 4. Registrazione API Endpoints
 	http.HandleFunc("/api/clock", handleClock)
 	http.HandleFunc("/api/login", handleLogin)
+	http.HandleFunc("/api/auth/logout", handleLogout)
+	http.HandleFunc("/api/auth/session", handleSessionInfo)
 	http.HandleFunc("/api/admin/login", handleAdminLogin)
 	http.HandleFunc("/api/employee/attendances", handleEmployeeAttendances)
 	http.HandleFunc("/api/employee/monthly-attendances", handleEmployeeMonthlyAttendances)

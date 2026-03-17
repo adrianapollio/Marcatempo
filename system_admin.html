@@ -293,18 +293,35 @@
     <script>
         const loginOverlay = document.getElementById('loginOverlay');
         const sysUserNameDisplay = document.getElementById('sysUserNameDisplay');
+        let currentSystemAdminName = '';
         let allEmployees = [];
         let filteredEmployees = [];
         let currentPage = 1;
         let pageSize = 20;
         let pendingAction = null;
-        
-        // Auth check
-        const isSysAdmin = localStorage.getItem('isSystemAdmin') === 'true';
-        if (isSysAdmin) {
-            loginOverlay.style.display = 'none';
-            sysUserNameDisplay.textContent = localStorage.getItem('sysAdminName');
-            initDashboard();
+
+        async function restoreSystemSession() {
+            try {
+                const res = await fetch('/api/auth/session');
+                if (!res.ok) {
+                    return false;
+                }
+
+                const session = await res.json();
+                if (!session || !session.isSystemAdmin) {
+                    return false;
+                }
+
+                currentSystemAdminName = session.name || session.username || '';
+                sysUserNameDisplay.textContent = currentSystemAdminName;
+                loginOverlay.style.display = 'none';
+
+                localStorage.setItem('sysAdminName', currentSystemAdminName);
+                return true;
+            } catch (err) {
+                console.error('Errore ripristino sessione system admin', err);
+                return false;
+            }
         }
 
         async function handleLogin() {
@@ -321,19 +338,11 @@
                 
                 if (res.ok) {
                     const data = await res.json();
-                    localStorage.setItem('isSystemAdmin', 'true');
-                    localStorage.setItem('sysAdminName', data.name);
-                    
-                    // Condividiamo lo stato per admin.html (HR Panel)
-                    localStorage.setItem('empId', '0');
-                    localStorage.setItem('empPin', p);
-                    localStorage.setItem('empName', data.name);
-                    localStorage.setItem('isAdmin', 'true');
-
+                    currentSystemAdminName = data.name || u;
                     loginOverlay.style.display = 'none';
-                    sysUserNameDisplay.textContent = data.name;
+                    sysUserNameDisplay.textContent = currentSystemAdminName;
                     initDashboard();
-                    showToast(`Bentornato, ${data.name}`, 'success');
+                    showToast(`Bentornato, ${currentSystemAdminName}`, 'success');
                 } else {
                     err.style.display = 'block';
                 }
@@ -343,13 +352,22 @@
             }
         }
 
-        function logout() {
-            localStorage.removeItem('isSystemAdmin');
+        async function logout() {
+            try {
+                await fetch('/api/auth/logout', { method: 'POST' });
+            } catch (err) {
+                console.error('Logout system admin fallito', err);
+            }
+
             localStorage.removeItem('sysAdminName');
+            localStorage.removeItem('adminName');
+            localStorage.removeItem('adminId');
+            localStorage.removeItem('isAdmin');
+            localStorage.removeItem('isSystemAdmin');
             localStorage.removeItem('empId');
             localStorage.removeItem('empPin');
             localStorage.removeItem('empName');
-            localStorage.removeItem('isAdmin');
+            currentSystemAdminName = '';
             location.reload();
         }
 
@@ -527,6 +545,13 @@
             setInterval(updateSystemStats, 60000);
         }
 
+        window.addEventListener('DOMContentLoaded', async () => {
+            const hasSession = await restoreSystemSession();
+            if (hasSession) {
+                initDashboard();
+            }
+        });
+
         async function loadBackups() {
             try {
                 const res = await fetch('/api/admin/backups');
@@ -703,7 +728,7 @@
             const p1 = document.getElementById('newSysPassword').value;
             const p2 = document.getElementById('confirmSysPassword').value;
             const err = document.getElementById('passwordError');
-            const username = localStorage.getItem('sysAdminName');
+            const username = currentSystemAdminName || localStorage.getItem('sysAdminName');
 
             if (!p1 || p1.length < 4) {
                 err.textContent = "La password deve contenere almeno 4 caratteri";

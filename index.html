@@ -454,7 +454,13 @@
             }
         }
 
-        function logout() {
+        async function logout() {
+            try {
+                await fetch('/api/auth/logout', { method: 'POST' });
+            } catch (err) {
+                console.error('Logout fallito', err);
+            }
+
             localStorage.clear();
             currentEmpId = null;
             currentPin = null;
@@ -614,6 +620,46 @@
             return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
         }
 
+        function pushEmployeeExtraMark(dayData, record) {
+            dayData.extraMarks.push({
+                action: record.mappedAction,
+                time: record.timeStr
+            });
+        }
+
+        function assignEmployeeDailyRecord(dayData, record) {
+            const key = record.mappedAction;
+            dayData.totalMarkingsCount++;
+
+            if (!dayData.hasOwnProperty(key)) {
+                pushEmployeeExtraMark(dayData, record);
+                return;
+            }
+
+            if (key === 'entrata') {
+                if (!dayData.entrata) {
+                    dayData.entrata = record.timeStr;
+                } else {
+                    pushEmployeeExtraMark(dayData, record);
+                }
+                return;
+            }
+
+            if (key === 'uscita') {
+                if (dayData.uscita) {
+                    pushEmployeeExtraMark(dayData, { mappedAction: 'uscita', timeStr: dayData.uscita });
+                }
+                dayData.uscita = record.timeStr;
+                return;
+            }
+
+            if (!dayData[key]) {
+                dayData[key] = record.timeStr;
+            } else {
+                pushEmployeeExtraMark(dayData, record);
+            }
+        }
+
         function renderAttendanceTable() {
             const tbody = document.getElementById('attendanceBody');
             const records = rawAttendanceRecords;
@@ -622,8 +668,7 @@
             const sortArrow = document.getElementById('sortArrow');
             if (sortArrow) sortArrow.textContent = currentSortOrder === 'asc' ? '↓' : '↑';
 
-            // 1. Group records by date with deduplication logic
-            const DEDUP_THRESHOLD_MS = 10 * 60 * 1000; // 10 minuti
+            // 1. Group records by date without frontend dedup heuristics.
             const dailyMap = {};
 
             // Prima passata: organizziamo i record in rawRecords per ogni giorno
@@ -646,59 +691,13 @@
                 });
             });
 
-            // Seconda passata: deduplicazione e assegnazione
+            // Seconda passata: assegnazione conservativa delle marcature.
             Object.values(dailyMap).forEach(dayData => {
                 if (dayData.rawRecords.length === 0) return;
 
                 dayData.rawRecords.sort((a, b) => a.tsMs - b.tsMs);
-                const validFlags = new Array(dayData.rawRecords.length).fill(true);
 
-                for (let i = 0; i < dayData.rawRecords.length; i++) {
-                    const rec = dayData.rawRecords[i];
-                    let alreadyAssigned = false;
-                    for (let j = 0; j < i; j++) {
-                        if (validFlags[j] && dayData.rawRecords[j].mappedAction === rec.mappedAction) {
-                            if (rec.mappedAction === 'uscita') {
-                                // Per l'uscita teniamo l'ultima, invalidiamo la precedente se è entro 10 min
-                                if (Math.abs(rec.tsMs - dayData.rawRecords[j].tsMs) <= DEDUP_THRESHOLD_MS) {
-                                    validFlags[j] = false;
-                                }
-                            } else {
-                                // Per le altre (entrata, resi etc), teniamo la prima valida
-                                if (Math.abs(rec.tsMs - dayData.rawRecords[j].tsMs) <= DEDUP_THRESHOLD_MS) {
-                                    alreadyAssigned = true;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    if (alreadyAssigned) {
-                        validFlags[i] = false;
-                    }
-                }
-
-                for (let i = 0; i < dayData.rawRecords.length; i++) {
-                    if (!validFlags[i]) continue;
-
-                    const rec = dayData.rawRecords[i];
-                    if (dayData.hasOwnProperty(rec.mappedAction)) {
-                        dayData.totalMarkingsCount++;
-                        if (rec.mappedAction === 'entrata' && !dayData.entrata) {
-                            dayData.entrata = rec.timeStr;
-                        } else if (rec.mappedAction === 'uscita') {
-                            dayData.uscita = rec.timeStr; // Keep the latest
-                        } else if (!dayData[rec.mappedAction]) {
-                            dayData[rec.mappedAction] = rec.timeStr;
-                        } else {
-                            // Extra hidden mark
-                            dayData.extraMarks.push({
-                                action: rec.mappedAction,
-                                time: rec.timeStr
-                            });
-                        }
-                    }
-                }
+                dayData.rawRecords.forEach(rec => assignEmployeeDailyRecord(dayData, rec));
             });
 
 
