@@ -10,6 +10,20 @@ import (
 	"time"
 )
 
+type SyncStats struct {
+	Received   int
+	Inserted   int
+	Duplicates int
+	Errors     int
+}
+
+func (s *SyncStats) Add(other SyncStats) {
+	s.Received += other.Received
+	s.Inserted += other.Inserted
+	s.Duplicates += other.Duplicates
+	s.Errors += other.Errors
+}
+
 const (
 	AnvizSTX     = 0xA5
 	AnvizCommand      = 0x40 // Comando TC_B (Download All Attendance Records) oppure 0x4C (Download New Attendance Records)
@@ -134,9 +148,13 @@ func readFullAnvizPacket(conn net.Conn) []byte {
 }
 
 // parseAnvizResponse accetta il byte buffer di ritorno dal socket e lo smonta.
-func parseAnvizResponse(res []byte, ip string) {
+// Per i record presenze restituisce le statistiche di ingestione del chunk.
+func parseAnvizResponse(res []byte, ip string, deviceID uint32) SyncStats {
+	stats := SyncStats{}
+
 	if len(res) < 11 {
-		return
+		stats.Errors++
+		return stats
 	}
 
 	cmdResponse := res[5]
@@ -152,24 +170,26 @@ func parseAnvizResponse(res []byte, ip string) {
 	if retCode != 0x00 {
 		log.Printf("TCP Worker: Il dispositivo Anviz ha risposto con codice di errore (RET: 0x%X).\n", retCode)
 		if dataLen == 0 {
-			return
+			stats.Errors++
+			return stats
 		}
 	}
 
 	// Body dati reale inizia ad indice 9 e finisce ad indice 9+length
 	if len(res) < int(9+dataLen) {
-		return
+		stats.Errors++
+		return stats
 	}
 	data := res[9 : 9+dataLen]
 
 	if len(data) == 0 {
-		return
+		return stats
 	}
 
 	recordCount := int(data[0])
 
 	if recordCount == 0 {
-		return
+		return stats
 	}
 
 	// Comando di Ritorno per Timbrature (ACK di 0x40 - Download New Attendance) = 0xC0 (0x40 + 0x80)
@@ -177,12 +197,14 @@ func parseAnvizResponse(res []byte, ip string) {
 
 	if cmdResponse == 0xC0 {
 		log.Printf("TCP Worker: Parsing %d timbrature dall'hardware Anviz %s.", recordCount, ip)
+		stats.Received += recordCount
 		
 		validRecordCount := int(data[0]) // Il primo byte è il "count"
 		idx := 2 // Nei pacchetti 0x40 il payload inizia da byte indice 2 (dopo i due header count)
 		
 		for i := 0; i < validRecordCount; i++ {
 			if idx+14 > len(data) {
+				stats.Errors += validRecordCount - i
 				break
 			}
 			recordBytes := data[idx : idx+14]
@@ -218,10 +240,24 @@ func parseAnvizResponse(res []byte, ip string) {
 				employeeName = fmt.Sprintf("Utente %d", userID)
 			}
 
-			err := InsertRecord(int(userID), employeeName, recordTime, action, statusCode, "device", nil, nil)
-			if err != nil {
-				log.Printf("TCP Worker: Errore insert SQLite timbratura device id %d: %v", userID, err)
+			inserted, err := InsertDeviceRecord(deviceID, int(userID), employeeName, recordTime, timestampSecs, action, statusCode)
+			if err == ErrDuplicateRecord {
+				stats.Duplicates++
+				log.Printf("TCP Worker: Timbratura device gia presente, salto device=%d employee=%d raw_ts=%d status=%d", deviceID, userID, timestampSecs, statusCode)
+				continue
 			}
+			if err != nil {
+				stats.Errors++
+				log.Printf("TCP Worker: Errore insert SQLite timbratura device id %d: %v", userID, err)
+				continue
+			}
+			if !inserted {
+				stats.Duplicates++
+				log.Printf("TCP Worker: Timbratura device gia presente, salto device=%d employee=%d raw_ts=%d status=%d", deviceID, userID, timestampSecs, statusCode)
+				continue
+			}
+
+			stats.Inserted++
 		}
 	} else if cmdResponse == 0xF2 {
 		log.Printf("TCP Worker: Parsing %d Profili Dipendenti dall'hardware Anviz %s.", recordCount, ip)
@@ -282,6 +318,8 @@ func parseAnvizResponse(res []byte, ip string) {
 			}
 		}
 	}
+
+	return stats
 }
 
 // SyncAnvizWorker è il worker che fa il polling all'hardware a scadenza temporale.
@@ -290,23 +328,25 @@ func SyncAnvizWorker(ip string, deviceID uint32) {
 	defer ticker.Stop()
 
 	// Tentativo di sync iniziale all'avvio dell'app!
-	_ = syncFromDevice(ip, deviceID)
+	_, _ = syncFromDevice(ip, deviceID)
 
 	for {
 		<-ticker.C
-		_ = syncFromDevice(ip, deviceID)
+		_, _ = syncFromDevice(ip, deviceID)
 	}
 }
 
 // syncFromDevice esegue una socket net.Dial vera verso l'hardware e implementa timeout in caso esso sia offline
-func syncFromDevice(ip string, deviceID uint32) error {
+func syncFromDevice(ip string, deviceID uint32) (SyncStats, error) {
+	stats := SyncStats{}
+
 	log.Printf("TCP Worker: Tentativo di sincronizzazione con l'Anviz IP %s...", ip)
 
 	// Usiamo DialTimeout per non bloccare la Goroutine per sempre se Anviz è spento\network issue.
 	conn, err := net.DialTimeout("tcp", ip+":5010", 5*time.Second)
 	if err != nil {
 		log.Printf("TCP Worker: l'Anviz (%s) sembra spento e irraggiungibile: %v", ip, err)
-		return fmt.Errorf("dispositivo %s irraggiungibile", ip)
+		return stats, fmt.Errorf("dispositivo %s irraggiungibile", ip)
 	}
 	defer conn.Close()
 
@@ -317,14 +357,14 @@ func syncFromDevice(ip string, deviceID uint32) error {
 	_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 	if _, err := conn.Write(loginPacket); err != nil {
 		log.Printf("TCP Worker: Errore durante tcp write (login): %v", err)
-		return fmt.Errorf("errore comunicazione login %s", ip)
+		return stats, fmt.Errorf("errore comunicazione login %s", ip)
 	}
 
 	// Leggiamo la risposta del login
 	loginRes := readFullAnvizPacket(conn)
 	if loginRes == nil {
 		log.Printf("TCP Worker: Timeout lettura login Anviz %s", ip)
-		return fmt.Errorf("timeout login %s", ip)
+		return stats, fmt.Errorf("timeout login %s", ip)
 	}
 	// Se la risposta al login (indice 6 RET Code) non è 0x00, proseguiamo comunque (su alcuni FW la pwd vuota non serve login)
 	if loginRes[6] != 0x00 {
@@ -348,7 +388,7 @@ func syncFromDevice(ip string, deviceID uint32) error {
 		staffRes := readFullAnvizPacket(conn)
 		if staffRes != nil && staffRes[6] == 0x00 { // 0x00 Success
 			count := int(staffRes[9])
-			parseAnvizResponse(staffRes, ip)
+			_ = parseAnvizResponse(staffRes, ip, deviceID)
 
 			if count < 8 { // L'Anviz tipicamente invia blocchi da 8 per lo staff
 				break
@@ -384,7 +424,9 @@ func syncFromDevice(ip string, deviceID uint32) error {
 		if recordRes != nil && recordRes[6] == 0x00 { // 0x00 Success
 			count := int(recordRes[9])
 			log.Printf("TCP Worker: Ricevuti %d record nel chunk corrente.", count)
-			parseAnvizResponse(recordRes, ip)
+			chunkStats := parseAnvizResponse(recordRes, ip, deviceID)
+			stats.Add(chunkStats)
+			log.Printf("TCP Worker: Chunk %s ricevuti=%d nuovi=%d duplicati=%d errori=%d", ip, chunkStats.Received, chunkStats.Inserted, chunkStats.Duplicates, chunkStats.Errors)
 
 			// Se il server ci ha restituito meno di 25 record, significa che li abbiamo esauriti tutti
 			if count < 25 {
@@ -427,7 +469,6 @@ func syncFromDevice(ip string, deviceID uint32) error {
 		log.Printf("TCP Worker: Scaricamento incompleto o nessun record, salto comando CLEAR su %s per prevenire perdita dati", ip)
 	}
 
-	// Opzionalmente si dovrebbe inviare COMMAND CLEAR (TC_C es. 0x4E) dopo lettura corretta.
-	log.Println("TCP Worker: Sincronizzazione conclusa con l'Anviz.")
-	return nil
+	log.Printf("TCP Worker: Sync completata %s ricevuti=%d nuovi=%d duplicati=%d errori=%d", ip, stats.Received, stats.Inserted, stats.Duplicates, stats.Errors)
+	return stats, nil
 }

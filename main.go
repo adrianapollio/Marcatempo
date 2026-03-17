@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -78,13 +79,13 @@ func handleSyncNow(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func(ip string, id uint32) {
 			defer wg.Done()
-			err := syncFromDevice(ip, id)
+			stats, err := syncFromDevice(ip, id)
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
 				results[ip] = "ERRORE: " + err.Error()
 			} else {
-				results[ip] = "OK"
+				results[ip] = fmt.Sprintf("OK (ricevuti=%d, nuovi=%d, duplicati=%d, errori=%d)", stats.Received, stats.Inserted, stats.Duplicates, stats.Errors)
 			}
 		}(d.IP, d.ID)
 	}
@@ -95,7 +96,7 @@ func handleSyncNow(w http.ResponseWriter, r *http.Request) {
 	successCount := 0
 	for ip, status := range results {
 		summary += fmt.Sprintf("- %s: %s\n", ip, status)
-		if status == "OK" {
+		if strings.HasPrefix(status, "OK") {
 			successCount++
 		}
 	}
@@ -601,10 +602,18 @@ func handleAdminManualClock(w http.ResponseWriter, r *http.Request) {
 	
 	log.Printf("MANUAL CLOCK: going to InsertRecord(empId=%d, name=%s, ts=%v, action=%s, sc=%d)", data.EmployeeID, employeeName, timestamp, data.Action, statusCode)
 
-	err = InsertRecord(data.EmployeeID, employeeName, timestamp, data.Action, statusCode, "manual_web", nil, nil)
+	inserted, err := InsertRecord(data.EmployeeID, employeeName, timestamp, data.Action, statusCode, "manual_web", nil, nil)
+	if err == ErrDuplicateRecord {
+		http.Error(w, "Esiste gia una marcatura web/manuale con gli stessi dati", http.StatusConflict)
+		return
+	}
 	if err != nil {
 		log.Printf("Errore inserimento marcatura manuale: %v", err)
 		http.Error(w, "Errore salvataggio nel database", http.StatusInternalServerError)
+		return
+	}
+	if !inserted {
+		http.Error(w, "Esiste gia una marcatura web/manuale con gli stessi dati", http.StatusConflict)
 		return
 	}
 	

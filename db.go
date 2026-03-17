@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -21,6 +22,8 @@ type Record struct {
 	Action       string    `json:"action"`      // "In", "Out", "I_pausa", "F_pausa", "U_trasf", "R_trasf", "I_break", "F_break"
 	StatusCode   int       `json:"status_code"` // Raw Anviz attendance state 0-7
 	Source       string    `json:"source"`      // "web" or "device"
+	DeviceID     *int      `json:"device_id,omitempty"`
+	RawDeviceTS  *int64    `json:"raw_device_timestamp,omitempty"`
 	Latitude     *float64  `json:"latitude"`
 	Longitude    *float64  `json:"longitude"`
 }
@@ -57,6 +60,8 @@ type PendingValidation struct {
 
 var DB *sql.DB
 
+var ErrDuplicateRecord = errors.New("record duplicato")
+
 // InitDB apre la connessione ed esegue l'inizializzazione della tabella
 func InitDB() {
 	var err error
@@ -86,6 +91,8 @@ func InitDB() {
 		action TEXT NOT NULL,
 		status_code INTEGER NOT NULL DEFAULT 0,
 		source TEXT NOT NULL,
+		device_id INTEGER,
+		raw_device_timestamp INTEGER,
 		latitude REAL,
 		longitude REAL
 	);
@@ -135,12 +142,20 @@ func InitDB() {
 	// Migrazione: aggiunge colonna is_admin agli impiegati se non esiste
 	_, _ = DB.Exec("ALTER TABLE employees ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
 
+	// Migrazione: aggiunge metadati device per deduplica robusta lato hardware
+	_, _ = DB.Exec("ALTER TABLE records ADD COLUMN device_id INTEGER")
+	_, _ = DB.Exec("ALTER TABLE records ADD COLUMN raw_device_timestamp INTEGER")
+
 	// Helper for testing: se non c'è nessun admin, imposta un admin (potrai gestire manualmente)
 	// (Decommentare per configurare automaticamente un admin di test sulla base dell'ID)
 	// _, _ = DB.Exec("UPDATE employees SET is_admin = 1 WHERE id = 15")
 
-	// Previene duplicati delle stesse timbrature
-	_, _ = DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_emp_time ON records(employee_id, timestamp)")
+	// Migrazione: rimuove il vecchio vincolo globale e separa i controlli duplicati
+	// tra flusso device e flusso web/manuale.
+	_, _ = DB.Exec("DROP INDEX IF EXISTS idx_emp_time")
+	_, _ = DB.Exec("DROP INDEX IF EXISTS idx_records_device_unique")
+	_, _ = DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_records_device_unique ON records(device_id, employee_id, raw_device_timestamp, status_code) WHERE source = 'device' AND device_id IS NOT NULL AND raw_device_timestamp IS NOT NULL")
+	_, _ = DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_records_web_unique ON records(employee_id, timestamp, action) WHERE source IN ('web', 'manual_web')")
 
 	log.Println("Database SQLite inizializzato con successo, tabelle verificata.")
 
@@ -153,12 +168,53 @@ func InitDB() {
 	}
 }
 
-// InsertRecord salva un dato di presenza prelevato dal web app o dal raw TCP tcp
-func InsertRecord(employeeID int, employeeName string, timestamp time.Time, action string, statusCode int, source string, lat, lon *float64) error {
-	query := `INSERT OR IGNORE INTO records (employee_id, employee_name, timestamp, action, status_code, source, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-	// Salviamo la data nel formato ISO8601 così è compresa da SQLite in query su intervalli (e.g. date())
-	_, err := DB.Exec(query, employeeID, employeeName, timestamp.Format(time.RFC3339), action, statusCode, source, lat, lon)
-	return err
+func isUniqueConstraintError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
+}
+
+func insertRecordWithDeviceMeta(employeeID int, employeeName string, timestamp time.Time, action string, statusCode int, source string, deviceID *uint32, rawDeviceTimestamp *uint32, lat, lon *float64) (bool, error) {
+	query := `INSERT INTO records (employee_id, employee_name, timestamp, action, status_code, source, device_id, raw_device_timestamp, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	var deviceIDValue interface{}
+	if deviceID != nil {
+		deviceIDValue = int64(*deviceID)
+	}
+
+	var rawDeviceTimestampValue interface{}
+	if rawDeviceTimestamp != nil {
+		rawDeviceTimestampValue = int64(*rawDeviceTimestamp)
+	}
+
+	res, err := DB.Exec(query, employeeID, employeeName, timestamp.Format(time.RFC3339), action, statusCode, source, deviceIDValue, rawDeviceTimestampValue, lat, lon)
+	if err != nil {
+		if isUniqueConstraintError(err) {
+			return false, ErrDuplicateRecord
+		}
+		return false, err
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+
+	if rowsAffected == 0 {
+		return false, ErrDuplicateRecord
+	}
+
+	return true, nil
+}
+
+// InsertRecord salva un dato di presenza e applica regole distinte di deduplica
+// per record device e per record inseriti via web/manuale.
+func InsertRecord(employeeID int, employeeName string, timestamp time.Time, action string, statusCode int, source string, lat, lon *float64) (bool, error) {
+	return insertRecordWithDeviceMeta(employeeID, employeeName, timestamp, action, statusCode, source, nil, nil, lat, lon)
+}
+
+// InsertDeviceRecord salva una timbratura hardware includendo identificativo terminale
+// e timestamp raw del protocollo Anviz per la deduplica lato device.
+func InsertDeviceRecord(deviceID uint32, employeeID int, employeeName string, timestamp time.Time, rawDeviceTimestamp uint32, action string, statusCode int) (bool, error) {
+	return insertRecordWithDeviceMeta(employeeID, employeeName, timestamp, action, statusCode, "device", &deviceID, &rawDeviceTimestamp, nil, nil)
 }
 
 func SyncEmployee(id int, name string, pin string) error {
@@ -584,9 +640,15 @@ func ApproveValidation(validationID int, adminID int) error {
 	}
 
 	// Inserisci il record nella tabella records
-	err = InsertRecord(v.EmployeeID, v.EmployeeName, v.Timestamp, v.Action, v.StatusCode, "web", v.Latitude, v.Longitude)
+	inserted, err := InsertRecord(v.EmployeeID, v.EmployeeName, v.Timestamp, v.Action, v.StatusCode, "web", v.Latitude, v.Longitude)
+	if errors.Is(err, ErrDuplicateRecord) {
+		return fmt.Errorf("esiste gia una marcatura web/manuale con gli stessi dati")
+	}
 	if err != nil {
 		return fmt.Errorf("errore inserimento record approvato: %w", err)
+	}
+	if !inserted {
+		return fmt.Errorf("esiste gia una marcatura web/manuale con gli stessi dati")
 	}
 
 	// Aggiorna lo stato della validazione
