@@ -1,17 +1,29 @@
 package main
 
 import (
+	"context"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
-// API Key statica per il gestionale - modificare in base alle esigenze in produzione (meglio ENV variable)
-const APIKey = "LA_MIA_CHIAVE_SEGRETA_123"
+const adminTokenTTL = 12 * time.Hour
+
+type contextKey string
+
+const adminIDContextKey contextKey = "adminID"
+
+var adminTokenSecret []byte
 
 // ClockData è la struttura della request in arrivo dal frontend (Web/Browser)
 type ClockData struct {
@@ -28,15 +40,113 @@ type LoginData struct {
 	PIN        string `json:"pin"`
 }
 
+func normalizeClockAction(action string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(action)) {
+	case "in":
+		return "in", true
+	case "out":
+		return "out", true
+	default:
+		return "", false
+	}
+}
+
+func initAdminTokenSecret() {
+	secret := strings.TrimSpace(os.Getenv("ADMIN_TOKEN_SECRET"))
+	if secret != "" {
+		adminTokenSecret = []byte(secret)
+		return
+	}
+
+	generated := make([]byte, 32)
+	if _, err := rand.Read(generated); err != nil {
+		log.Fatalf("Impossibile inizializzare il segreto dei token admin: %v", err)
+	}
+	adminTokenSecret = generated
+	log.Println("ADMIN_TOKEN_SECRET non configurato: uso un segreto volatile generato all'avvio")
+}
+
+func issueAdminToken(adminID int) (string, error) {
+	if adminID <= 0 {
+		return "", fmt.Errorf("admin non valido")
+	}
+
+	expiresAt := time.Now().Add(adminTokenTTL).Unix()
+	payload := fmt.Sprintf("%d:%d", adminID, expiresAt)
+	mac := hmac.New(sha256.New, adminTokenSecret)
+	if _, err := mac.Write([]byte(payload)); err != nil {
+		return "", err
+	}
+	signature := mac.Sum(nil)
+
+	encodedPayload := base64.RawURLEncoding.EncodeToString([]byte(payload))
+	encodedSignature := base64.RawURLEncoding.EncodeToString(signature)
+	return encodedPayload + "." + encodedSignature, nil
+}
+
+func parseAdminToken(token string) (int, error) {
+	parts := strings.Split(token, ".")
+	if len(parts) != 2 {
+		return 0, fmt.Errorf("token non valido")
+	}
+
+	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return 0, fmt.Errorf("payload token non valido")
+	}
+	signatureBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return 0, fmt.Errorf("firma token non valida")
+	}
+
+	mac := hmac.New(sha256.New, adminTokenSecret)
+	if _, err := mac.Write(payloadBytes); err != nil {
+		return 0, err
+	}
+	if !hmac.Equal(signatureBytes, mac.Sum(nil)) {
+		return 0, fmt.Errorf("firma token non valida")
+	}
+
+	var adminID int
+	var expiresAt int64
+	if _, err := fmt.Sscanf(string(payloadBytes), "%d:%d", &adminID, &expiresAt); err != nil {
+		return 0, fmt.Errorf("contenuto token non valido")
+	}
+	if adminID <= 0 {
+		return 0, fmt.Errorf("admin non valido")
+	}
+	if time.Now().Unix() > expiresAt {
+		return 0, fmt.Errorf("token admin scaduto")
+	}
+	if !IsEmployeeAdmin(adminID) {
+		return 0, fmt.Errorf("admin non autorizzato")
+	}
+
+	return adminID, nil
+}
+
+func adminIDFromRequest(r *http.Request) (int, bool) {
+	adminID, ok := r.Context().Value(adminIDContextKey).(int)
+	return adminID, ok
+}
+
 // AuthMiddleware controlla la presenza del Bearer token corretto
 func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		token := r.Header.Get("Authorization")
-		if token != "Bearer "+APIKey {
+		authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
+		if !strings.HasPrefix(authHeader, "Bearer ") {
 			http.Error(w, "Non autorizzato - Bearer token mancante o errato", http.StatusUnauthorized)
 			return
 		}
-		next.ServeHTTP(w, r)
+
+		adminID, err := parseAdminToken(strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer ")))
+		if err != nil {
+			http.Error(w, "Non autorizzato - token admin non valido o scaduto", http.StatusUnauthorized)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), adminIDContextKey, adminID)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	}
 }
 
@@ -59,6 +169,13 @@ func handleClock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	normalizedAction, ok := normalizeClockAction(data.Action)
+	if !ok {
+		http.Error(w, "Azione non valida: usa 'in' o 'out'", http.StatusBadRequest)
+		return
+	}
+	data.Action = normalizedAction
+
 	// Per le timbrature da web, mappiamo "in"->0, "out"->1
 	statusCode := 0
 	if data.Action == "out" {
@@ -72,6 +189,10 @@ func handleClock(w http.ResponseWriter, r *http.Request) {
 
 	err := InsertPendingValidation(data.EmployeeID, employeeName, time.Now(), data.Action, statusCode, data.Latitude, data.Longitude)
 	if err != nil {
+		if errors.Is(err, ErrDuplicatePendingValidation) {
+			http.Error(w, "Esiste gia una marcatura web recente uguale o una richiesta ancora in attesa", http.StatusConflict)
+			return
+		}
 		log.Printf("Errore creazione richiesta validazione (Web): %v", err)
 		http.Error(w, "Errore salvataggio nel database", http.StatusInternalServerError)
 		return
@@ -130,9 +251,16 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		name := GetEmployeeName(data.EmployeeID)
 		isAdmin := IsEmployeeAdmin(data.EmployeeID)
 		response := map[string]interface{}{"success": true, "name": name, "isAdmin": isAdmin}
-		// Se è admin, includi anche l'API Key per accesso al pannello admin
+		// Se è admin, includi un token firmato per accesso alle API protette.
 		if isAdmin {
-			response["apiKey"] = APIKey
+			token, err := issueAdminToken(data.EmployeeID)
+			if err != nil {
+				log.Printf("Errore generazione token admin per %d: %v", data.EmployeeID, err)
+				http.Error(w, "Errore generazione token admin", http.StatusInternalServerError)
+				return
+			}
+			response["apiKey"] = token
+			response["token"] = token
 		}
 		json.NewEncoder(w).Encode(response)
 	} else {
@@ -156,11 +284,18 @@ func handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 
 	if VerifyAdminPIN(data.EmployeeID, data.PIN) {
 		name := GetEmployeeName(data.EmployeeID)
-		// Ritorna l'API Key da utilizzare come Bearer token per le successive chiamate admin
+		token, err := issueAdminToken(data.EmployeeID)
+		if err != nil {
+			log.Printf("Errore generazione token admin per %d: %v", data.EmployeeID, err)
+			http.Error(w, "Errore generazione token admin", http.StatusInternalServerError)
+			return
+		}
+		// Ritorna il token da utilizzare come Bearer token per le successive chiamate admin.
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": true,
 			"name":    name,
-			"apiKey":  APIKey,
+			"apiKey":  token,
+			"token":   token,
 		})
 	} else {
 		http.Error(w, "Credenziali non valide o privilegi insufficienti", http.StatusUnauthorized)
@@ -307,8 +442,7 @@ func handlePendingValidations(w http.ResponseWriter, r *http.Request) {
 
 // ValidationAction è la struttura per approvare/rifiutare una validazione
 type ValidationAction struct {
-	ID      int `json:"id"`
-	AdminID int `json:"adminId"`
+	ID int `json:"id"`
 }
 
 // handleApproveValidation approva una richiesta di validazione
@@ -324,7 +458,13 @@ func handleApproveValidation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := ApproveValidation(data.ID, data.AdminID); err != nil {
+	adminID, ok := adminIDFromRequest(r)
+	if !ok {
+		http.Error(w, "Admin non autenticato", http.StatusUnauthorized)
+		return
+	}
+
+	if err := ApproveValidation(data.ID, adminID); err != nil {
 		log.Printf("Errore approvazione validazione %d: %v", data.ID, err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -347,7 +487,13 @@ func handleRejectValidation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := RejectValidation(data.ID, data.AdminID); err != nil {
+	adminID, ok := adminIDFromRequest(r)
+	if !ok {
+		http.Error(w, "Admin non autenticato", http.StatusUnauthorized)
+		return
+	}
+
+	if err := RejectValidation(data.ID, adminID); err != nil {
 		log.Printf("Errore rifiuto validazione %d: %v", data.ID, err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -359,6 +505,7 @@ func handleRejectValidation(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	log.Println("Avvio Time & Attendance Microservice...")
+	initAdminTokenSecret()
 
 	// 1. Inizializzazione Database
 	InitDB()

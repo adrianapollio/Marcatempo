@@ -1178,9 +1178,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
 
     <script>
-        let adminApiKey = localStorage.getItem('adminApiKey');
+        let adminApiKey = localStorage.getItem('adminApiKey') || localStorage.getItem('adminToken');
         let adminName = localStorage.getItem('adminName');
-        let storedAdminId = localStorage.getItem('adminId') || localStorage.getItem('empId');
 
         let currentPage = 1;
         let itemsPerPage = 15;
@@ -1469,8 +1468,7 @@
                                 'Authorization': 'Bearer ' + adminApiKey
                             },
                             body: JSON.stringify({
-                                id: id,
-                                adminId: parseInt(storedAdminId) || 0
+                                id: id
                             })
                         });
 
@@ -1495,6 +1493,7 @@
 
         function logout() {
             localStorage.removeItem('adminApiKey');
+            localStorage.removeItem('adminToken');
             localStorage.removeItem('adminName');
             localStorage.removeItem('adminId');
             localStorage.removeItem('empId');
@@ -1502,7 +1501,6 @@
             localStorage.removeItem('isAdmin');
             adminApiKey = null;
             adminName = null;
-            storedAdminId = null;
             window.location.href = "/";
         }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -47,6 +48,10 @@ type PendingValidation struct {
 
 var DB *sql.DB
 
+var ErrDuplicatePendingValidation = errors.New("esiste gia una marcatura web recente in attesa o registrata")
+
+const webDuplicateWindow = time.Minute
+
 // InitDB apre la connessione ed esegue l'inizializzazione della tabella
 func InitDB() {
 	var err error
@@ -65,6 +70,9 @@ func InitDB() {
 		action TEXT NOT NULL,
 		status_code INTEGER NOT NULL DEFAULT 0,
 		source TEXT NOT NULL,
+		device_id INTEGER,
+		device_ip TEXT,
+		raw_timestamp_secs INTEGER,
 		latitude REAL,
 		longitude REAL
 	);
@@ -103,21 +111,140 @@ func InitDB() {
 	// Migrazione: aggiunge colonna is_admin agli impiegati se non esiste
 	_, _ = DB.Exec("ALTER TABLE employees ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
 
+	// Migrazione: metadati grezzi per la deduplica delle marcature device
+	_, _ = DB.Exec("ALTER TABLE records ADD COLUMN device_id INTEGER")
+	_, _ = DB.Exec("ALTER TABLE records ADD COLUMN device_ip TEXT")
+	_, _ = DB.Exec("ALTER TABLE records ADD COLUMN raw_timestamp_secs INTEGER")
+
 	// Helper for testing: se non c'è nessun admin, imposta un admin (potrai gestire manualmente)
 	// (Decommentare per configurare automaticamente un admin di test sulla base dell'ID)
 	// _, _ = DB.Exec("UPDATE employees SET is_admin = 1 WHERE id = 15")
 
-	// Previene duplicati delle stesse timbrature
-	_, _ = DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_emp_time ON records(employee_id, timestamp)")
+	// Rimuove la vecchia unique globale che mischiava device e web.
+	_, _ = DB.Exec("DROP INDEX IF EXISTS idx_emp_time")
+	_, _ = DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_records_device_unique ON records(device_id, employee_id, raw_timestamp_secs, status_code) WHERE source = 'device' AND device_id IS NOT NULL AND raw_timestamp_secs IS NOT NULL")
+	_, _ = DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_records_web_unique ON records(employee_id, timestamp, action) WHERE source = 'web'")
+	_, _ = DB.Exec("CREATE INDEX IF NOT EXISTS idx_records_web_lookup ON records(source, employee_id, action, status_code, timestamp)")
+	_, _ = DB.Exec("CREATE INDEX IF NOT EXISTS idx_pending_validations_lookup ON pending_validations(status, employee_id, action, status_code, timestamp)")
 
 	log.Println("Database SQLite inizializzato con successo, tabelle verificata.")
 }
 
-// InsertRecord salva un dato di presenza prelevato dal web app o dal raw TCP tcp
+func hasLegacyDeviceDuplicate(employeeID int, timestamp time.Time, statusCode int) (bool, error) {
+	var exists int
+	err := DB.QueryRow(`
+		SELECT 1
+		FROM records
+		WHERE source = 'device' AND raw_timestamp_secs IS NULL AND employee_id = ? AND timestamp = ? AND status_code = ?
+		LIMIT 1`, employeeID, timestamp.Format(time.RFC3339), statusCode).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func hasDeviceDuplicate(employeeID int, timestamp time.Time, statusCode int, deviceID uint32, rawTimestampSecs uint32) (bool, error) {
+	var exists int
+	err := DB.QueryRow(`
+		SELECT 1
+		FROM records
+		WHERE source = 'device' AND (
+			(device_id = ? AND employee_id = ? AND raw_timestamp_secs = ? AND status_code = ?)
+			OR
+			(raw_timestamp_secs IS NULL AND employee_id = ? AND timestamp = ? AND status_code = ?)
+		)
+		LIMIT 1`,
+		int(deviceID), employeeID, int64(rawTimestampSecs), statusCode,
+		employeeID, timestamp.Format(time.RFC3339), statusCode,
+	).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func hasRecentWebRecord(employeeID int, timestamp time.Time, action string, statusCode int) (bool, error) {
+	var exists int
+	lowerBound := timestamp.Add(-webDuplicateWindow).Format(time.RFC3339)
+	upperBound := timestamp.Add(webDuplicateWindow).Format(time.RFC3339)
+	err := DB.QueryRow(`
+		SELECT 1
+		FROM records
+		WHERE source = 'web' AND employee_id = ? AND action = ? AND status_code = ?
+			AND datetime(timestamp) BETWEEN datetime(?) AND datetime(?)
+		LIMIT 1`, employeeID, action, statusCode, lowerBound, upperBound).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func hasRecentPendingValidation(employeeID int, timestamp time.Time, action string, statusCode int) (bool, error) {
+	var exists int
+	lowerBound := timestamp.Add(-webDuplicateWindow).Format(time.RFC3339)
+	upperBound := timestamp.Add(webDuplicateWindow).Format(time.RFC3339)
+	err := DB.QueryRow(`
+		SELECT 1
+		FROM pending_validations
+		WHERE status = 'pending' AND employee_id = ? AND action = ? AND status_code = ?
+			AND datetime(timestamp) BETWEEN datetime(?) AND datetime(?)
+		LIMIT 1`, employeeID, action, statusCode, lowerBound, upperBound).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// InsertRecord salva un dato di presenza generato dal flusso web.
 func InsertRecord(employeeID int, employeeName string, timestamp time.Time, action string, statusCode int, source string, lat, lon *float64) error {
-	query := `INSERT OR IGNORE INTO records (employee_id, employee_name, timestamp, action, status_code, source, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-	// Salviamo la data nel formato ISO8601 così è compresa da SQLite in query su intervalli (e.g. date())
+	if source == "device" {
+		duplicate, err := hasLegacyDeviceDuplicate(employeeID, timestamp, statusCode)
+		if err != nil {
+			return err
+		}
+		if duplicate {
+			return nil
+		}
+	}
+
+	if source == "web" {
+		duplicate, err := hasRecentWebRecord(employeeID, timestamp, action, statusCode)
+		if err != nil {
+			return err
+		}
+		if duplicate {
+			return nil
+		}
+	}
+
+	query := `INSERT INTO records (employee_id, employee_name, timestamp, action, status_code, source, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 	_, err := DB.Exec(query, employeeID, employeeName, timestamp.Format(time.RFC3339), action, statusCode, source, lat, lon)
+	return err
+}
+
+func InsertDeviceRecord(employeeID int, employeeName string, timestamp time.Time, action string, statusCode int, deviceID uint32, deviceIP string, rawTimestampSecs uint32) error {
+	duplicate, err := hasDeviceDuplicate(employeeID, timestamp, statusCode, deviceID, rawTimestampSecs)
+	if err != nil {
+		return err
+	}
+	if duplicate {
+		return nil
+	}
+
+	query := `INSERT INTO records (employee_id, employee_name, timestamp, action, status_code, source, device_id, device_ip, raw_timestamp_secs, latitude, longitude) VALUES (?, ?, ?, ?, ?, 'device', ?, ?, ?, NULL, NULL)`
+	_, err = DB.Exec(query, employeeID, employeeName, timestamp.Format(time.RFC3339), action, statusCode, int(deviceID), deviceIP, int64(rawTimestampSecs))
 	return err
 }
 
@@ -142,6 +269,47 @@ func SyncEmployee(id int, name string, pin string) error {
 	`
 	_, err := DB.Exec(query, id, name, pin)
 	return err
+}
+
+func businessLocation() *time.Location {
+	loc, err := time.LoadLocation("Europe/Rome")
+	if err != nil {
+		return time.Local
+	}
+	return loc
+}
+
+func buildDayRange(dateStr string) (time.Time, time.Time, error) {
+	loc := businessLocation()
+	start, err := time.ParseInLocation("2006-01-02", dateStr, loc)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	return start, start.AddDate(0, 0, 1), nil
+}
+
+func buildMonthRange(year int, month int) (time.Time, time.Time) {
+	loc := businessLocation()
+	start := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, loc)
+	return start, start.AddDate(0, 1, 0)
+}
+
+func parseRecordTimestamp(timestampStr string) time.Time {
+	timestamp, err := time.Parse(time.RFC3339, timestampStr)
+	if err != nil {
+		return time.Time{}
+	}
+	return timestamp
+}
+
+func isAdminEmployee(employeeID int) error {
+	if employeeID <= 0 {
+		return fmt.Errorf("admin non valido")
+	}
+	if !IsEmployeeAdmin(employeeID) {
+		return fmt.Errorf("l'utente %d non ha privilegi admin", employeeID)
+	}
+	return nil
 }
 
 func VerifyPIN(employeeID int, pin string) bool {
@@ -214,13 +382,20 @@ func GetRecords(startDate, endDate, employeeID string) ([]Record, error) {
 	var args []interface{}
 
 	if startDate != "" {
-		// startDate expected as YYYY-MM-DD
-		query += " AND date(timestamp) >= date(?)"
-		args = append(args, startDate)
+		startTime, _, err := buildDayRange(startDate)
+		if err != nil {
+			return nil, err
+		}
+		query += " AND datetime(timestamp) >= datetime(?)"
+		args = append(args, startTime.Format(time.RFC3339))
 	}
 	if endDate != "" && endDate != "null" {
-		query += " AND date(timestamp) <= date(?)"
-		args = append(args, endDate)
+		_, endExclusive, err := buildDayRange(endDate)
+		if err != nil {
+			return nil, err
+		}
+		query += " AND datetime(timestamp) < datetime(?)"
+		args = append(args, endExclusive.Format(time.RFC3339))
 	}
 	if employeeID != "" && employeeID != "null" {
 		query += " AND employee_id = ?"
@@ -244,10 +419,7 @@ func GetRecords(startDate, endDate, employeeID string) ([]Record, error) {
 		}
 
 		// Riconvertiamo a time.Time per i client REST
-		t, parseErr := time.Parse(time.RFC3339, timestampStr)
-		if parseErr == nil {
-			r.Timestamp = t
-		}
+		r.Timestamp = parseRecordTimestamp(timestampStr)
 
 		records = append(records, r)
 	}
@@ -273,10 +445,7 @@ func GetEmployeeRecords(employeeID int, limit int) ([]Record, error) {
 			return nil, err
 		}
 
-		t, parseErr := time.Parse(time.RFC3339, timestampStr)
-		if parseErr == nil {
-			r.Timestamp = t
-		}
+		r.Timestamp = parseRecordTimestamp(timestampStr)
 
 		records = append(records, r)
 	}
@@ -285,15 +454,14 @@ func GetEmployeeRecords(employeeID int, limit int) ([]Record, error) {
 
 // GetEmployeeMonthlyRecords restituisce tutti i record di un dipendente per un dato mese
 func GetEmployeeMonthlyRecords(employeeID int, year int, month int) ([]Record, error) {
-	startDate := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.Local).Format("2006-01-02")
-	endDate := time.Date(year, time.Month(month)+1, 0, 23, 59, 59, 0, time.Local).Format("2006-01-02")
+	startDate, endDate := buildMonthRange(year, month)
 
 	query := `SELECT id, employee_id, employee_name, timestamp, action, status_code, source, latitude, longitude
 		FROM records
-		WHERE employee_id = ? AND date(timestamp) >= date(?) AND date(timestamp) <= date(?)
+		WHERE employee_id = ? AND datetime(timestamp) >= datetime(?) AND datetime(timestamp) < datetime(?)
 		ORDER BY timestamp ASC`
 
-	rows, err := DB.Query(query, employeeID, startDate, endDate)
+	rows, err := DB.Query(query, employeeID, startDate.Format(time.RFC3339), endDate.Format(time.RFC3339))
 	if err != nil {
 		return nil, err
 	}
@@ -308,10 +476,7 @@ func GetEmployeeMonthlyRecords(employeeID int, year int, month int) ([]Record, e
 			return nil, err
 		}
 
-		t, parseErr := time.Parse(time.RFC3339, timestampStr)
-		if parseErr == nil {
-			r.Timestamp = t
-		}
+		r.Timestamp = parseRecordTimestamp(timestampStr)
 
 		records = append(records, r)
 	}
@@ -320,12 +485,21 @@ func GetEmployeeMonthlyRecords(employeeID int, year int, month int) ([]Record, e
 
 // GetEmployeeRangeRecords restituisce tutti i record di un dipendente in un range di date
 func GetEmployeeRangeRecords(employeeID int, startDate string, endDate string) ([]Record, error) {
+	startTime, _, err := buildDayRange(startDate)
+	if err != nil {
+		return nil, err
+	}
+	_, endExclusive, err := buildDayRange(endDate)
+	if err != nil {
+		return nil, err
+	}
+
 	query := `SELECT id, employee_id, employee_name, timestamp, action, status_code, source, latitude, longitude
 		FROM records
-		WHERE employee_id = ? AND date(timestamp) >= date(?) AND date(timestamp) <= date(?)
+		WHERE employee_id = ? AND datetime(timestamp) >= datetime(?) AND datetime(timestamp) < datetime(?)
 		ORDER BY timestamp ASC`
 
-	rows, err := DB.Query(query, employeeID, startDate, endDate)
+	rows, err := DB.Query(query, employeeID, startTime.Format(time.RFC3339), endExclusive.Format(time.RFC3339))
 	if err != nil {
 		return nil, err
 	}
@@ -340,10 +514,7 @@ func GetEmployeeRangeRecords(employeeID int, startDate string, endDate string) (
 			return nil, err
 		}
 
-		t, parseErr := time.Parse(time.RFC3339, timestampStr)
-		if parseErr == nil {
-			r.Timestamp = t
-		}
+		r.Timestamp = parseRecordTimestamp(timestampStr)
 
 		records = append(records, r)
 	}
@@ -352,9 +523,25 @@ func GetEmployeeRangeRecords(employeeID int, startDate string, endDate string) (
 
 // InsertPendingValidation crea una nuova richiesta di validazione per marcatura web
 func InsertPendingValidation(employeeID int, employeeName string, timestamp time.Time, action string, statusCode int, lat, lon *float64) error {
+	pendingDuplicate, err := hasRecentPendingValidation(employeeID, timestamp, action, statusCode)
+	if err != nil {
+		return err
+	}
+	if pendingDuplicate {
+		return ErrDuplicatePendingValidation
+	}
+
+	recordDuplicate, err := hasRecentWebRecord(employeeID, timestamp, action, statusCode)
+	if err != nil {
+		return err
+	}
+	if recordDuplicate {
+		return ErrDuplicatePendingValidation
+	}
+
 	query := `INSERT INTO pending_validations (employee_id, employee_name, timestamp, action, status_code, latitude, longitude, status, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)`
-	_, err := DB.Exec(query, employeeID, employeeName, timestamp.Format(time.RFC3339), action, statusCode, lat, lon, time.Now().Format(time.RFC3339))
+	_, err = DB.Exec(query, employeeID, employeeName, timestamp.Format(time.RFC3339), action, statusCode, lat, lon, time.Now().Format(time.RFC3339))
 	return err
 }
 
@@ -412,6 +599,10 @@ func GetPendingValidations(status string) ([]PendingValidation, error) {
 
 // ApproveValidation approva una richiesta pendente e copia il record nella tabella records
 func ApproveValidation(validationID int, adminID int) error {
+	if err := isAdminEmployee(adminID); err != nil {
+		return err
+	}
+
 	// Recupera la validazione pendente
 	var v PendingValidation
 	var timestampStr string
@@ -425,9 +616,7 @@ func ApproveValidation(validationID int, adminID int) error {
 		return fmt.Errorf("la validazione è già stata gestita (stato: %s)", v.Status)
 	}
 
-	if t, e := time.Parse(time.RFC3339, timestampStr); e == nil {
-		v.Timestamp = t
-	}
+	v.Timestamp = parseRecordTimestamp(timestampStr)
 
 	// Inserisci il record nella tabella records
 	err = InsertRecord(v.EmployeeID, v.EmployeeName, v.Timestamp, v.Action, v.StatusCode, "web", v.Latitude, v.Longitude)
@@ -444,6 +633,10 @@ func ApproveValidation(validationID int, adminID int) error {
 
 // RejectValidation rifiuta una richiesta pendente
 func RejectValidation(validationID int, adminID int) error {
+	if err := isAdminEmployee(adminID); err != nil {
+		return err
+	}
+
 	var status string
 	err := DB.QueryRow(`SELECT status FROM pending_validations WHERE id = ?`, validationID).Scan(&status)
 	if err != nil {

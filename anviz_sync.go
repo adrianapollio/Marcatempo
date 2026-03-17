@@ -96,6 +96,16 @@ func BuildAnvizPacket(deviceID uint32, command byte, data []byte) []byte {
 	return buf.Bytes()
 }
 
+func isValidAnvizPacket(packet []byte) bool {
+	if len(packet) < 11 {
+		return false
+	}
+
+	payload := packet[:len(packet)-2]
+	receivedCRC := binary.LittleEndian.Uint16(packet[len(packet)-2:])
+	return crc16(payload) == receivedCRC
+}
+
 // readFullAnvizPacket legge deterministicamente un pacchetto in arrivo risolvendo l'eventuale frammentazione TCP
 func readFullAnvizPacket(conn net.Conn) []byte {
 	// Il pacchetto di base ha sempre 9 byte di Header prima dei Dati e del CRC.
@@ -129,11 +139,16 @@ func readFullAnvizPacket(conn net.Conn) []byte {
 		return nil
 	}
 
-	return append(header, rest...)
+	packet := append(header, rest...)
+	if !isValidAnvizPacket(packet) {
+		return nil
+	}
+
+	return packet
 }
 
 // parseAnvizResponse accetta il byte buffer di ritorno dal socket e lo smonta.
-func parseAnvizResponse(res []byte, ip string) {
+func parseAnvizResponse(res []byte, ip string, deviceID uint32) {
 	if len(res) < 11 {
 		return
 	}
@@ -217,7 +232,7 @@ func parseAnvizResponse(res []byte, ip string) {
 				employeeName = fmt.Sprintf("Utente %d", userID)
 			}
 
-			err := InsertRecord(int(userID), employeeName, recordTime, action, statusCode, "device", nil, nil)
+			err := InsertDeviceRecord(int(userID), employeeName, recordTime, action, statusCode, deviceID, ip, timestampSecs)
 			if err != nil {
 				log.Printf("TCP Worker: Errore insert SQLite timbratura device id %d: %v", userID, err)
 			}
@@ -230,7 +245,7 @@ func parseAnvizResponse(res []byte, ip string) {
 		for i := 0; i < recordCount; i++ {
 			// Per Anviz standard, Download Staff invia packet chunk di circa 40 byte
 			// Byte 0-4: ID, Byte 12-14 o 8-11: PIN, etc (struttura variabile, usiamo approccio prudente su 40 byte)
-			if idx+30 > len(data) {
+			if idx+40 > len(data) {
 				break
 			}
 			profileBytes := data[idx : idx+40]
@@ -359,7 +374,7 @@ func syncFromDevice(ip string, deviceID uint32) {
 		staffRes := readFullAnvizPacket(conn)
 		if staffRes != nil && staffRes[6] == 0x00 { // 0x00 Success
 			count := int(staffRes[9])
-			parseAnvizResponse(staffRes, ip)
+			parseAnvizResponse(staffRes, ip, deviceID)
 
 			if count < 8 { // L'Anviz tipicamente invia blocchi da 8 per lo staff
 				break
@@ -393,7 +408,7 @@ func syncFromDevice(ip string, deviceID uint32) {
 		recordRes := readFullAnvizPacket(conn)
 		if recordRes != nil && recordRes[6] == 0x00 { // 0x00 Success
 			count := int(recordRes[9])
-			parseAnvizResponse(recordRes, ip)
+			parseAnvizResponse(recordRes, ip, deviceID)
 
 			// Se il server ci ha restituito meno di 25 record, significa che li abbiamo esauriti tutti
 			if count < 25 {

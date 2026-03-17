@@ -1143,6 +1143,7 @@
                     localStorage.setItem('empName', currentName);
                     localStorage.setItem('isAdmin', isAdmin ? 'true' : 'false');
                     if (data.apiKey) localStorage.setItem('adminApiKey', data.apiKey);
+                    if (data.token) localStorage.setItem('adminToken', data.token);
 
                     showDashboard();
                 } else {
@@ -1167,7 +1168,7 @@
         }
 
         function goToAdmin() {
-            if (isAdmin && !localStorage.getItem('adminApiKey')) {
+            if (isAdmin && !localStorage.getItem('adminApiKey') && !localStorage.getItem('adminToken')) {
                 alert("La tua sessione da amministratore è scaduta o non è aggiornata. Clicca su 'Esci' e accedi nuovamente per ripristinare i permessi.");
                 return;
             }
