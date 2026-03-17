@@ -18,6 +18,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o marcatempo .
 
 # Compila anche il tool per impostare l'admin
 RUN CGO_ENABLED=0 GOOS=linux go build -o make_admin scripts/make_admin.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o make_system_admin scripts/make_system_admin.go
 
 # Compila lo script per inserire marcature device-like
 RUN CGO_ENABLED=0 GOOS=linux go build -o insert_device_record scripts/insert_device_record.go
@@ -34,10 +35,11 @@ WORKDIR /app
 # Copia gli eseguibili compilati dallo stage precedente
 COPY --from=builder /app/marcatempo .
 COPY --from=builder /app/make_admin .
+COPY --from=builder /app/make_system_admin .
 COPY --from=builder /app/insert_device_record .
 
 # Copia i file statici necessari per il frontend
-COPY admin.html admin.css index.html index.css ./
+COPY admin.html admin.css index.html index.css system_admin.html system_admin.css ./
 
 # Esponi la porta 8080
 EXPOSE 8080

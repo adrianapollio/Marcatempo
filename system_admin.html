@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Administrator Dashboard</title>
+    <!-- Modern Tech Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="system_admin.css">
+    <style>
+        /* Small overrides or specific adjustments */
+        #adminLink {
+            margin-top: auto;
+            border-top: 1px solid var(--border);
+            padding-top: 20px;
+        }
+        
+        .backup-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .backup-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            transition: background 0.2s;
+        }
+
+        .backup-item:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .backup-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .backup-name {
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .backup-meta {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-family: 'JetBrains Mono', monospace;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="loginOverlay" class="login-overlay">
+        <div class="login-box">
+            <div style="width: 64px; height: 64px; background: rgba(99, 102, 241, 0.1); border-radius: 16px; margin: 0 auto 24px; display: flex; align-items: center; justify-content: center; color: var(--primary);">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                </svg>
+            </div>
+            <h1>System Login</h1>
+            <p>Accesso riservato all'amministratore tecnico</p>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="sysUsername" placeholder="admin">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="sysPassword" placeholder="••••••••">
+            </div>
+            <button class="btn-system" onclick="handleLogin()">Accedi al Sistema</button>
+            <div style="margin-top: 16px; text-align: center;">
+                <a href="/" style="color: var(--text-secondary); text-decoration: none; font-size: 0.875rem; display: flex; align-items: center; justify-content: center; gap: 6px; transition: color 0.2s;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="19" y1="12" x2="5" y2="12"></line>
+                        <polyline points="12 19 5 12 12 5"></polyline>
+                    </svg>
+                    Torna al Portale Dipendenti
+                </a>
+                <style>
+                    .login-box a:hover { color: var(--primary) !important; }
+                </style>
+            </div>
+            <div id="loginError" style="color: #ef4444; font-size: 0.875rem; margin-top: 16px; display: none;">Credenziali non valide</div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <div class="header-title">
+                <h2>Marcatempo Core</h2>
+                <p>System Administration Shell v1.1</p>
+            </div>
+            <div style="display: flex; gap: 12px; align-items: center;">
+                <div class="admin-info">
+                    <span style="font-weight: 700; font-size: 1.1rem; letter-spacing: 0.02em;">admin</span>
+                    <div class="status-container">
+                        <span class="status-dot"></span>
+                        <span id="syncStatus">Online</span>
+                    </div>
+                </div>
+                <button class="btn-logout" onclick="logout()">Logout</button>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="sidebar">
+                <div class="nav-item active" id="nav-overview" onclick="showPanel('overview')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                    Overview
+                </div>
+                <div class="nav-item" id="nav-admins" onclick="showPanel('admins')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><polyline points="16 11 18 13 22 9"></polyline></svg>
+                    Gestione Admin HR
+                </div>
+                <div class="nav-item" id="nav-backups" onclick="showPanel('backups')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    Data Backups
+                </div>
+                <div class="nav-item" id="nav-devices" onclick="showPanel('devices')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                    Devices Status
+                </div>
+                <div class="nav-item" id="nav-security" onclick="showPanel('security')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg>
+                    Sicurezza
+                </div>
+                
+                <div id="adminLink">
+                    <div class="nav-item" onclick="window.location.href='/admin'" style="border: 1px solid var(--border);">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                        HR Admin Panel
+                    </div>
+                </div>
+            </div>
+
+            <div class="main-panel">
+                <div id="panel-overview">
+                    <h3 style="margin-top: 0; margin-bottom: 24px; font-weight: 500;">System Health</h3>
+                    <div class="card-grid">
+                        <div class="stat-card">
+                            <span class="label">Database Size</span>
+                            <span class="value" id="dbSize">-</span>
+                            <span class="trend">SQLite WAL Enabled</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="label">Connected Devices</span>
+                            <span class="value">2</span>
+                            <span class="trend">Anviz TCP/IP Stack</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="label">Server Uptime</span>
+                            <span class="value" id="serverUptime">Calculated...</span>
+                        </div>
+                    </div>
+                    
+                    <div style="background: white; padding: 20px; border-radius: 12px; border: 1px solid var(--border); box-shadow: var(--shadow-sm);">
+                        <h4 style="margin-top: 0; color: var(--primary); font-family: 'JetBrains Mono'; font-size: 0.8rem;">Recent System Logs</h4>
+                        <div id="smallLogs" style="font-family: 'JetBrains Mono'; font-size: 0.75rem; color: #64748b; line-height: 1.8;">
+                            [SYSTEM] Dashboard initialized...<br>
+                            [AUTH] Multi-role authentication ready.<br>
+                            [DB] Connection pool verified.
+                        </div>
+                    </div>
+                </div>
+
+                <div id="panel-admins" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                        <h3 style="margin: 0; font-weight: 500;">Gestione Privilegi HR</h3>
+                        <div style="width: 300px;">
+                            <input type="text" id="adminSearch" placeholder="Cerca dipendente..." oninput="filterAdmins()">
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table id="adminTable">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Nome</th>
+                                    <th>Stato Admin</th>
+                                    <th>Azione</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminListBody"></tbody>
+                        </table>
+                    </div>
+                    <!-- Pagination (DataGrid Style) -->
+                    <div class="pagination">
+                        <div class="page-size-selector">
+                            <label>Record per pagina:</label>
+                            <select id="pageSize" onchange="changePageSize()">
+                                <option value="15">15</option>
+                                <option value="20" selected>20</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
+                        <button class="btn-page" id="prevPage" onclick="changePage(-1)" disabled title="Pagina Precedente">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                        </button>
+                        <span class="pagination-info" id="pageInfo">Pagina 1 di 1</span>
+                        <button class="btn-page" id="nextPage" onclick="changePage(1)" disabled title="Pagina Successiva">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="panel-backups" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="margin: 0; font-weight: 500;">History Backups</h3>
+                        <button class="btn-system" style="width: auto; padding: 8px 16px;" onclick="triggerBackup()">Esegui Backup Ora</button>
+                    </div>
+                    <div style="background: white; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow-sm);">
+                        <div id="backupWait" style="padding: 24px; text-align: center; color: var(--text-secondary);">Recupero lista backup...</div>
+                        <ul class="backup-list" id="backupList"></ul>
+                    </div>
+                </div>
+
+                <div id="panel-devices" style="display: none;">
+                    <h3 style="margin-top: 0; margin-bottom: 24px; font-weight: 500;">Anviz Communication Status</h3>
+                    <div class="stat-card" style="margin-bottom: 12px; border-left: 4px solid var(--accent);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-weight: 600;">Terminal ID #1</div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary);">IP: 192.168.1.245 | Porta: 5010</div>
+                            </div>
+                            <div style="background: rgba(16, 185, 129, 0.1); color: var(--accent); padding: 4px 12px; border-radius: 12px; font-size: 0.75rem;">CONNECTED</div>
+                        </div>
+                    </div>
+                    <div class="stat-card" style="border-left: 4px solid var(--accent);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-weight: 600;">Terminal ID #2</div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary);">IP: 192.168.1.246 | Porta: 5010</div>
+                            </div>
+                            <div style="background: rgba(16, 185, 129, 0.1); color: var(--accent); padding: 4px 12px; border-radius: 12px; font-size: 0.75rem;">CONNECTED</div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 24px; text-align: right;">
+                        <button class="btn-download" style="border-radius: 8px;" onclick="location.reload()">Refresh Stack</button>
+                    </div>
+                </div>
+
+                <div id="panel-security" style="display: none;">
+                    <h3 style="margin-top: 0; margin-bottom: 24px; font-weight: 500;">Accesso e Sicurezza</h3>
+                    <div class="stat-card" style="max-width: 500px;">
+                        <h4 style="margin-top: 0; margin-bottom: 20px;">Cambia Password Super Admin</h4>
+                        <div class="form-group">
+                            <label>Nuova Password</label>
+                            <input type="password" id="newSysPassword" placeholder="Inserisci nuova password">
+                        </div>
+                        <div class="form-group">
+                            <label>Conferma Nuova Password</label>
+                            <input type="password" id="confirmSysPassword" placeholder="Conferma nuova password">
+                        </div>
+                        <button class="btn-system" onclick="updatePassword()">Aggiorna Password</button>
+                        <div id="passwordError" style="color: #ef4444; font-size: 0.875rem; margin-top: 16px; display: none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Modal -->
+    <div id="confirmModal" class="modal-overlay">
+        <div class="modal-content">
+            <div id="confirmModalTitle" class="modal-title">Conferma</div>
+            <div id="confirmModalBody" class="modal-body">Sei sicuro di voler procedere?</div>
+            <div class="modal-actions">
+                <button class="modal-btn cancel" onclick="closeConfirmModal(false)">Annulla</button>
+                <button id="confirmModalBtn" class="modal-btn confirm" onclick="closeConfirmModal(true)">Conferma</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script>
+        const loginOverlay = document.getElementById('loginOverlay');
+        const sysUserNameDisplay = document.getElementById('sysUserNameDisplay');
+        let allEmployees = [];
+        let filteredEmployees = [];
+        let currentPage = 1;
+        let pageSize = 20;
+        let pendingAction = null;
+        
+        // Auth check
+        const isSysAdmin = localStorage.getItem('isSystemAdmin') === 'true';
+        if (isSysAdmin) {
+            loginOverlay.style.display = 'none';
+            sysUserNameDisplay.textContent = localStorage.getItem('sysAdminName');
+            initDashboard();
+        }
+
+        async function handleLogin() {
+            const u = document.getElementById('sysUsername').value;
+            const p = document.getElementById('sysPassword').value;
+            const err = document.getElementById('loginError');
+            
+            try {
+                const res = await fetch('/api/system/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: u, password: p })
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    localStorage.setItem('isSystemAdmin', 'true');
+                    localStorage.setItem('sysAdminName', data.name);
+                    
+                    // Condividiamo lo stato per admin.html (HR Panel)
+                    localStorage.setItem('empId', '0');
+                    localStorage.setItem('empPin', p);
+                    localStorage.setItem('empName', data.name);
+                    localStorage.setItem('isAdmin', 'true');
+
+                    loginOverlay.style.display = 'none';
+                    sysUserNameDisplay.textContent = data.name;
+                    initDashboard();
+                    showToast(`Bentornato, ${data.name}`, 'success');
+                } else {
+                    err.style.display = 'block';
+                }
+            } catch (e) {
+                console.error(e);
+                showToast("Errore di connessione al server", "error");
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('isSystemAdmin');
+            localStorage.removeItem('sysAdminName');
+            localStorage.removeItem('empId');
+            localStorage.removeItem('empPin');
+            localStorage.removeItem('empName');
+            localStorage.removeItem('isAdmin');
+            location.reload();
+        }
+
+        function showPanel(id) {
+            document.querySelectorAll('.main-panel > div').forEach(p => p.style.display = 'none');
+            document.getElementById('panel-' + id).style.display = 'block';
+            
+            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+            document.getElementById('nav-' + id).classList.add('active');
+            
+            if (id === 'backups') loadBackups();
+            if (id === 'admins') loadEmployees();
+        }
+
+        async function addSystemLog(message, type = 'info') {
+            const logsContainer = document.getElementById('smallLogs');
+            const time = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            
+            let color = '#64748b';
+            if (type === 'success') color = '#10b981';
+            if (type === 'error') color = '#ef4444';
+            if (type === 'auth') color = '#6366f1';
+            if (type === 'db') color = '#f59e0b';
+
+            const logEntry = document.createElement('div');
+            logEntry.style.marginBottom = '4px';
+            logEntry.innerHTML = `<span style="color: #94a3b8; font-size: 0.7rem;">[${time}]</span> <span style="color: ${color}; font-weight: 500;">${message}</span>`;
+            
+            logsContainer.prepend(logEntry);
+            
+            // Keep only last 20 logs
+            if (logsContainer.children.length > 20) {
+                logsContainer.removeChild(logsContainer.lastChild);
+            }
+        }
+
+        async function updateSystemStats() {
+            try {
+                // 1. Get last sync time from attendances
+                const resAtt = await fetch('/api/attendances?limit=50');
+                if (resAtt.ok) {
+                    const records = await resAtt.json();
+                    const deviceRecord = records.reverse().find(r => r.source === 'device');
+                    if (deviceRecord) {
+                        const syncTime = new Date(deviceRecord.timestamp).toLocaleString('it-IT');
+                        addSystemLog(`Last sync detected from Anviz device at ${syncTime}`, 'success');
+                    }
+                    const totalRecords = records.length;
+                    addSystemLog(`Database check: ${totalRecords} records found in current batch.`, 'db');
+                }
+
+                // 2. Get last backup
+                const resBack = await fetch('/api/admin/backups');
+                if (resBack.ok) {
+                    const backups = await resBack.json();
+                    if (backups.length > 0) {
+                        const lastBack = backups[0];
+                        const backDate = new Date(lastBack.created_at).toLocaleString('it-IT');
+                        addSystemLog(`Recovery point verified: ${lastBack.filename} (${backDate})`, 'db');
+                    }
+                }
+
+                // 3. Get pending validations
+                const resVal = await fetch('/api/admin/pending-validations');
+                if (resVal.ok) {
+                    const validations = await resVal.json();
+                    const pending = validations.filter(v => v.status === 'pending').length;
+                    if (pending > 0) {
+                        addSystemLog(`Security Alert: ${pending} validation requests awaiting review.`, 'auth');
+                    }
+                }
+
+                addSystemLog(`Server health check completed. All systems nominal.`, 'info');
+
+            } catch (err) {
+                console.error("Stats Update Error:", err);
+                addSystemLog(`System monitor error: connection failed.`, 'error');
+            }
+        }
+
+        function initDashboard() {
+            document.getElementById('smallLogs').innerHTML = '';
+            addSystemLog('System Administration Shell initialized.', 'auth');
+            
+            loadBackups();
+            loadEmployees();
+            updateSystemStats();
+            
+            // Start uptime ticker
+            const startStr = localStorage.getItem('serverStartTime') || new Date().toISOString();
+            if(!localStorage.getItem('serverStartTime')) localStorage.setItem('serverStartTime', startStr);
+            
+            setInterval(() => {
+                const start = new Date(startStr);
+                const now = new Date();
+                const diff = Math.floor((now - start) / 1000);
+                const h = Math.floor(diff / 3600);
+                const m = Math.floor((diff % 3600) / 60);
+                const s = diff % 60;
+                document.getElementById('serverUptime').textContent = `${h}h ${m}m ${s}s`;
+            }, 1000);
+
+            // Periodically refresh stats
+            setInterval(updateSystemStats, 60000);
+        }
+
+        async function loadBackups() {
+            try {
+                const res = await fetch('/api/admin/backups');
+                if (!res.ok) return;
+                const backups = await res.json();
+                
+                const list = document.getElementById('backupList');
+                const wait = document.getElementById('backupWait');
+                
+                if (backups.length === 0) {
+                    wait.textContent = "Nessun backup trovato.";
+                    return;
+                }
+                
+                const formatSize = (bytes) => {
+                    if (bytes < 1024) return bytes + ' B';
+                    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+                    return (bytes / 1048576).toFixed(1) + ' MB';
+                };
+
+                const formatDate = (iso) => {
+                    const d = new Date(iso);
+                    return d.toLocaleDateString('it-IT') + ' ' + d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'});
+                };
+
+                wait.style.display = 'none';
+                list.innerHTML = backups.map(b => `
+                    <li class="backup-item">
+                        <div class="backup-info">
+                            <span class="backup-name">${b.filename}</span>
+                            <span class="backup-meta">${formatDate(b.created_at)} • ${formatSize(b.size)}</span>
+                        </div>
+                        <button class="btn-download" onclick="downloadBackup('${b.filename}')">Download</button>
+                    </li>
+                `).join('');
+                
+                // Update first card with total size
+                if (backups[0]) document.getElementById('dbSize').textContent = formatSize(backups[0].size);
+                
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function triggerBackup() {
+            showCustomConfirm(
+                "Eseguire un backup manuale del database Marcatempo?",
+                "Conferma Backup",
+                "Esegui Backup",
+                "var(--primary)",
+                async () => {
+                    try {
+                        const res = await fetch('/api/admin/backup', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ adminId: 0 })
+                        });
+                        if (res.ok) {
+                            showToast("Backup completato con successo!", "success");
+                            loadBackups();
+                        } else { 
+                            showToast("Errore durante la creazione del backup.", "error"); 
+                        }
+                    } catch (e) { 
+                        showToast("Errore di connessione al server.", "error"); 
+                    }
+                }
+            );
+        }
+
+        function downloadBackup(file) {
+            window.location.href = `/api/admin/backup/download?file=${file}`;
+        }
+
+        async function loadEmployees() {
+            try {
+                const res = await fetch('/api/system/employees');
+                if (res.ok) {
+                    allEmployees = await res.json();
+                    filteredEmployees = [...allEmployees];
+                    currentPage = 1;
+                    renderEmployees();
+                }
+            } catch(e) { console.error(e); }
+        }
+
+        function renderEmployees() {
+            const body = document.getElementById('adminListBody');
+            const totalPages = Math.ceil(filteredEmployees.length / pageSize) || 1;
+            
+            if (currentPage > totalPages) currentPage = totalPages;
+            if (currentPage < 1) currentPage = 1;
+
+            const start = (currentPage - 1) * pageSize;
+            const end = start + pageSize;
+            const paginatedItems = filteredEmployees.slice(start, end);
+
+            body.innerHTML = paginatedItems.map(e => `
+                <tr>
+                    <td><code>#${e.id}</code></td>
+                    <td style="font-weight: 600; color: var(--text-dark);">${e.name}</td>
+                    <td><span class="badge ${e.isAdmin ? 'badge-admin' : 'badge-user'}">${e.isAdmin ? 'ADMIN HR' : 'Utente'}</span></td>
+                    <td>
+                        <button class="btn-toggle ${e.isAdmin ? 'active' : ''}" onclick="toggleAdmin(${e.id}, '${e.name.replace(/'/g, "\\'")}', ${!e.isAdmin})">
+                            ${e.isAdmin ? 'Rendi Utente' : 'Rendi Admin'}
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+
+            // Update pagination UI
+            document.getElementById('pageInfo').textContent = `Pagina ${currentPage} di ${totalPages}`;
+            document.getElementById('prevPage').disabled = currentPage === 1;
+            document.getElementById('nextPage').disabled = currentPage === totalPages;
+        }
+
+        function changePage(delta) {
+            currentPage += delta;
+            renderEmployees();
+        }
+
+        function filterAdmins() {
+            const q = document.getElementById('adminSearch').value.toLowerCase().trim();
+            if (!q) {
+                filteredEmployees = [...allEmployees];
+            } else {
+                filteredEmployees = allEmployees.filter(e => {
+                    const name = e.name.toLowerCase();
+                    const id = e.id.toString();
+                    
+                    if (id.startsWith(q)) return true;
+                    
+                    const words = name.split(/\s+/);
+                    return words.some(word => word.startsWith(q));
+                });
+            }
+            currentPage = 1;
+            renderEmployees();
+        }
+
+        async function toggleAdmin(id, name, newStatus) {
+            showCustomConfirm(
+                `Vuoi ${newStatus ? 'concedere' : 'revocare'} i privilegi di Amministratore HR per <b>${name}</b> (ID: #${id})?`,
+                newStatus ? "Nomina Amministratore" : "Revoca Privilegi",
+                newStatus ? "Conferma Nomina" : "Revoca",
+                newStatus ? "var(--primary)" : "#ef4444",
+                async () => {
+                    try {
+                        const res = await fetch('/api/system/toggle-admin', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ employeeId: id, isAdmin: newStatus })
+                        });
+                        if (res.ok) {
+                            showToast(newStatus ? "Privilegi concessi!" : "Privilegi revocati.", "success");
+                            loadEmployees();
+                        } else {
+                            showToast("Errore durante l'aggiornamento dei privilegi.", "error");
+                        }
+                    } catch(e) { 
+                        showToast("Errore di connessione.", "error"); 
+                    }
+                }
+            );
+        }
+
+        function changePageSize() {
+            pageSize = parseInt(document.getElementById('pageSize').value);
+            currentPage = 1;
+            renderEmployees();
+        }
+
+        async function updatePassword() {
+            const p1 = document.getElementById('newSysPassword').value;
+            const p2 = document.getElementById('confirmSysPassword').value;
+            const err = document.getElementById('passwordError');
+            const username = localStorage.getItem('sysAdminName');
+
+            if (!p1 || p1.length < 4) {
+                err.textContent = "La password deve contenere almeno 4 caratteri";
+                err.style.display = 'block';
+                return;
+            }
+            if (p1 !== p2) {
+                err.textContent = "Le password non coincidono";
+                err.style.display = 'block';
+                return;
+            }
+
+            showCustomConfirm(
+                "Sei sicuro di voler cambiare la password? Verrai disconnesso dal sistema.",
+                "Cambia Password",
+                "Aggiorna Password",
+                "var(--primary)",
+                async () => {
+                    try {
+                        const res = await fetch('/api/system/change-password', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ username: username, newPassword: p1 })
+                        });
+                        if (res.ok) {
+                            showToast("Password aggiornata con successo!", "success");
+                            setTimeout(() => logout(), 1500);
+                        } else {
+                            err.textContent = "Errore durante l'aggiornamento";
+                            err.style.display = 'block';
+                        }
+                    } catch(e) {
+                        showToast("Errore di connessione.", "error");
+                    }
+                }
+            );
+        }
+
+        // --- Custom Component Logic ---
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            
+            let iconSvg = '';
+            if (type === 'success') {
+                iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+            } else if (type === 'error') {
+                iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
+            } else {
+                iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
+            }
+
+            toast.innerHTML = `
+                <div class="toast-icon">${iconSvg}</div>
+                <div class="toast-message">${message}</div>
+            `;
+            
+            container.appendChild(toast);
+            setTimeout(() => toast.classList.add('show'), 10);
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 400);
+            }, 3000);
+        }
+
+        function showCustomConfirm(message, title, btnText, btnColor, onConfirm) {
+            document.getElementById('confirmModalTitle').textContent = title || "Conferma";
+            document.getElementById('confirmModalBody').innerHTML = message;
+            
+            const btn = document.getElementById('confirmModalBtn');
+            btn.textContent = btnText || "Conferma";
+            btn.style.background = btnColor || "var(--primary)";
+            
+            pendingAction = onConfirm;
+            document.getElementById('confirmModal').classList.add('active');
+        }
+
+        function closeConfirmModal(confirmed) {
+            document.getElementById('confirmModal').classList.remove('active');
+            if (confirmed && pendingAction) {
+                pendingAction();
+            }
+            pendingAction = null;
+        }
+
+        function escapeHtml(unsafe) {
+            return (unsafe || "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>

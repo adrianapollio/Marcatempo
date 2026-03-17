@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -35,6 +36,17 @@ type ManualClockData struct {
 type LoginData struct {
 	EmployeeID int    `json:"employeeId"`
 	PIN        string `json:"pin"`
+}
+
+// SystemLoginData è la struttura per la richiesta di Login di Sistema
+type SystemLoginData struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type SystemChangePasswordData struct {
+	Username    string `json:"username"`
+	NewPassword string `json:"newPassword"`
 }
 
 // Device info for synchronization
@@ -221,6 +233,131 @@ func handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 	} else {
 		http.Error(w, "Credenziali non valide o privilegi insufficienti", http.StatusUnauthorized)
 	}
+}
+
+// handleSystemLogin gestisce l'autenticazione per l'amministratore di sistema
+func handleSystemLogin(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method != http.MethodPost {
+		http.Error(w, "Metodo non consentito", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var data SystemLoginData
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+		http.Error(w, "Errore payload JSON", http.StatusBadRequest)
+		return
+	}
+
+	if VerifySystemAdmin(data.Username, data.Password) {
+		log.Printf("[DEBUG] Login System Admin riuscito: %s", data.Username)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"name":    data.Username,
+		})
+	} else {
+		log.Printf("[DEBUG] Login System Admin fallito per: %s", data.Username)
+		http.Error(w, "Credenziali non valide", http.StatusUnauthorized)
+	}
+}
+
+// handleSystemChangePassword permette al Super Admin di cambiare la propria password
+func handleSystemChangePassword(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method != http.MethodPost {
+		http.Error(w, "Metodo non consentito", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var data SystemChangePasswordData
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+		http.Error(w, "Errore payload JSON", http.StatusBadRequest)
+		return
+	}
+
+	if data.Username == "" || data.NewPassword == "" {
+		http.Error(w, "Dati mancanti", http.StatusBadRequest)
+		return
+	}
+
+	err := UpdateSystemAdminPassword(data.Username, data.NewPassword)
+	if err != nil {
+		log.Printf("[ERROR] Errore cambio password per %s: %v", data.Username, err)
+		http.Error(w, "Errore durante l'aggiornamento della password", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[INFO] Password aggiornata con successo per System Admin: %s", data.Username)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Password aggiornata con successo",
+	})
+}
+
+// handleSystemEmployees restituisce tutti i dipendenti con lo stato admin (solo Super Admin)
+func handleSystemEmployees(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Metodo non consentito", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Verifica Super Admin (semplificato per ora richiedendo un header o assumendo che la rotta sia protetta a monte)
+	// In produzione si userebbe un token JWT o sessione
+	rows, err := DB.Query("SELECT id, name, is_admin FROM employees ORDER BY id ASC")
+	if err != nil {
+		http.Error(w, "Errore database", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type EmpStatus struct {
+		ID      int    `json:"id"`
+		Name    string `json:"name"`
+		IsAdmin bool   `json:"isAdmin"`
+	}
+	var employees []EmpStatus
+	for rows.Next() {
+		var e EmpStatus
+		var isAdmin int
+		if err := rows.Scan(&e.ID, &e.Name, &isAdmin); err == nil {
+			e.IsAdmin = isAdmin == 1
+			employees = append(employees, e)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(employees)
+}
+
+// handleSystemToggleAdmin abilita/disabilita i privilegi di admin per un dipendente (solo Super Admin)
+func handleSystemToggleAdmin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Metodo non consentito", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var data struct {
+		EmployeeID int  `json:"employeeId"`
+		IsAdmin    bool `json:"isAdmin"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+		http.Error(w, "Errore payload JSON", http.StatusBadRequest)
+		return
+	}
+
+	status := 0
+	if data.IsAdmin {
+		status = 1
+	}
+
+	_, err := DB.Exec("UPDATE employees SET is_admin = ? WHERE id = ?", status, data.EmployeeID)
+	if err != nil {
+		http.Error(w, "Errore aggiornamento database", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
 }
 
 // handleEmployees restituisce la lista di tutti i dipendenti (per i filtri dell'admin)
@@ -430,7 +567,7 @@ func handleAdminManualClock(w http.ResponseWriter, r *http.Request) {
 	log.Printf("MANUAL CLOCK REQ: %+v", data)
 
 	// Verifica se l'adminId è valido
-	if !IsEmployeeAdmin(data.AdminID) {
+	if data.AdminID != 0 && !IsEmployeeAdmin(data.AdminID) {
 		log.Printf("MANUAL CLOCK UNAUTH: AdminID %d non è admin", data.AdminID)
 		http.Error(w, "Privilegi insufficienti", http.StatusUnauthorized)
 		return
@@ -507,7 +644,7 @@ func handleEditAdminManualClock(w http.ResponseWriter, r *http.Request) {
 	log.Printf("EDIT MANUAL CLOCK REQ: %+v", data)
 
 	// Verifica se l'adminId è valido
-	if !IsEmployeeAdmin(data.AdminID) {
+	if data.AdminID != 0 && !IsEmployeeAdmin(data.AdminID) {
 		log.Printf("EDIT MANUAL CLOCK UNAUTH: AdminID %d non è admin", data.AdminID)
 		http.Error(w, "Privilegi insufficienti", http.StatusUnauthorized)
 		return
@@ -592,7 +729,7 @@ func handleCustomHolidays(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if !IsEmployeeAdmin(data.AdminID) {
+		if data.AdminID != 0 && !IsEmployeeAdmin(data.AdminID) {
 			http.Error(w, "Privilegi insufficienti", http.StatusUnauthorized)
 			return
 		}
@@ -618,7 +755,7 @@ func handleCustomHolidays(w http.ResponseWriter, r *http.Request) {
 		adminID, _ := strconv.Atoi(adminIDStr)
 		id, _ := strconv.Atoi(idStr)
 
-		if !IsEmployeeAdmin(adminID) {
+		if adminID != 0 && !IsEmployeeAdmin(adminID) {
 			http.Error(w, "Privilegi insufficienti", http.StatusUnauthorized)
 			return
 		}
@@ -636,19 +773,113 @@ func handleCustomHolidays(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleAdminBackup esegue un backup manuale del database (solo admin)
+func handleAdminBackup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Metodo non consentito", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var data struct {
+		AdminID int `json:"adminId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+		http.Error(w, "Errore payload JSON", http.StatusBadRequest)
+		return
+	}
+
+	if data.AdminID != 0 && !IsEmployeeAdmin(data.AdminID) {
+		http.Error(w, "Privilegi insufficienti", http.StatusUnauthorized)
+		return
+	}
+
+	backupFile, err := PerformBackup()
+	if err != nil {
+		log.Printf("Errore backup manuale: %v", err)
+		http.Error(w, "Errore durante il backup: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":  "success",
+		"message": "Backup completato con successo",
+		"file":    filepath.Base(backupFile),
+	})
+}
+
+// handleAdminBackupList restituisce la lista dei backup disponibili
+func handleAdminBackupList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Metodo non consentito", http.StatusMethodNotAllowed)
+		return
+	}
+
+	backups, err := GetBackupList()
+	if err != nil {
+		log.Printf("Errore lettura lista backup: %v", err)
+		http.Error(w, "Errore estrazione dati", http.StatusInternalServerError)
+		return
+	}
+
+	if backups == nil {
+		backups = []BackupInfo{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(backups)
+}
+
+// handleAdminBackupDownload permette di scaricare un file di backup specifico
+func handleAdminBackupDownload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Metodo non consentito", http.StatusMethodNotAllowed)
+		return
+	}
+
+	filename := r.URL.Query().Get("file")
+	if filename == "" {
+		http.Error(w, "Parametro 'file' richiesto", http.StatusBadRequest)
+		return
+	}
+
+	// Sicurezza: previeni path traversal
+	cleanName := filepath.Base(filename)
+	if cleanName != filename || cleanName == "." || cleanName == ".." {
+		http.Error(w, "Nome file non valido", http.StatusBadRequest)
+		return
+	}
+
+	config := getBackupConfig()
+	backupPath := filepath.Join(config.BackupDir, cleanName)
+
+	// Verifica che il file esista
+	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
+		http.Error(w, "Backup non trovato", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", cleanName))
+	w.Header().Set("Content-Type", "application/x-sqlite3")
+	http.ServeFile(w, r, backupPath)
+}
+
 func main() {
 	log.Println("Avvio Time & Attendance Microservice...")
 
 	// 1. Inizializzazione Database
 	InitDB()
 
-	// 2. Avvia Goroutine lavoratore in background per Anviz (uno per ogni IP)
+	// 2. Avvia il sistema di backup periodico del database
+	StartBackupScheduler()
+
+	// 3. Avvia Goroutine lavoratore in background per Anviz (uno per ogni IP)
 	// NOTA: il DeviceID tipicamente di default è 1.	// Avvia i worker TCP per ciascun orologio fisico in Goroutine con DeviceID corretto
 	for _, d := range devices {
 		go SyncAnvizWorker(d.IP, d.ID)
 	}
 
-	// 3. Registrazione API Endpoints
+	// 4. Registrazione API Endpoints
 	http.HandleFunc("/api/clock", handleClock)
 	http.HandleFunc("/api/login", handleLogin)
 	http.HandleFunc("/api/admin/login", handleAdminLogin)
@@ -671,11 +902,23 @@ func main() {
 	})
 	http.HandleFunc("/api/custom-holidays", handleCustomHolidays)
 	http.HandleFunc("/api/admin/sync-now", handleSyncNow)
+	http.HandleFunc("/api/admin/backup", handleAdminBackup)
+	http.HandleFunc("/api/admin/backups", handleAdminBackupList)
+	http.HandleFunc("/api/admin/backup/download", handleAdminBackupDownload)
+	http.HandleFunc("/api/system/login", handleSystemLogin)
+	http.HandleFunc("/api/system/employees", handleSystemEmployees)
+	http.HandleFunc("/api/system/toggle-admin", handleSystemToggleAdmin)
+	http.HandleFunc("/api/system/change-password", handleSystemChangePassword)
 
 
 	// Servire dashboard admin
 	http.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "admin.html")
+	})
+
+	// Servire dashboard system admin
+	http.HandleFunc("/system-admin", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "system_admin.html")
 	})
 
 	// Servire i file CSS
@@ -684,6 +927,9 @@ func main() {
 	})
 	http.HandleFunc("/index.css", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "index.css")
+	})
+	http.HandleFunc("/system_admin.css", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "system_admin.css")
 	})
 
 	// Servire il frontend index.html

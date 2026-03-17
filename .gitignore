@@ -1,0 +1,20 @@
+# SQLite
+*.db
+*.db-wal
+*.db-shm
+
+# SSL Certificates & Keys
+certs/*.key
+certs/*.pem
+!certs/server.crt
+
+# Binaries and build artifacts
+marcatempo
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Environment variables
+.env

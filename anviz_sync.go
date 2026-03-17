@@ -205,8 +205,8 @@ func parseAnvizResponse(res []byte, ip string) {
 				3: "F_pausa",
 				4: "U_trasf",
 				5: "R_trasf",
-				6: "I_pausa",
-				7: "F_pausa",
+				6: "I_break",
+				7: "F_break",
 			}
 			action := statusMap[statusCode]
 			if action == "" {
@@ -368,6 +368,7 @@ func syncFromDevice(ip string, deviceID uint32) error {
 	// Mode: 1 (All Records), 2 (New Records), 0 (Next chunk of previous command)
 	mode := byte(0x02)
 	limit := byte(0x19) // 25 records alla volta (max supportato da molti vecchi firmware in un colpo)
+	allRecordsDown := false
 
 	for {
 		reqData := []byte{mode, limit}
@@ -382,23 +383,29 @@ func syncFromDevice(ip string, deviceID uint32) error {
 		recordRes := readFullAnvizPacket(conn)
 		if recordRes != nil && recordRes[6] == 0x00 { // 0x00 Success
 			count := int(recordRes[9])
+			log.Printf("TCP Worker: Ricevuti %d record nel chunk corrente.", count)
 			parseAnvizResponse(recordRes, ip)
 
 			// Se il server ci ha restituito meno di 25 record, significa che li abbiamo esauriti tutti
 			if count < 25 {
+				allRecordsDown = true
 				break
 			}
 			// Per i pacchetti successivi la mode deve diventare 0 (Next Page)
 			mode = 0x00
 		} else {
+			if recordRes != nil {
+				log.Printf("TCP Worker: Errore scaricamento record (RET: 0x%X)", recordRes[6])
+			} else {
+				log.Printf("TCP Worker: Timeout o pacchetto corrotto durante scaricamento record")
+			}
 			break
 		}
 	}
 
 	// --- 3. Clear New Records (Command 0x4E) ---
-	// Se abbiamo scaricato con successo (arrivando alla fine del loop sopra),
-	// inviamo il comando per resettare il puntatore "nuovi record" sull'hardware.
-	if mode == 0x00 { // Significa che eravamo nel loop di "scaricamento pagine successive"
+	// Inviaci il comando solo se abbiamo completato con successo lo scaricamento di TUTTI i nuovi record.
+	if allRecordsDown {
 		log.Printf("TCP Worker: Invio comando CLEAR per resettare puntatore nuovi record su %s", ip)
 		clearPacket := BuildAnvizPacket(deviceID, AnvizCommandClear, nil)
 		_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
@@ -417,7 +424,7 @@ func syncFromDevice(ip string, deviceID uint32) error {
 			}
 		}
 	} else {
-		log.Printf("TCP Worker: Nessun nuovo record scaricato o loop interrotto, salto comando CLEAR su %s", ip)
+		log.Printf("TCP Worker: Scaricamento incompleto o nessun record, salto comando CLEAR su %s per prevenire perdita dati", ip)
 	}
 
 	// Opzionalmente si dovrebbe inviare COMMAND CLEAR (TC_C es. 0x4E) dopo lettura corretta.

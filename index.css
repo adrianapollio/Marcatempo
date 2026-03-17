@@ -37,7 +37,7 @@
 }
 
 body {
-    font-family: 'Inter', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+    font-family: 'Outfit', 'Inter', 'Roboto', 'Helvetica', 'Arial', sans-serif;
     background-color: var(--bg);
     display: flex;
     align-items: flex-start;

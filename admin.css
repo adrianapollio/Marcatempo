@@ -46,7 +46,7 @@
 }
 
 body {
-    font-family: 'Inter', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+    font-family: 'Outfit', 'Inter', sans-serif;
     background-color: var(--bg);
     color: var(--text-dark);
     display: flex;
@@ -56,6 +56,12 @@ body {
     margin: 0;
     padding: 24px;
     line-height: 1.6;
+}
+
+code,
+pre,
+.mono {
+    font-family: 'JetBrains Mono', monospace;
 }
 
 .container {
@@ -86,6 +92,7 @@ body {
     from {
         transform: rotate(0deg);
     }
+
     to {
         transform: rotate(360deg);
     }
@@ -160,7 +167,7 @@ input[type="date"],
 input[type="month"],
 select {
     width: 100%;
-    padding: 14px 14px;
+    padding: 10px 14px;
     border: 1.5px solid var(--input-border);
     border-radius: 10px;
     font-size: 0.95rem;
@@ -301,7 +308,7 @@ button:active {
     border: none;
     background: transparent;
     color: var(--text-light);
-    font-weight: 600;
+    font-weight: 700;
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -320,7 +327,7 @@ button:active {
 
 /* Empty state styling */
 .month-nav {
-    height: 56px;
+    height: 48px;
     display: flex;
     align-items: center;
     background: var(--input-bg);
@@ -332,12 +339,12 @@ button:active {
 }
 
 .month-nav:hover {
-    border-color: var(--text-dark);
+    border-color: var(--primary);
 }
 
 .month-nav button {
-    width: 46px;
-    height: 46px;
+    width: 40px;
+    height: 40px;
     background: var(--primary);
     color: white;
     border: none;
@@ -380,11 +387,17 @@ button:active {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 46px;
-    height: 46px;
+    width: 40px;
+    height: 40px;
     cursor: pointer;
     border-left: 1px solid var(--input-border);
     color: var(--text-secondary);
+    transition: background-color 0.2s;
+}
+
+.month-nav-picker:hover {
+    background-color: var(--primary-light);
+    color: var(--primary);
 }
 
 /* Screens */

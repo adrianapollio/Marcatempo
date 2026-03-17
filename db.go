@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 	"time"
+	"crypto/sha256"
+	"encoding/hex"
 
 	_ "modernc.org/sqlite" // Pure Go SQLite driver, no CGO or Windows DLL needed!
 )
@@ -28,6 +30,13 @@ type Employee struct {
 	Name    string `json:"name"`
 	PIN     string `json:"-"` // Non esportare il PIN nel JSON per sicurezza
 	IsAdmin bool   `json:"is_admin"`
+}
+
+type SystemAdmin struct {
+	ID           int    `json:"id"`
+	Username     string `json:"username"`
+	PasswordHash string `json:"-"`
+	CreatedAt    string `json:"created_at"`
 }
 
 // PendingValidation rappresenta una marcatura web in attesa di approvazione admin
@@ -105,6 +114,12 @@ func InitDB() {
 		date TEXT UNIQUE NOT NULL,
 		description TEXT
 	);
+	CREATE TABLE IF NOT EXISTS system_admins (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		username TEXT UNIQUE NOT NULL,
+		password_hash TEXT NOT NULL,
+		created_at DATETIME NOT NULL
+	);
 	`
 	_, err = DB.Exec(createTableQuery)
 	if err != nil {
@@ -128,6 +143,14 @@ func InitDB() {
 	_, _ = DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_emp_time ON records(employee_id, timestamp)")
 
 	log.Println("Database SQLite inizializzato con successo, tabelle verificata.")
+
+	// Auto-inizializzazione Super Admin se la tabella è vuota
+	var count int
+	err = DB.QueryRow("SELECT COUNT(*) FROM system_admins").Scan(&count)
+	if err == nil && count == 0 {
+		log.Println("[INFO] Inizializzazione Super Admin predefinito (admin/admin)...")
+		_ = AddSystemAdmin("admin", "admin")
+	}
 }
 
 // InsertRecord salva un dato di presenza prelevato dal web app o dal raw TCP tcp
@@ -173,6 +196,30 @@ func VerifyPIN(employeeID int, pin string) bool {
 
 // VerifyAdminPIN controlla se il PIN fornito corrisponde e se l'utente ha privilegi di admin
 func VerifyAdminPIN(employeeID int, pin string) bool {
+	if employeeID == 0 {
+		// Per il super admin (ID 0), verifichiamo se esiste almeno un admin di sistema con questa password
+		// Cerchiamo qualsiasi admin per semplicità, o potremmo passare lo username se lo avessimo
+		var hash string
+		rows, err := DB.Query(`SELECT password_hash FROM system_admins`)
+		if err != nil {
+			return false
+		}
+		defer rows.Close()
+		
+		h := sha256.New()
+		h.Write([]byte(pin))
+		expected := hex.EncodeToString(h.Sum(nil))
+		
+		for rows.Next() {
+			if err := rows.Scan(&hash); err == nil {
+				if hash == expected {
+					return true
+				}
+			}
+		}
+		return false
+	}
+
 	var dbPin string
 	var isAdmin int
 	err := DB.QueryRow(`SELECT pin, is_admin FROM employees WHERE id = ?`, employeeID).Scan(&dbPin, &isAdmin)
@@ -200,6 +247,60 @@ func GetEmployeeName(employeeID int) string {
 		return ""
 	}
 	return name
+}
+
+// --- SYSTEM ADMIN FUNCTIONS ---
+
+// VerifySystemAdmin controlla le credenziali di un amministratore di sistema
+func VerifySystemAdmin(username, password string) bool {
+	var hash string
+	// Per ora usiamo un hash sha256. 
+	err := DB.QueryRow(`SELECT password_hash FROM system_admins WHERE username = ?`, username).Scan(&hash)
+	if err != nil {
+		return false
+	}
+	
+	h := sha256.New()
+	h.Write([]byte(password))
+	expected := hex.EncodeToString(h.Sum(nil))
+	
+	return hash == expected
+}
+
+// AddSystemAdmin aggiunge o aggiorna un amministratore di sistema
+func AddSystemAdmin(username, password string) error {
+	h := sha256.New()
+	h.Write([]byte(password))
+	hash := hex.EncodeToString(h.Sum(nil))
+	
+	query := `
+		INSERT INTO system_admins (username, password_hash, created_at) VALUES (?, ?, ?)
+		ON CONFLICT(username) DO UPDATE SET password_hash=excluded.password_hash
+	`
+	_, err := DB.Exec(query, username, hash, time.Now().Format(time.RFC3339))
+	return err
+}
+
+// UpdateSystemAdminPassword aggiorna la password di un amministratore esistente
+func UpdateSystemAdminPassword(username, newPassword string) error {
+	h := sha256.New()
+	h.Write([]byte(newPassword))
+	hash := hex.EncodeToString(h.Sum(nil))
+	
+	query := `UPDATE system_admins SET password_hash = ? WHERE username = ?`
+	res, err := DB.Exec(query, hash, username)
+	if err != nil {
+		return err
+	}
+	
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("utente non trovato")
+	}
+	return nil
 }
 
 // GetAllEmployees restituisce la lista di tutti i dipendenti salvati nel DB
