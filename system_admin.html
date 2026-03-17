@@ -98,7 +98,7 @@
             </div>
             <div style="display: flex; gap: 12px; align-items: center;">
                 <div class="admin-info">
-                    <span style="font-weight: 700; font-size: 1.1rem; letter-spacing: 0.02em;">admin</span>
+                    <span id="sysUserNameDisplay" style="font-weight: 700; font-size: 1.1rem; letter-spacing: 0.02em;">admin</span>
                     <div class="status-container">
                         <span class="status-dot"></span>
                         <span id="syncStatus">Online</span>
@@ -223,26 +223,35 @@
 
                 <div id="panel-devices" style="display: none;">
                     <h3 style="margin-top: 0; margin-bottom: 24px; font-weight: 500;">Anviz Communication Status</h3>
-                    <div class="stat-card" style="margin-bottom: 12px; border-left: 4px solid var(--accent);">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div id="deviceDiagnosticsGrid" class="card-grid" style="margin-bottom: 20px;"></div>
+                    <div style="background: white; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow-sm); margin-bottom: 20px;">
+                        <div style="padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
                             <div>
-                                <div style="font-weight: 600;">Terminal ID #1</div>
-                                <div style="font-size: 0.8rem; color: var(--text-secondary);">IP: 192.168.1.245 | Porta: 5010</div>
+                                <div style="font-weight: 600;">Raw Device Diagnostics</div>
+                                <div id="deviceDiagnosticsMeta" style="font-size: 0.8rem; color: var(--text-secondary);">Caricamento diagnostica...</div>
                             </div>
-                            <div style="background: rgba(16, 185, 129, 0.1); color: var(--accent); padding: 4px 12px; border-radius: 12px; font-size: 0.75rem;">CONNECTED</div>
+                            <button class="btn-download" style="border-radius: 8px;" onclick="loadDeviceDiagnostics()">Aggiorna Diagnostica</button>
                         </div>
-                    </div>
-                    <div class="stat-card" style="border-left: 4px solid var(--accent);">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div>
-                                <div style="font-weight: 600;">Terminal ID #2</div>
-                                <div style="font-size: 0.8rem; color: var(--text-secondary);">IP: 192.168.1.246 | Porta: 5010</div>
-                            </div>
-                            <div style="background: rgba(16, 185, 129, 0.1); color: var(--accent); padding: 4px 12px; border-radius: 12px; font-size: 0.75rem;">CONNECTED</div>
+                        <div class="table-container" style="box-shadow:none; border:none; border-radius:0;">
+                            <table id="deviceDiagnosticsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Device</th>
+                                        <th>Dipendente</th>
+                                        <th>Raw TS</th>
+                                        <th>Timestamp Parse</th>
+                                        <th>Azione</th>
+                                        <th>Import</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="deviceDiagnosticsBody">
+                                    <tr><td colspan="6" style="text-align:center; color: var(--text-secondary); padding: 20px;">Caricamento...</td></tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                     <div style="margin-top: 24px; text-align: right;">
-                        <button class="btn-download" style="border-radius: 8px;" onclick="location.reload()">Refresh Stack</button>
+                        <button class="btn-download" style="border-radius: 8px;" onclick="loadDeviceDiagnostics()">Refresh Stack</button>
                     </div>
                 </div>
 
@@ -353,6 +362,76 @@
             
             if (id === 'backups') loadBackups();
             if (id === 'admins') loadEmployees();
+            if (id === 'devices') loadDeviceDiagnostics();
+        }
+
+        function formatDiagnosticDate(value) {
+            if (!value) return '—';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return '—';
+            return date.toLocaleString('it-IT');
+        }
+
+        async function loadDeviceDiagnostics() {
+            const grid = document.getElementById('deviceDiagnosticsGrid');
+            const body = document.getElementById('deviceDiagnosticsBody');
+            const meta = document.getElementById('deviceDiagnosticsMeta');
+
+            if (!grid || !body || !meta) return;
+
+            grid.innerHTML = '<div class="stat-card"><span class="label">Device Diagnostics</span><span class="value">...</span><span class="trend">Recupero dati in corso</span></div>';
+            body.innerHTML = '<tr><td colspan="6" style="text-align:center; color: var(--text-secondary); padding: 20px;">Caricamento...</td></tr>';
+            meta.textContent = 'Caricamento diagnostica...';
+
+            try {
+                const res = await fetch('/api/system/device-diagnostics');
+                if (!res.ok) {
+                    throw new Error('diagnostic fetch failed');
+                }
+
+                const data = await res.json();
+                const devices = Array.isArray(data.devices) ? data.devices : [];
+                const recentRaw = Array.isArray(data.recent_raw) ? data.recent_raw : [];
+                const legacyCount = data.legacy_unassigned_records || 0;
+
+                grid.innerHTML = devices.map(device => {
+                    const latestRaw = formatDiagnosticDate(device.latest_raw_timestamp);
+                    const latestFinal = formatDiagnosticDate(device.latest_final_timestamp);
+                    const badgeColor = device.raw_count >= device.final_count ? 'var(--accent)' : 'var(--warning)';
+                    return `
+                        <div class="stat-card" style="border-left: 4px solid ${badgeColor};">
+                            <span class="label">Terminal ID #${device.device_id}</span>
+                            <span class="value">${device.raw_count} raw / ${device.final_count} finali</span>
+                            <span class="trend">${device.ip ? `IP ${device.ip}` : 'Device non configurato'} • Raw: ${latestRaw} • Finale: ${latestFinal}</span>
+                        </div>
+                    `;
+                }).join('');
+
+                if (devices.length === 0) {
+                    grid.innerHTML = '<div class="stat-card"><span class="label">Device Diagnostics</span><span class="value">0</span><span class="trend">Nessun device diagnosticato</span></div>';
+                }
+
+                meta.textContent = `Record legacy non assegnati: ${legacyCount} • Ultimi raw mostrati: ${recentRaw.length}`;
+
+                if (recentRaw.length === 0) {
+                    body.innerHTML = '<tr><td colspan="6" style="text-align:center; color: var(--text-secondary); padding: 20px;">Nessun raw record disponibile</td></tr>';
+                } else {
+                    body.innerHTML = recentRaw.map(row => `
+                        <tr>
+                            <td><code>#${row.device_id}</code></td>
+                            <td>${escapeHtml(row.employee_name || '')} <span style="color: var(--text-secondary);">(#${row.employee_id})</span></td>
+                            <td><code>${row.raw_device_timestamp}</code></td>
+                            <td>${formatDiagnosticDate(row.parsed_timestamp)}</td>
+                            <td>${escapeHtml(row.action)} <span style="color: var(--text-secondary);">(${row.status_code})</span></td>
+                            <td>${formatDiagnosticDate(row.imported_at)}</td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (e) {
+                meta.textContent = 'Errore caricamento diagnostica device';
+                grid.innerHTML = '<div class="stat-card"><span class="label">Device Diagnostics</span><span class="value">ERR</span><span class="trend">Impossibile leggere la diagnostica</span></div>';
+                body.innerHTML = '<tr><td colspan="6" style="text-align:center; color: #ef4444; padding: 20px;">Errore caricamento diagnostica device</td></tr>';
+            }
         }
 
         async function addSystemLog(message, type = 'info') {
@@ -427,6 +506,7 @@
             
             loadBackups();
             loadEmployees();
+            loadDeviceDiagnostics();
             updateSystemStats();
             
             // Start uptime ticker

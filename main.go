@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -48,6 +49,22 @@ type SystemLoginData struct {
 type SystemChangePasswordData struct {
 	Username    string `json:"username"`
 	NewPassword string `json:"newPassword"`
+}
+
+type SystemDeviceDiagnosticsResponse struct {
+	LegacyUnassignedRecords int                       `json:"legacy_unassigned_records"`
+	Devices                 []SystemDeviceDiagnostics `json:"devices"`
+	RecentRaw               []DeviceRawDiagnostic     `json:"recent_raw"`
+}
+
+type SystemDeviceDiagnostics struct {
+	DeviceID             int        `json:"device_id"`
+	IP                   string     `json:"ip"`
+	Configured           bool       `json:"configured"`
+	RawCount             int        `json:"raw_count"`
+	FinalCount           int        `json:"final_count"`
+	LatestRawTimestamp   *time.Time `json:"latest_raw_timestamp,omitempty"`
+	LatestFinalTimestamp *time.Time `json:"latest_final_timestamp,omitempty"`
 }
 
 // Device info for synchronization
@@ -359,6 +376,69 @@ func handleSystemToggleAdmin(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+}
+
+func handleSystemDeviceDiagnostics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Metodo non consentito", http.StatusMethodNotAllowed)
+		return
+	}
+
+	aggregates, err := GetDeviceAggregates()
+	if err != nil {
+		log.Printf("Errore lettura diagnostica device: %v", err)
+		http.Error(w, "Errore estrazione diagnostica device", http.StatusInternalServerError)
+		return
+	}
+
+	legacyCount, err := GetLegacyUnassignedDeviceRecordCount()
+	if err != nil {
+		log.Printf("Errore conteggio record legacy device: %v", err)
+		http.Error(w, "Errore conteggio record legacy", http.StatusInternalServerError)
+		return
+	}
+
+	recentRaw, err := GetRecentDeviceRawRecords(25)
+	if err != nil {
+		log.Printf("Errore lettura raw records device: %v", err)
+		http.Error(w, "Errore estrazione raw records device", http.StatusInternalServerError)
+		return
+	}
+
+	byDevice := make(map[int]SystemDeviceDiagnostics)
+	for _, device := range devices {
+		byDevice[int(device.ID)] = SystemDeviceDiagnostics{
+			DeviceID:   int(device.ID),
+			IP:         device.IP,
+			Configured: true,
+		}
+	}
+
+	for _, aggregate := range aggregates {
+		entry := byDevice[aggregate.DeviceID]
+		entry.DeviceID = aggregate.DeviceID
+		entry.RawCount = aggregate.RawCount
+		entry.FinalCount = aggregate.FinalCount
+		entry.LatestRawTimestamp = aggregate.LatestRawTimestamp
+		entry.LatestFinalTimestamp = aggregate.LatestFinalTimestamp
+		byDevice[aggregate.DeviceID] = entry
+	}
+
+	responseDevices := make([]SystemDeviceDiagnostics, 0, len(byDevice))
+	for _, entry := range byDevice {
+		responseDevices = append(responseDevices, entry)
+	}
+
+	sort.Slice(responseDevices, func(i, j int) bool {
+		return responseDevices[i].DeviceID < responseDevices[j].DeviceID
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(SystemDeviceDiagnosticsResponse{
+		LegacyUnassignedRecords: legacyCount,
+		Devices:                 responseDevices,
+		RecentRaw:               recentRaw,
+	})
 }
 
 // handleEmployees restituisce la lista di tutti i dipendenti (per i filtri dell'admin)
@@ -918,6 +998,7 @@ func main() {
 	http.HandleFunc("/api/system/employees", handleSystemEmployees)
 	http.HandleFunc("/api/system/toggle-admin", handleSystemToggleAdmin)
 	http.HandleFunc("/api/system/change-password", handleSystemChangePassword)
+	http.HandleFunc("/api/system/device-diagnostics", handleSystemDeviceDiagnostics)
 
 
 	// Servire dashboard admin

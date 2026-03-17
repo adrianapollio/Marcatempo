@@ -1417,6 +1417,7 @@
                             totalMarkingsCount: 0,
                             dedupCount: 0,
                             extraMarks: [], // Collect markings that don't fit into fixed columns
+                            hiddenMarks: [], // Collect markings hidden by frontend heuristics
                             rawRecords: [], // Collect all raw records for two-pass dedup
                             isEmpty: false,
                             isWeekend: dateObj.getDay() === 0 || dateObj.getDay() === 6,
@@ -1432,6 +1433,7 @@
                         id: r.id, 
                         source: r.source,
                         tsMs: dateObj.getTime(),
+                        rawAction: rawAction,
                         mappedAction: mappedAction,
                         timeStr: dateObj.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
                         lat: r.latitude,
@@ -1463,6 +1465,12 @@
                                 // Per 'uscita' teniamo l'ultimo. Se il precedente à¨ entro 10 min,
                                 // à¨ un duplicato -> annulliamo il precedente dal conteggio e teniamo questo nuovo
                                 if (Math.abs(rec.tsMs - group.rawRecords[j].tsMs) <= DEDUP_THRESHOLD_MS) {
+                                    group.hiddenMarks.push({
+                                        action: group.rawRecords[j].mappedAction,
+                                        rawAction: group.rawRecords[j].rawAction,
+                                        time: group.rawRecords[j].timeStr,
+                                        reason: 'Marcatura nascosta dalla deduplica frontend (uscita precedente entro 10 minuti)'
+                                    });
                                     validFlags[j] = false;
                                     group.dedupCount++;
                                 }
@@ -1479,6 +1487,12 @@
 
                     if (alreadyAssigned) {
                         // àˆ un duplicato puro della STESSA marcatura entro 10 min. Ignorare.
+                        group.hiddenMarks.push({
+                            action: rec.mappedAction,
+                            rawAction: rec.rawAction,
+                            time: rec.timeStr,
+                            reason: 'Marcatura nascosta dalla deduplica frontend (stessa azione entro 10 minuti)'
+                        });
                         validFlags[i] = false;
                         group.dedupCount++;
                     }
@@ -1510,9 +1524,17 @@
                             // Already has this type of mark, add to extraMarks for visibility
                             group.extraMarks.push({
                                 action: rec.mappedAction,
+                                rawAction: rec.rawAction,
                                 time: rec.timeStr
                             });
                         }
+                    } else if (validFlags[i]) {
+                        // Azione non mappata a una colonna fissa: non deve sparire dalla UI.
+                        group.extraMarks.push({
+                            action: rec.mappedAction,
+                            rawAction: rec.rawAction,
+                            time: rec.timeStr
+                        });
                     }
                 }
 
@@ -1558,6 +1580,12 @@
 
                     if (hasNearbySameType) {
                         // Orfana vicina ad un'azione dello stesso tipo ↑’ errore di codice
+                        group.hiddenMarks.push({
+                            action: rec.mappedAction,
+                            rawAction: rec.rawAction,
+                            time: rec.timeStr,
+                            reason: 'Marcatura nascosta dalla logica frontend (orfana vicina a un\'azione dello stesso tipo)'
+                        });
                         validFlags[i] = false;
                         group.dedupCount++;
                         group.totalMarkingsCount--;
@@ -1819,6 +1847,14 @@
                         const internalKey = ACTION_MAP[em.action] || em.action;
                         const actionLabel = DISPLAY_ACTION_MAP[internalKey] || internalKey.replace('_', ' ');
                         anomalyReasons.push(`Marcatura EXTRA o sconosciuta: ${actionLabel} alle ${em.time}`);
+                    });
+                }
+
+                if (dayData.hiddenMarks && dayData.hiddenMarks.length > 0) {
+                    dayData.hiddenMarks.forEach(hm => {
+                        const internalKey = ACTION_MAP[hm.action] || hm.action;
+                        const actionLabel = DISPLAY_ACTION_MAP[internalKey] || (hm.rawAction || internalKey).replace('_', ' ');
+                        anomalyReasons.push(`${hm.reason}: ${actionLabel} alle ${hm.time}`);
                     });
                 }
 

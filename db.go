@@ -58,6 +58,25 @@ type PendingValidation struct {
 	ReviewedAt   *time.Time `json:"reviewed_at"`
 }
 
+type DeviceAggregate struct {
+	DeviceID             int        `json:"device_id"`
+	RawCount             int        `json:"raw_count"`
+	FinalCount           int        `json:"final_count"`
+	LatestRawTimestamp   *time.Time `json:"latest_raw_timestamp,omitempty"`
+	LatestFinalTimestamp *time.Time `json:"latest_final_timestamp,omitempty"`
+}
+
+type DeviceRawDiagnostic struct {
+	DeviceID           int       `json:"device_id"`
+	EmployeeID         int       `json:"employee_id"`
+	EmployeeName       string    `json:"employee_name"`
+	RawDeviceTimestamp int64     `json:"raw_device_timestamp"`
+	ParsedTimestamp    time.Time `json:"parsed_timestamp"`
+	Action             string    `json:"action"`
+	StatusCode         int       `json:"status_code"`
+	ImportedAt         time.Time `json:"imported_at"`
+}
+
 var DB *sql.DB
 
 var ErrDuplicateRecord = errors.New("record duplicato")
@@ -619,6 +638,137 @@ func GetAllEmployees() ([]Employee, error) {
 		employees = append(employees, e)
 	}
 	return employees, nil
+}
+
+func parseNullableRFC3339(value sql.NullString) (*time.Time, error) {
+	if !value.Valid || strings.TrimSpace(value.String) == "" {
+		return nil, nil
+	}
+	timestamp, err := time.Parse(time.RFC3339, value.String)
+	if err != nil {
+		return nil, err
+	}
+	return &timestamp, nil
+}
+
+func GetDeviceAggregates() ([]DeviceAggregate, error) {
+	aggregates := map[int]*DeviceAggregate{}
+
+	rawRows, err := DB.Query(`
+		SELECT device_id, COUNT(*), MAX(parsed_timestamp)
+		FROM device_raw_records
+		GROUP BY device_id
+		ORDER BY device_id ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rawRows.Close()
+
+	for rawRows.Next() {
+		var deviceID int
+		var rawCount int
+		var latestRaw sql.NullString
+		if err := rawRows.Scan(&deviceID, &rawCount, &latestRaw); err != nil {
+			return nil, err
+		}
+
+		agg := &DeviceAggregate{DeviceID: deviceID, RawCount: rawCount}
+		agg.LatestRawTimestamp, err = parseNullableRFC3339(latestRaw)
+		if err != nil {
+			return nil, err
+		}
+		aggregates[deviceID] = agg
+	}
+	if err := rawRows.Err(); err != nil {
+		return nil, err
+	}
+
+	finalRows, err := DB.Query(`
+		SELECT device_id, COUNT(*), MAX(timestamp)
+		FROM records
+		WHERE source = 'device' AND device_id IS NOT NULL
+		GROUP BY device_id
+		ORDER BY device_id ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer finalRows.Close()
+
+	for finalRows.Next() {
+		var deviceID int
+		var finalCount int
+		var latestFinal sql.NullString
+		if err := finalRows.Scan(&deviceID, &finalCount, &latestFinal); err != nil {
+			return nil, err
+		}
+
+		agg, ok := aggregates[deviceID]
+		if !ok {
+			agg = &DeviceAggregate{DeviceID: deviceID}
+			aggregates[deviceID] = agg
+		}
+		agg.FinalCount = finalCount
+		agg.LatestFinalTimestamp, err = parseNullableRFC3339(latestFinal)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := finalRows.Err(); err != nil {
+		return nil, err
+	}
+
+	result := make([]DeviceAggregate, 0, len(aggregates))
+	for _, aggregate := range aggregates {
+		result = append(result, *aggregate)
+	}
+
+	return result, nil
+}
+
+func GetLegacyUnassignedDeviceRecordCount() (int, error) {
+	var count int
+	err := DB.QueryRow(`SELECT COUNT(*) FROM records WHERE source = 'device' AND (device_id IS NULL OR raw_device_timestamp IS NULL)`).Scan(&count)
+	return count, err
+}
+
+func GetRecentDeviceRawRecords(limit int) ([]DeviceRawDiagnostic, error) {
+	if limit <= 0 {
+		limit = 25
+	}
+
+	rows, err := DB.Query(`
+		SELECT device_id, employee_id, employee_name, raw_device_timestamp, parsed_timestamp, action, status_code, imported_at
+		FROM device_raw_records
+		ORDER BY imported_at DESC, id DESC
+		LIMIT ?
+	`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var records []DeviceRawDiagnostic
+	for rows.Next() {
+		var record DeviceRawDiagnostic
+		var parsedTimestampStr string
+		var importedAtStr string
+		if err := rows.Scan(&record.DeviceID, &record.EmployeeID, &record.EmployeeName, &record.RawDeviceTimestamp, &parsedTimestampStr, &record.Action, &record.StatusCode, &importedAtStr); err != nil {
+			return nil, err
+		}
+
+		if parsedTimestamp, err := time.Parse(time.RFC3339, parsedTimestampStr); err == nil {
+			record.ParsedTimestamp = parsedTimestamp
+		}
+		if importedAt, err := time.Parse(time.RFC3339, importedAtStr); err == nil {
+			record.ImportedAt = importedAt
+		}
+
+		records = append(records, record)
+	}
+
+	return records, rows.Err()
 }
 
 // scanRecords è un helper interno per unificare la scansione dei record dal dataset SQLite
