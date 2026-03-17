@@ -1002,8 +1002,17 @@ func main() {
 
 	// 3. Avvia Goroutine lavoratore in background per Anviz (uno per ogni IP)
 	// NOTA: il DeviceID tipicamente di default è 1.	// Avvia i worker TCP per ciascun orologio fisico in Goroutine con DeviceID corretto
-	for _, d := range devices {
-		go SyncAnvizWorker(d.IP, d.ID)
+	syncEnabled := true
+	if value := strings.TrimSpace(os.Getenv("ANVIZ_SYNC_ENABLED")); value != "" {
+		syncEnabled = value != "0" && !strings.EqualFold(value, "false")
+	}
+
+	if syncEnabled {
+		for _, d := range devices {
+			go SyncAnvizWorker(d.IP, d.ID)
+		}
+	} else {
+		log.Println("Anviz background sync disabilitato da ANVIZ_SYNC_ENABLED")
 	}
 
 	// 4. Registrazione API Endpoints

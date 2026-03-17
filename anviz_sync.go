@@ -8,6 +8,9 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
+	"strconv"
+	"sync"
 	"time"
 )
 
@@ -17,6 +20,8 @@ type SyncStats struct {
 	Duplicates int
 	Errors     int
 }
+
+var deviceSyncGuards sync.Map
 
 func (s *SyncStats) Add(other SyncStats) {
 	s.Received += other.Received
@@ -78,6 +83,32 @@ func summarizeAttendanceRecordBytes(recordBytes []byte) string {
 	}
 
 	return fmt.Sprintf("status8=%s status9=%s bytes=%s", status8, status9, hex.EncodeToString(recordBytes[:hexLen]))
+}
+
+func getDeviceSyncGuard(deviceID uint32) *sync.Mutex {
+	guard, _ := deviceSyncGuards.LoadOrStore(deviceID, &sync.Mutex{})
+	return guard.(*sync.Mutex)
+}
+
+func anvizCommandDelay() time.Duration {
+	raw := os.Getenv("ANVIZ_COMMAND_DELAY_MS")
+	if raw == "" {
+		return 2500 * time.Millisecond
+	}
+
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 0 {
+		return 2500 * time.Millisecond
+	}
+
+	return time.Duration(value) * time.Millisecond
+}
+
+func pauseBetweenAnvizCommands() {
+	delay := anvizCommandDelay()
+	if delay > 0 {
+		time.Sleep(delay)
+	}
 }
 
 const (
@@ -259,13 +290,27 @@ func parseAnvizResponse(res []byte, ip string, deviceID uint32) SyncStats {
 		idx := 2 // Nei pacchetti 0x40 il payload inizia da byte indice 2 (dopo i due header count)
 		
 		for i := 0; i < validRecordCount; i++ {
-			if idx+14 > len(data) {
+			remaining := len(data) - idx
+			if remaining <= 0 {
 				log.Printf("TCP Worker: Chunk parse truncato device=%d ip=%s idx=%d len(data)=%d expected_remaining=%d", deviceID, ip, idx, len(data), validRecordCount-i)
 				stats.Errors += validRecordCount - i
 				break
 			}
-			recordBytes := data[idx : idx+14]
-			idx += 14
+
+			recordLen := 14
+			recordBytes := make([]byte, recordLen)
+			if remaining >= recordLen {
+				copy(recordBytes, data[idx:idx+recordLen])
+				idx += recordLen
+			} else if remaining == recordLen-1 && validRecordCount-i == 1 {
+				copy(recordBytes, data[idx:])
+				idx = len(data)
+				log.Printf("TCP Worker: Chunk tail incompleto recuperato device=%d ip=%s idx=%d len(data)=%d missing_bytes=%d", deviceID, ip, idx, len(data), recordLen-remaining)
+			} else {
+				log.Printf("TCP Worker: Chunk parse truncato device=%d ip=%s idx=%d len(data)=%d expected_remaining=%d remaining_bytes=%d", deviceID, ip, idx, len(data), validRecordCount-i, remaining)
+				stats.Errors += validRecordCount - i
+				break
+			}
 
 			// ID 4 byte (byte 0..3)
 			userID := binary.BigEndian.Uint32(recordBytes[0:4])
@@ -384,6 +429,9 @@ func SyncAnvizWorker(ip string, deviceID uint32) {
 // syncFromDevice esegue una socket net.Dial vera verso l'hardware e implementa timeout in caso esso sia offline
 func syncFromDevice(ip string, deviceID uint32) (SyncStats, error) {
 	stats := SyncStats{}
+	guard := getDeviceSyncGuard(deviceID)
+	guard.Lock()
+	defer guard.Unlock()
 
 	log.Printf("TCP Worker: Tentativo di sincronizzazione con l'Anviz IP %s...", ip)
 
@@ -417,6 +465,7 @@ func syncFromDevice(ip string, deviceID uint32) (SyncStats, error) {
 	} else {
 		log.Printf("TCP Worker: Login riuscito su %s!", ip)
 	}
+	pauseBetweenAnvizCommands()
 
 	// --- 1. Scaricamento Profili Staff (Command 0x72) ---
 	staffMode := byte(0x01) // 0x01 per iniziare, 0x00 per le pagine successive
@@ -435,6 +484,7 @@ func syncFromDevice(ip string, deviceID uint32) (SyncStats, error) {
 		if staffRes != nil && staffRes[6] == 0x00 { // 0x00 Success
 			count := int(staffRes[9])
 			_ = parseAnvizResponse(staffRes, ip, deviceID)
+			pauseBetweenAnvizCommands()
 
 			if count < 8 { // L'Anviz tipicamente invia blocchi da 8 per lo staff
 				break
@@ -474,6 +524,7 @@ func syncFromDevice(ip string, deviceID uint32) (SyncStats, error) {
 			chunkStats := parseAnvizResponse(recordRes, ip, deviceID)
 			stats.Add(chunkStats)
 			log.Printf("TCP Worker: Chunk %s ricevuti=%d nuovi=%d duplicati=%d errori=%d", ip, chunkStats.Received, chunkStats.Inserted, chunkStats.Duplicates, chunkStats.Errors)
+			pauseBetweenAnvizCommands()
 
 			// Se il server ci ha restituito meno di 25 record, significa che li abbiamo esauriti tutti
 			if count < 25 {
