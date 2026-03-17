@@ -510,14 +510,15 @@
         }
 
         // Mappa dalle azioni RAW (di database/dispositivo) alle chiavi interne dell'oggetto dayData
+        // Usiamo chiavi minuscole e facciamo il match in case-insensitive
         const ACTION_MAP = {
-            'in': 'entrata', 'In': 'entrata', 'ENTRATA': 'entrata',
-            'out': 'uscita', 'Out': 'uscita', 'USCITA': 'uscita',
-            'I_pausa': 'inizio_pausa', 'inizio_pausa': 'inizio_pausa', 'I_PAUSA': 'inizio_pausa',
-            'F_pausa': 'fine_pausa', 'fine_pausa': 'fine_pausa', 'F_PAUSA': 'fine_pausa',
-            'U_trasf': 'inizio_trasferta', 'inizio_trasferta': 'inizio_trasferta', 'U_TRASFER': 'inizio_trasferta',
-            'R_trasf': 'ritorno_trasferta', 'ritorno_trasferta': 'ritorno_trasferta', 'R_TRASFER': 'ritorno_trasferta',
-            'I_break': 'inizio_pausa', 'F_break': 'fine_pausa' // Altri casi legacy
+            'in': 'entrata', 'entrata': 'entrata',
+            'out': 'uscita', 'uscita': 'uscita',
+            'i_pausa': 'inizio_pausa', 'inizio_pausa': 'inizio_pausa',
+            'f_pausa': 'fine_pausa', 'fine_pausa': 'fine_pausa',
+            'u_trasf': 'inizio_trasferta', 'inizio_trasferta': 'inizio_trasferta', 'u_trasfer': 'inizio_trasferta',
+            'r_trasf': 'ritorno_trasferta', 'ritorno_trasferta': 'ritorno_trasferta', 'r_trasfer': 'ritorno_trasferta',
+            'i_break': 'inizio_pausa', 'f_break': 'fine_pausa' // Casi legacy
         };
 
         // Mappa dalle chiavi interne (entrata, uscita...) ai nomi visualizzati nell'interfaccia
@@ -1056,7 +1057,7 @@
                     }
                     const workedMins = calculateWorkedMinutes(day);
                     if (workedMins > 0) { 
-                        const isToday = (day.dateKey === new Date().toISOString().split('T')[0]);
+                        const isToday = (day.dateKey === formatDateLocal(new Date()));
                         if (isToday && !day.isWeekend && !day.isHoliday && day.uscita) {
                             empSummary[day.empId].theoreticalMins += 480;
                             empSummary[day.empId].theoreticalDays++;
@@ -1104,7 +1105,7 @@
                 }
             });
 
-            const fileName = `Report_${tabName.replace(' ', '_')}_${new Date().toISOString().slice(0, 10)}.pdf`;
+            const fileName = `Report_${tabName.replace(' ', '_')}_${formatDateLocal(new Date())}.pdf`;
             doc.save(fileName);
         }
 
@@ -1177,7 +1178,7 @@
                     }
                     const workedMins = calculateWorkedMinutes(day);
                     if (workedMins > 0) { 
-                        const isToday = (day.dateKey === new Date().toISOString().split('T')[0]);
+                        const isToday = (day.dateKey === formatDateLocal(new Date()));
                         if (isToday && !day.isWeekend && !day.isHoliday && day.uscita) {
                             empSummary[day.empId].theoreticalMins += 480;
                             empSummary[day.empId].theoreticalDays++;
@@ -1204,7 +1205,7 @@
             const csvUrl = URL.createObjectURL(csvData);
             const link = document.createElement("a");
 
-            const fileName = `Report_${tabName.replace(' ', '_')}_${new Date().toISOString().slice(0, 10)}.csv`;
+            const fileName = `Report_${tabName.replace(' ', '_')}_${formatDateLocal(new Date())}.csv`;
             link.href = csvUrl;
             link.setAttribute("download", fileName);
             document.body.appendChild(link);
@@ -1213,6 +1214,14 @@
         }
 
         // --- Utilities for Dates ---
+        function formatDateLocal(date) {
+            if (!date || isNaN(date.getTime())) return "";
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
         function getDatesInRange(startDate, endDate) {
             const dateArray = [];
             let currentDate = new Date(startDate);
@@ -1220,7 +1229,7 @@
             while (currentDate <= stopDate) {
                 const dayOfWeek = currentDate.getDay();
                 dateArray.push({
-                    dateKey: currentDate.toLocaleDateString('en-CA'),
+                    dateKey: formatDateLocal(currentDate),
                     isSunday: dayOfWeek === 0,
                     isSaturday: dayOfWeek === 6,
                     isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
@@ -1245,8 +1254,7 @@
             const rangeDays = getDatesInRange(firstDay, lastDay);
 
             // Limit theoretical calculation to current day
-            const today = new Date();
-            const todayStr = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+            const todayStr = formatDateLocal(new Date());
 
             let theoreticalMins = 0;
             let theoreticalDays = 0;
@@ -1277,8 +1285,8 @@
             }
 
             // Format dates for API (YYYY-MM-DD local)
-            const startStr = firstDay.toLocaleDateString('en-CA');
-            const endStr = lastDay.toLocaleDateString('en-CA');
+            const startStr = formatDateLocal(firstDay);
+            const endStr = formatDateLocal(lastDay);
 
             const empId = document.getElementById('filterEmp').value;
 
@@ -1313,19 +1321,34 @@
         function renderAdminTable(records, currentNamesMap) {
             const tbody = document.getElementById('attendanceBody');
 
+            function isInvalidName(n) {
+                if (!n) return true;
+                let lower = n.toLowerCase().trim();
+                if (lower.startsWith("ex")) return true;
+                if (lower.startsWith("nome vuoto")) return true;
+                return false;
+            }
+
             // Fetch employees map from select box for quick name lookup
             const selectOptions = document.getElementById('filterEmp').options;
             const filterEmpId = document.getElementById('filterEmp').value;
             const allEmpIds = [];
 
             for (let i = 1; i < selectOptions.length; i++) {
-                allEmpIds.push(selectOptions[i].value);
+                const val = selectOptions[i].value;
+                const text = selectOptions[i].text;
+                // Don't add to allEmpIds if it's an EX employee, to avoid generating empty rows for them
+                if (!isInvalidName(text)) {
+                    allEmpIds.push(val);
+                }
             }
 
-            // Critical fix: make sure the specific filterEmpId is also actually valid
-            if (filterEmpId && !allEmpIds.includes(filterEmpId)) {
-                return; // The selected employee was probably an "EX" or blank that was removed
-            }
+            // Critical fix: We should NOT return early if the filter ID is not in allEmpIds. 
+            // An employee might exist in DB (via Excel) but not yet downloaded from Anviz.
+            // If the user selected a valid filterEmpId it came from the DOM.
+            // if (filterEmpId && !allEmpIds.includes(filterEmpId)) {
+            //    return; 
+            // }
 
             // Genera la lista dei giorni del periodo selezionato
             let firstDay, lastDay;
@@ -1359,23 +1382,24 @@
                     let cName = currentNamesMap[r.employee_id] || "";
                     let hName = r.employee_name || "";
 
-                    if (cName.toUpperCase().startsWith("EX")) return; // Always hide EX visually
+                    // If it's an EX employee, we still process the record if it exists, 
+                    // but we won't generate empty rows for them in the second pass.
 
                     let bestName = "";
                     if (!isInvalidName(cName)) {
                         bestName = cName;
                     } else if (!isInvalidName(hName)) {
                         bestName = hName;
+                    } else {
+                        bestName = "Dipendente ID: " + empId;
                     }
 
-                    // IF we don't have a bestName, we exclude them!
-                    if (!bestName) return;
-
-                    // If filter is active and doesn't match, skip
+                    // Selezioniamo il dipendente (filtro per singola persona)
                     if (filterEmpId && filterEmpId !== empId) return;
 
+                    // Usiamo formatDateLocal per avere YYYY-MM-DD locale (senza shift UTC)
                     const dateObj = new Date(r.timestamp);
-                    const dateKey = dateObj.toISOString().slice(0, 10);
+                    const dateKey = formatDateLocal(dateObj);
                     const isHolidayToday = isHoliday(dateObj);
                     const dailyKey = empId + '_' + dateKey;
 
@@ -1401,10 +1425,12 @@
                         };
                     }
 
-                    const mappedAction = ACTION_MAP[r.action] || r.action;
+                    // Mappatura azione robusta: minuscolo e trim
+                    const rawAction = (r.action || "").trim().toLowerCase();
+                    const mappedAction = ACTION_MAP[rawAction] || rawAction;
                     groupedMap[dailyKey].rawRecords.push({
-                        id: r.id, // Save the actual database ID for edit operations
-                        source: r.source, // Save the origin (manual_web, web, device)
+                        id: r.id, 
+                        source: r.source,
                         tsMs: dateObj.getTime(),
                         mappedAction: mappedAction,
                         timeStr: dateObj.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
@@ -1542,13 +1568,35 @@
             });
 
             // Aggiungiamo i record vuoti per i giorni feriali mancanti
-            const empsToCheck = filterEmpId ? [filterEmpId] : allEmpIds;
+            // Dobbiamo ciclare non solo su allEmpIds, ma anche su TUTTI gli empId che abbiamo incontrato nei records
+            const foundEmpIds = new Set(allEmpIds);
+            if (records && records.length > 0) {
+                records.forEach(r => {
+                    const idStr = String(r.employee_id);
+                    let cName = currentNamesMap[r.employee_id] || "";
+                    if (!isInvalidName(cName)) foundEmpIds.add(idStr);
+                    // Accettiamo i recovery Excel
+                    else if (r.employee_name && !isInvalidName(r.employee_name)) foundEmpIds.add(idStr);
+                });
+            }
 
-            const today = new Date();
-            const todayStr = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+            const empsToCheck = filterEmpId ? [filterEmpId] : Array.from(foundEmpIds);
+
+            const todayStr = formatDateLocal(new Date());
 
             empsToCheck.forEach(empId => {
-                let nameToUse = currentNamesMap[empId] || `Dipendente ID: ${empId}`;
+                let nameToUse = currentNamesMap[empId] || "";
+                
+                // Fallback attempt: if we don't have it in currentNamesMap, look inside records
+                if (!nameToUse && records) {
+                    const matchedRecord = records.find(r => String(r.employee_id) === empId && r.employee_name);
+                    if (matchedRecord) {
+                        nameToUse = matchedRecord.employee_name;
+                    }
+                }
+                if (!nameToUse) {
+                    nameToUse = `Dipendente ID: ${empId}`;
+                }
 
                 rangeDays.forEach(day => {
                     if (day.dateKey > todayStr) return; // Do not generate empty records for future days
@@ -1684,7 +1732,7 @@
                 }
 
                 const workedMins = calculateWorkedMinutes(day);
-                const isToday = (day.dateKey === new Date().toISOString().split('T')[0]);
+                const isToday = (day.dateKey === formatDateLocal(new Date()));
 
                 // Se è OGGI ed è finita (uscita presente), aggiungiamo le 8 ore teoriche al totale di questo dipendente
                 if (isToday && !day.isWeekend && !day.isHoliday && day.uscita) {
@@ -1932,7 +1980,7 @@
             let rT = t(dayData.ritorno_trasferta);
 
             const today = new Date();
-            const todayStr = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+            const todayStr = formatDateLocal(today);
             const isToday = dayData.dateKey === todayStr;
             const nowMins = today.getHours() * 60 + today.getMinutes();
 
