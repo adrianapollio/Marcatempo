@@ -116,6 +116,17 @@ func InitDB() {
 		reviewed_by INTEGER,
 		reviewed_at DATETIME
 	);
+	CREATE TABLE IF NOT EXISTS device_raw_records (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		device_id INTEGER NOT NULL,
+		employee_id INTEGER NOT NULL,
+		employee_name TEXT NOT NULL DEFAULT '',
+		raw_device_timestamp INTEGER NOT NULL,
+		parsed_timestamp DATETIME NOT NULL,
+		action TEXT NOT NULL,
+		status_code INTEGER NOT NULL DEFAULT 0,
+		imported_at DATETIME NOT NULL
+	);
 	CREATE TABLE IF NOT EXISTS custom_holidays (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		date TEXT UNIQUE NOT NULL,
@@ -157,8 +168,10 @@ func InitDB() {
 	_, _ = DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_records_device_unique ON records(device_id, employee_id, raw_device_timestamp, status_code) WHERE source = 'device' AND device_id IS NOT NULL AND raw_device_timestamp IS NOT NULL")
 	_, _ = DB.Exec("CREATE INDEX IF NOT EXISTS idx_records_device_legacy_lookup ON records(employee_id, timestamp, status_code) WHERE source = 'device' AND device_id IS NULL")
 	_, _ = DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_records_web_unique ON records(employee_id, timestamp, action) WHERE source IN ('web', 'manual_web')")
+	_, _ = DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_device_raw_unique ON device_raw_records(device_id, employee_id, raw_device_timestamp, status_code)")
 
 	migrateLegacyDeviceTimestamps()
+	backfillDeviceRawRecords()
 
 	log.Println("Database SQLite inizializzato con successo, tabelle verificata.")
 
@@ -173,6 +186,10 @@ func InitDB() {
 
 func isUniqueConstraintError(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
+}
+
+type sqlExecer interface {
+	Exec(query string, args ...interface{}) (sql.Result, error)
 }
 
 func anvizEpochLocation() *time.Location {
@@ -243,7 +260,11 @@ func migrateLegacyDeviceTimestamps() {
 }
 
 func adoptLegacyDeviceRecord(deviceID uint32, employeeID int, timestamp time.Time, rawDeviceTimestamp uint32, statusCode int) (bool, error) {
-	res, err := DB.Exec(`
+	return adoptLegacyDeviceRecordUsing(DB, deviceID, employeeID, timestamp, rawDeviceTimestamp, statusCode)
+}
+
+func adoptLegacyDeviceRecordUsing(execer sqlExecer, deviceID uint32, employeeID int, timestamp time.Time, rawDeviceTimestamp uint32, statusCode int) (bool, error) {
+	res, err := execer.Exec(`
 		UPDATE records
 		SET device_id = ?, raw_device_timestamp = ?
 		WHERE id = (
@@ -270,7 +291,99 @@ func adoptLegacyDeviceRecord(deviceID uint32, employeeID int, timestamp time.Tim
 	return rowsAffected > 0, nil
 }
 
+func insertDeviceRawRecordUsing(execer sqlExecer, deviceID uint32, employeeID int, employeeName string, timestamp time.Time, rawDeviceTimestamp uint32, action string, statusCode int) (bool, error) {
+	res, err := execer.Exec(
+		`INSERT INTO device_raw_records (device_id, employee_id, employee_name, raw_device_timestamp, parsed_timestamp, action, status_code, imported_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		int64(deviceID),
+		employeeID,
+		employeeName,
+		int64(rawDeviceTimestamp),
+		timestamp.Format(time.RFC3339),
+		action,
+		statusCode,
+		time.Now().Format(time.RFC3339),
+	)
+	if err != nil {
+		if isUniqueConstraintError(err) {
+			return false, ErrDuplicateRecord
+		}
+		return false, err
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+
+	if rowsAffected == 0 {
+		return false, ErrDuplicateRecord
+	}
+
+	return true, nil
+}
+
+func backfillDeviceRawRecords() {
+	rows, err := DB.Query(`
+		SELECT device_id, employee_id, employee_name, raw_device_timestamp, timestamp, action, status_code
+		FROM records
+		WHERE source = 'device' AND device_id IS NOT NULL AND raw_device_timestamp IS NOT NULL
+	`)
+	if err != nil {
+		log.Printf("Migrazione raw device: query fallita: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	inserted := 0
+	duplicates := 0
+	skipped := 0
+
+	for rows.Next() {
+		var deviceID int64
+		var employeeID int
+		var employeeName string
+		var rawDeviceTimestamp int64
+		var timestampStr string
+		var action string
+		var statusCode int
+
+		if err := rows.Scan(&deviceID, &employeeID, &employeeName, &rawDeviceTimestamp, &timestampStr, &action, &statusCode); err != nil {
+			skipped++
+			continue
+		}
+
+		timestamp, err := time.Parse(time.RFC3339, timestampStr)
+		if err != nil {
+			skipped++
+			continue
+		}
+
+		ok, err := insertDeviceRawRecordUsing(DB, uint32(deviceID), employeeID, employeeName, timestamp, uint32(rawDeviceTimestamp), action, statusCode)
+		if err == ErrDuplicateRecord {
+			duplicates++
+			continue
+		}
+		if err != nil {
+			skipped++
+			continue
+		}
+		if ok {
+			inserted++
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("Migrazione raw device: iterazione fallita: %v", err)
+	}
+
+	log.Printf("Migrazione raw device: inseriti=%d duplicati=%d saltati=%d", inserted, duplicates, skipped)
+}
+
 func insertRecordWithDeviceMeta(employeeID int, employeeName string, timestamp time.Time, action string, statusCode int, source string, deviceID *uint32, rawDeviceTimestamp *uint32, lat, lon *float64) (bool, error) {
+	return insertRecordWithDeviceMetaUsing(DB, employeeID, employeeName, timestamp, action, statusCode, source, deviceID, rawDeviceTimestamp, lat, lon)
+}
+
+func insertRecordWithDeviceMetaUsing(execer sqlExecer, employeeID int, employeeName string, timestamp time.Time, action string, statusCode int, source string, deviceID *uint32, rawDeviceTimestamp *uint32, lat, lon *float64) (bool, error) {
 	query := `INSERT INTO records (employee_id, employee_name, timestamp, action, status_code, source, device_id, raw_device_timestamp, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	var deviceIDValue interface{}
@@ -283,7 +396,7 @@ func insertRecordWithDeviceMeta(employeeID int, employeeName string, timestamp t
 		rawDeviceTimestampValue = int64(*rawDeviceTimestamp)
 	}
 
-	res, err := DB.Exec(query, employeeID, employeeName, timestamp.Format(time.RFC3339), action, statusCode, source, deviceIDValue, rawDeviceTimestampValue, lat, lon)
+	res, err := execer.Exec(query, employeeID, employeeName, timestamp.Format(time.RFC3339), action, statusCode, source, deviceIDValue, rawDeviceTimestampValue, lat, lon)
 	if err != nil {
 		if isUniqueConstraintError(err) {
 			return false, ErrDuplicateRecord
@@ -312,15 +425,35 @@ func InsertRecord(employeeID int, employeeName string, timestamp time.Time, acti
 // InsertDeviceRecord salva una timbratura hardware includendo identificativo terminale
 // e timestamp raw del protocollo Anviz per la deduplica lato device.
 func InsertDeviceRecord(deviceID uint32, employeeID int, employeeName string, timestamp time.Time, rawDeviceTimestamp uint32, action string, statusCode int) (bool, error) {
-	adopted, err := adoptLegacyDeviceRecord(deviceID, employeeID, timestamp, rawDeviceTimestamp, statusCode)
+	tx, err := DB.Begin()
 	if err != nil {
 		return false, err
 	}
-	if adopted {
-		return false, ErrDuplicateRecord
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	rawInserted, err := insertDeviceRawRecordUsing(tx, deviceID, employeeID, employeeName, timestamp, rawDeviceTimestamp, action, statusCode)
+	if err != nil {
+		return false, err
 	}
 
-	return insertRecordWithDeviceMeta(employeeID, employeeName, timestamp, action, statusCode, "device", &deviceID, &rawDeviceTimestamp, nil, nil)
+	adopted, err := adoptLegacyDeviceRecordUsing(tx, deviceID, employeeID, timestamp, rawDeviceTimestamp, statusCode)
+	if err != nil {
+		return false, err
+	}
+	if !adopted {
+		_, err = insertRecordWithDeviceMetaUsing(tx, employeeID, employeeName, timestamp, action, statusCode, "device", &deviceID, &rawDeviceTimestamp, nil, nil)
+		if err != nil && err != ErrDuplicateRecord {
+			return false, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+
+	return rawInserted, nil
 }
 
 func SyncEmployee(id int, name string, pin string) error {
