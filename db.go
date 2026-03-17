@@ -155,7 +155,10 @@ func InitDB() {
 	_, _ = DB.Exec("DROP INDEX IF EXISTS idx_emp_time")
 	_, _ = DB.Exec("DROP INDEX IF EXISTS idx_records_device_unique")
 	_, _ = DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_records_device_unique ON records(device_id, employee_id, raw_device_timestamp, status_code) WHERE source = 'device' AND device_id IS NOT NULL AND raw_device_timestamp IS NOT NULL")
+	_, _ = DB.Exec("CREATE INDEX IF NOT EXISTS idx_records_device_legacy_lookup ON records(employee_id, timestamp, status_code) WHERE source = 'device' AND device_id IS NULL")
 	_, _ = DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_records_web_unique ON records(employee_id, timestamp, action) WHERE source IN ('web', 'manual_web')")
+
+	migrateLegacyDeviceTimestamps()
 
 	log.Println("Database SQLite inizializzato con successo, tabelle verificata.")
 
@@ -170,6 +173,101 @@ func InitDB() {
 
 func isUniqueConstraintError(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
+}
+
+func anvizEpochLocation() *time.Location {
+	localTZ, err := time.LoadLocation("Europe/Rome")
+	if err != nil {
+		return time.Local
+	}
+	return localTZ
+}
+
+func rawDeviceTimestampFromTime(timestamp time.Time) (uint32, error) {
+	anvizEpoch := time.Date(2000, 1, 2, 0, 0, 0, 0, anvizEpochLocation())
+	seconds := timestamp.In(anvizEpoch.Location()).Sub(anvizEpoch) / time.Second
+	if seconds < 0 || uint64(seconds) > uint64(^uint32(0)) {
+		return 0, fmt.Errorf("timestamp fuori range per protocollo Anviz")
+	}
+	return uint32(seconds), nil
+}
+
+func migrateLegacyDeviceTimestamps() {
+	rows, err := DB.Query(`SELECT id, timestamp FROM records WHERE source = 'device' AND raw_device_timestamp IS NULL`)
+	if err != nil {
+		log.Printf("Migrazione device legacy: query fallita: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	updated := 0
+	skipped := 0
+
+	for rows.Next() {
+		var id int
+		var timestampStr string
+		if err := rows.Scan(&id, &timestampStr); err != nil {
+			skipped++
+			continue
+		}
+
+		timestamp, err := time.Parse(time.RFC3339, timestampStr)
+		if err != nil {
+			skipped++
+			continue
+		}
+
+		rawTS, err := rawDeviceTimestampFromTime(timestamp)
+		if err != nil {
+			skipped++
+			continue
+		}
+
+		res, err := DB.Exec(`UPDATE records SET raw_device_timestamp = ? WHERE id = ? AND raw_device_timestamp IS NULL`, int64(rawTS), id)
+		if err != nil {
+			skipped++
+			continue
+		}
+
+		rowsAffected, err := res.RowsAffected()
+		if err == nil && rowsAffected > 0 {
+			updated++
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("Migrazione device legacy: iterazione fallita: %v", err)
+	}
+
+	log.Printf("Migrazione device legacy: raw timestamp aggiornati=%d, saltati=%d", updated, skipped)
+}
+
+func adoptLegacyDeviceRecord(deviceID uint32, employeeID int, timestamp time.Time, rawDeviceTimestamp uint32, statusCode int) (bool, error) {
+	res, err := DB.Exec(`
+		UPDATE records
+		SET device_id = ?, raw_device_timestamp = ?
+		WHERE id = (
+			SELECT id
+			FROM records
+			WHERE source = 'device'
+			  AND employee_id = ?
+			  AND timestamp = ?
+			  AND status_code = ?
+			  AND device_id IS NULL
+			ORDER BY id ASC
+			LIMIT 1
+		)
+	`, int64(deviceID), int64(rawDeviceTimestamp), employeeID, timestamp.Format(time.RFC3339), statusCode)
+	if err != nil {
+		return false, err
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+
+	return rowsAffected > 0, nil
 }
 
 func insertRecordWithDeviceMeta(employeeID int, employeeName string, timestamp time.Time, action string, statusCode int, source string, deviceID *uint32, rawDeviceTimestamp *uint32, lat, lon *float64) (bool, error) {
@@ -214,6 +312,14 @@ func InsertRecord(employeeID int, employeeName string, timestamp time.Time, acti
 // InsertDeviceRecord salva una timbratura hardware includendo identificativo terminale
 // e timestamp raw del protocollo Anviz per la deduplica lato device.
 func InsertDeviceRecord(deviceID uint32, employeeID int, employeeName string, timestamp time.Time, rawDeviceTimestamp uint32, action string, statusCode int) (bool, error) {
+	adopted, err := adoptLegacyDeviceRecord(deviceID, employeeID, timestamp, rawDeviceTimestamp, statusCode)
+	if err != nil {
+		return false, err
+	}
+	if adopted {
+		return false, ErrDuplicateRecord
+	}
+
 	return insertRecordWithDeviceMeta(employeeID, employeeName, timestamp, action, statusCode, "device", &deviceID, &rawDeviceTimestamp, nil, nil)
 }
 
