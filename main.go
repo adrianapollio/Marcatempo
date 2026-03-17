@@ -55,6 +55,7 @@ type SystemDeviceDiagnosticsResponse struct {
 	LegacyUnassignedRecords int                       `json:"legacy_unassigned_records"`
 	Devices                 []SystemDeviceDiagnostics `json:"devices"`
 	RecentRaw               []DeviceRawDiagnostic     `json:"recent_raw"`
+	RecentLegacyUnassigned  []DeviceRawDiagnostic     `json:"recent_legacy_unassigned"`
 }
 
 type SystemDeviceDiagnostics struct {
@@ -78,6 +79,40 @@ var devices = []AnvizDevice{
 	{"192.168.1.246", 2},
 }
 
+func activeAnvizDevices() []AnvizDevice {
+	configured := strings.TrimSpace(os.Getenv("ANVIZ_ACTIVE_DEVICE_IDS"))
+	if configured == "" {
+		return devices
+	}
+
+	selected := make(map[uint32]struct{})
+	for _, token := range strings.Split(configured, ",") {
+		value := strings.TrimSpace(token)
+		if value == "" {
+			continue
+		}
+		parsed, err := strconv.ParseUint(value, 10, 32)
+		if err != nil {
+			continue
+		}
+		selected[uint32(parsed)] = struct{}{}
+	}
+
+	filtered := make([]AnvizDevice, 0, len(devices))
+	for _, device := range devices {
+		if _, ok := selected[device.ID]; ok {
+			filtered = append(filtered, device)
+		}
+	}
+
+	if len(filtered) == 0 {
+		log.Printf("ANVIZ_ACTIVE_DEVICE_IDS=%q non corrisponde a nessun device configurato; uso tutti i device", configured)
+		return devices
+	}
+
+	return filtered
+}
+
 // handleSyncNow triggers a manual synchronization with all configured Anviz devices
 func handleSyncNow(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -95,11 +130,11 @@ func handleSyncNow(w http.ResponseWriter, r *http.Request) {
 	var mu sync.Mutex
 	results := make(map[string]string)
 
-	for _, d := range devices {
+	for _, d := range activeAnvizDevices() {
 		wg.Add(1)
 		go func(ip string, id uint32) {
 			defer wg.Done()
-			stats, err := syncFromDevice(ip, id)
+			stats, err := syncFromDevice(ip, id, true)
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
@@ -447,6 +482,13 @@ func handleSystemDeviceDiagnostics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	recentLegacyUnassigned, err := GetRecentLegacyUnassignedDeviceRecords(25)
+	if err != nil {
+		log.Printf("Errore lettura record device legacy senza raw: %v", err)
+		http.Error(w, "Errore estrazione record device legacy", http.StatusInternalServerError)
+		return
+	}
+
 	byDevice := make(map[int]SystemDeviceDiagnostics)
 	for _, device := range devices {
 		byDevice[int(device.ID)] = SystemDeviceDiagnostics{
@@ -480,6 +522,7 @@ func handleSystemDeviceDiagnostics(w http.ResponseWriter, r *http.Request) {
 		LegacyUnassignedRecords: legacyCount,
 		Devices:                 responseDevices,
 		RecentRaw:               recentRaw,
+		RecentLegacyUnassigned:  recentLegacyUnassigned,
 	})
 }
 
@@ -1008,7 +1051,7 @@ func main() {
 	}
 
 	if syncEnabled {
-		for _, d := range devices {
+		for _, d := range activeAnvizDevices() {
 			go SyncAnvizWorker(d.IP, d.ID)
 		}
 	} else {

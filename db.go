@@ -1,15 +1,15 @@
 package main
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
 	"os"
 	"strings"
 	"time"
-	"crypto/sha256"
-	"encoding/hex"
 
 	_ "modernc.org/sqlite" // Pure Go SQLite driver, no CGO or Windows DLL needed!
 )
@@ -75,19 +75,31 @@ type DeviceRawDiagnostic struct {
 	Action             string    `json:"action"`
 	StatusCode         int       `json:"status_code"`
 	ImportedAt         time.Time `json:"imported_at"`
+	Origin             string    `json:"origin"`
 }
 
 var DB *sql.DB
 
 var ErrDuplicateRecord = errors.New("record duplicato")
 
+func resolveDBPath() string {
+	if envPath := os.Getenv("DB_PATH"); envPath != "" {
+		return envPath
+	}
+
+	preferredPath := "data/attendance.db"
+	if _, err := os.Stat(preferredPath); err == nil {
+		return preferredPath
+	}
+
+	return "attendance.db"
+}
+
 // InitDB apre la connessione ed esegue l'inizializzazione della tabella
 func InitDB() {
 	var err error
-	dbPath := os.Getenv("DB_PATH")
-	if dbPath == "" {
-		dbPath = "attendance.db"
-	}
+	dbPath := resolveDBPath()
+	log.Printf("Database SQLite in uso: %s", dbPath)
 	// modernc.org/sqlite DSN supporta i parametri pragma
 	DB, err = sql.Open("sqlite", dbPath+"?_pragma=busy_timeout(5000)")
 	if err != nil {
@@ -194,12 +206,34 @@ func InitDB() {
 
 	log.Println("Database SQLite inizializzato con successo, tabelle verificata.")
 
-	// Auto-inizializzazione Super Admin se la tabella è vuota
+	ensureDefaultSystemAdmin()
+}
+
+func ensureDefaultSystemAdmin() {
+	username := strings.TrimSpace(os.Getenv("DEFAULT_SYSTEM_ADMIN_USERNAME"))
+	if username == "" {
+		username = "superadmin"
+	}
+
+	password := os.Getenv("DEFAULT_SYSTEM_ADMIN_PASSWORD")
+	if password == "" {
+		password = "superadmin"
+	}
+
 	var count int
-	err = DB.QueryRow("SELECT COUNT(*) FROM system_admins").Scan(&count)
-	if err == nil && count == 0 {
-		log.Println("[INFO] Inizializzazione Super Admin predefinito (admin/admin)...")
-		_ = AddSystemAdmin("admin", "admin")
+	err := DB.QueryRow("SELECT COUNT(*) FROM system_admins WHERE username = ?", username).Scan(&count)
+	if err != nil {
+		log.Printf("[WARN] Impossibile verificare il super admin predefinito %s: %v", username, err)
+		return
+	}
+
+	if count > 0 {
+		return
+	}
+
+	log.Printf("[INFO] Inizializzazione Super Admin predefinito (%s/%s)...", username, password)
+	if err := AddSystemAdmin(username, password); err != nil {
+		log.Printf("[WARN] Impossibile creare il super admin predefinito %s: %v", username, err)
 	}
 }
 
@@ -801,6 +835,52 @@ func getRecentDeviceRawRecordsFromFinalRecords(limit int) ([]DeviceRawDiagnostic
 		} else if derived, err := rawDeviceTimestampFromTime(parsedTimestamp); err == nil {
 			record.RawDeviceTimestamp = int64(derived)
 		}
+		record.Origin = "legacy_final"
+
+		records = append(records, record)
+	}
+
+	return records, rows.Err()
+}
+
+func GetRecentLegacyUnassignedDeviceRecords(limit int) ([]DeviceRawDiagnostic, error) {
+	if limit <= 0 {
+		limit = 25
+	}
+
+	rows, err := DB.Query(`
+		SELECT employee_id, employee_name, timestamp, action, status_code
+		FROM records
+		WHERE source = 'device'
+		  AND (device_id IS NULL OR raw_device_timestamp IS NULL)
+		ORDER BY timestamp DESC, id DESC
+		LIMIT ?
+	`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var records []DeviceRawDiagnostic
+	for rows.Next() {
+		var record DeviceRawDiagnostic
+		var timestampStr string
+		if err := rows.Scan(&record.EmployeeID, &record.EmployeeName, &timestampStr, &record.Action, &record.StatusCode); err != nil {
+			return nil, err
+		}
+
+		parsedTimestamp, err := time.Parse(time.RFC3339, timestampStr)
+		if err != nil {
+			continue
+		}
+
+		record.ParsedTimestamp = parsedTimestamp
+		record.ImportedAt = parsedTimestamp
+		record.DeviceID = 0
+		record.Origin = "legacy_final"
+		if derived, err := rawDeviceTimestampFromTime(parsedTimestamp); err == nil {
+			record.RawDeviceTimestamp = int64(derived)
+		}
 
 		records = append(records, record)
 	}
@@ -818,7 +898,7 @@ func GetRecentDeviceRawRecords(limit int) ([]DeviceRawDiagnostic, error) {
 	rows, err := DB.Query(`
 		SELECT device_id, employee_id, employee_name, raw_device_timestamp, parsed_timestamp, action, status_code, imported_at
 		FROM device_raw_records
-		ORDER BY imported_at DESC, id DESC
+		ORDER BY parsed_timestamp DESC, imported_at DESC, id DESC
 		LIMIT ?
 	`, limit)
 	if err != nil {
@@ -841,6 +921,7 @@ func GetRecentDeviceRawRecords(limit int) ([]DeviceRawDiagnostic, error) {
 		if importedAt, err := time.Parse(time.RFC3339, importedAtStr); err == nil {
 			record.ImportedAt = importedAt
 		}
+		record.Origin = "raw"
 
 		records = append(records, record)
 	}

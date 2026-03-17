@@ -20,10 +20,7 @@ type BackupConfig struct {
 
 // getBackupConfig legge la configurazione dai env vars o usa i default
 func getBackupConfig() BackupConfig {
-	dbPath := os.Getenv("DB_PATH")
-	if dbPath == "" {
-		dbPath = "attendance.db"
-	}
+	dbPath := resolveDBPath()
 
 	backupDir := os.Getenv("BACKUP_DIR")
 	if backupDir == "" {

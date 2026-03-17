@@ -67,13 +67,14 @@
             <p>Accesso riservato all'amministratore tecnico</p>
             <div class="form-group">
                 <label>Username</label>
-                <input type="text" id="sysUsername" placeholder="admin">
+                <input type="text" id="sysUsername" placeholder="superadmin">
             </div>
             <div class="form-group">
                 <label>Password</label>
-                <input type="password" id="sysPassword" placeholder="••••••••">
+                <input type="password" id="sysPassword" placeholder="0000">
             </div>
             <button class="btn-system" onclick="handleLogin()">Accedi al Sistema</button>
+            <div style="margin-top: 12px; font-size: 0.8rem; color: var(--text-secondary); text-align: center;">Default locale: <strong>superadmin</strong> / <strong>superadmin</strong></div>
             <div style="margin-top: 16px; text-align: center;">
                 <a href="/" style="color: var(--text-secondary); text-decoration: none; font-size: 0.875rem; display: flex; align-items: center; justify-content: center; gap: 6px; transition: color 0.2s;">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -236,6 +237,7 @@
                             <table id="deviceDiagnosticsTable">
                                 <thead>
                                     <tr>
+                                        <th>Origine</th>
                                         <th>Device</th>
                                         <th>Dipendente</th>
                                         <th>Raw TS</th>
@@ -245,7 +247,28 @@
                                     </tr>
                                 </thead>
                                 <tbody id="deviceDiagnosticsBody">
-                                    <tr><td colspan="6" style="text-align:center; color: var(--text-secondary); padding: 20px;">Caricamento...</td></tr>
+                                    <tr><td colspan="7" style="text-align:center; color: var(--text-secondary); padding: 20px;">Caricamento...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div style="background: white; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow-sm); margin-bottom: 20px;">
+                        <div style="padding: 16px 20px; border-bottom: 1px solid var(--border);">
+                            <div style="font-weight: 600;">Record Device Finali Senza Raw</div>
+                            <div id="legacyDeviceDiagnosticsMeta" style="font-size: 0.8rem; color: var(--text-secondary);">Caricamento diagnostica...</div>
+                        </div>
+                        <div class="table-container" style="box-shadow:none; border:none; border-radius:0;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Dipendente</th>
+                                        <th>Timestamp Finale</th>
+                                        <th>Azione</th>
+                                        <th>Raw TS Stimato</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="legacyDeviceDiagnosticsBody">
+                                    <tr><td colspan="4" style="text-align:center; color: var(--text-secondary); padding: 20px;">Caricamento...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -394,12 +417,16 @@
             const grid = document.getElementById('deviceDiagnosticsGrid');
             const body = document.getElementById('deviceDiagnosticsBody');
             const meta = document.getElementById('deviceDiagnosticsMeta');
+            const legacyBody = document.getElementById('legacyDeviceDiagnosticsBody');
+            const legacyMeta = document.getElementById('legacyDeviceDiagnosticsMeta');
 
-            if (!grid || !body || !meta) return;
+            if (!grid || !body || !meta || !legacyBody || !legacyMeta) return;
 
             grid.innerHTML = '<div class="stat-card"><span class="label">Device Diagnostics</span><span class="value">...</span><span class="trend">Recupero dati in corso</span></div>';
-            body.innerHTML = '<tr><td colspan="6" style="text-align:center; color: var(--text-secondary); padding: 20px;">Caricamento...</td></tr>';
+            body.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-secondary); padding: 20px;">Caricamento...</td></tr>';
+            legacyBody.innerHTML = '<tr><td colspan="4" style="text-align:center; color: var(--text-secondary); padding: 20px;">Caricamento...</td></tr>';
             meta.textContent = 'Caricamento diagnostica...';
+            legacyMeta.textContent = 'Caricamento diagnostica...';
 
             try {
                 const res = await fetch('/api/system/device-diagnostics');
@@ -410,6 +437,7 @@
                 const data = await res.json();
                 const devices = Array.isArray(data.devices) ? data.devices : [];
                 const recentRaw = Array.isArray(data.recent_raw) ? data.recent_raw : [];
+                const recentLegacyUnassigned = Array.isArray(data.recent_legacy_unassigned) ? data.recent_legacy_unassigned : [];
                 const legacyCount = data.legacy_unassigned_records || 0;
 
                 grid.innerHTML = devices.map(device => {
@@ -429,13 +457,15 @@
                     grid.innerHTML = '<div class="stat-card"><span class="label">Device Diagnostics</span><span class="value">0</span><span class="trend">Nessun device diagnosticato</span></div>';
                 }
 
-                meta.textContent = `Record legacy non assegnati: ${legacyCount} • Ultimi raw mostrati: ${recentRaw.length}`;
+                meta.textContent = `Record legacy non assegnati: ${legacyCount} • Ultimi raw mostrati per timestamp reale: ${recentRaw.length}`;
+                legacyMeta.textContent = `Ultimi record finali device senza raw/metadati: ${recentLegacyUnassigned.length}`;
 
                 if (recentRaw.length === 0) {
-                    body.innerHTML = '<tr><td colspan="6" style="text-align:center; color: var(--text-secondary); padding: 20px;">Nessun raw record disponibile</td></tr>';
+                    body.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-secondary); padding: 20px;">Nessun raw record disponibile</td></tr>';
                 } else {
                     body.innerHTML = recentRaw.map(row => `
                         <tr>
+                            <td><span style="font-size: 0.75rem; color: var(--text-secondary);">${row.origin || 'raw'}</span></td>
                             <td><code>#${row.device_id}</code></td>
                             <td>${escapeHtml(row.employee_name || '')} <span style="color: var(--text-secondary);">(#${row.employee_id})</span></td>
                             <td><code>${row.raw_device_timestamp}</code></td>
@@ -445,10 +475,25 @@
                         </tr>
                     `).join('');
                 }
+
+                if (recentLegacyUnassigned.length === 0) {
+                    legacyBody.innerHTML = '<tr><td colspan="4" style="text-align:center; color: var(--text-secondary); padding: 20px;">Nessun record finale device senza raw</td></tr>';
+                } else {
+                    legacyBody.innerHTML = recentLegacyUnassigned.map(row => `
+                        <tr>
+                            <td>${escapeHtml(row.employee_name || '')} <span style="color: var(--text-secondary);">(#${row.employee_id})</span></td>
+                            <td>${formatDiagnosticDate(row.parsed_timestamp)}</td>
+                            <td>${escapeHtml(row.action)} <span style="color: var(--text-secondary);">(${row.status_code})</span></td>
+                            <td><code>${row.raw_device_timestamp || '—'}</code></td>
+                        </tr>
+                    `).join('');
+                }
             } catch (e) {
                 meta.textContent = 'Errore caricamento diagnostica device';
+                legacyMeta.textContent = 'Errore caricamento diagnostica legacy';
                 grid.innerHTML = '<div class="stat-card"><span class="label">Device Diagnostics</span><span class="value">ERR</span><span class="trend">Impossibile leggere la diagnostica</span></div>';
-                body.innerHTML = '<tr><td colspan="6" style="text-align:center; color: #ef4444; padding: 20px;">Errore caricamento diagnostica device</td></tr>';
+                body.innerHTML = '<tr><td colspan="7" style="text-align:center; color: #ef4444; padding: 20px;">Errore caricamento diagnostica device</td></tr>';
+                legacyBody.innerHTML = '<tr><td colspan="4" style="text-align:center; color: #ef4444; padding: 20px;">Errore caricamento diagnostica legacy</td></tr>';
             }
         }
 

@@ -9,7 +9,9 @@ import (
 	"log"
 	"net"
 	"os"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -19,6 +21,9 @@ type SyncStats struct {
 	Inserted   int
 	Duplicates int
 	Errors     int
+	HasWindow  bool
+	Earliest   time.Time
+	Latest     time.Time
 }
 
 var deviceSyncGuards sync.Map
@@ -28,6 +33,25 @@ func (s *SyncStats) Add(other SyncStats) {
 	s.Inserted += other.Inserted
 	s.Duplicates += other.Duplicates
 	s.Errors += other.Errors
+	if other.HasWindow {
+		if !s.HasWindow || other.Earliest.Before(s.Earliest) {
+			s.Earliest = other.Earliest
+		}
+		if !s.HasWindow || other.Latest.After(s.Latest) {
+			s.Latest = other.Latest
+		}
+		s.HasWindow = true
+	}
+}
+
+func (s *SyncStats) ObserveTimestamp(timestamp time.Time) {
+	if !s.HasWindow || timestamp.Before(s.Earliest) {
+		s.Earliest = timestamp
+	}
+	if !s.HasWindow || timestamp.After(s.Latest) {
+		s.Latest = timestamp
+	}
+	s.HasWindow = true
 }
 
 func decodeAttendanceAction(recordBytes []byte) (int, string) {
@@ -93,12 +117,12 @@ func getDeviceSyncGuard(deviceID uint32) *sync.Mutex {
 func anvizCommandDelay() time.Duration {
 	raw := os.Getenv("ANVIZ_COMMAND_DELAY_MS")
 	if raw == "" {
-		return 2500 * time.Millisecond
+		return 5000 * time.Millisecond
 	}
 
 	value, err := strconv.Atoi(raw)
 	if err != nil || value < 0 {
-		return 2500 * time.Millisecond
+		return 5000 * time.Millisecond
 	}
 
 	return time.Duration(value) * time.Millisecond
@@ -109,6 +133,69 @@ func pauseBetweenAnvizCommands() {
 	if delay > 0 {
 		time.Sleep(delay)
 	}
+}
+
+func attendanceModeLabel(mode byte) string {
+	switch mode {
+	case 0x01:
+		return "all-records"
+	case 0x02:
+		return "new-records"
+	case 0x00:
+		return "next-page"
+	default:
+		return fmt.Sprintf("unknown-0x%02X", mode)
+	}
+}
+
+func useRecentFirstForDevice(deviceID uint32) bool {
+	configured := strings.TrimSpace(os.Getenv("ANVIZ_RECENT_FIRST_DEVICES"))
+	if configured == "" {
+		return false
+	}
+
+	for _, token := range strings.Split(configured, ",") {
+		value := strings.TrimSpace(token)
+		if value == "" {
+			continue
+		}
+		parsed, err := strconv.ParseUint(value, 10, 32)
+		if err != nil {
+			continue
+		}
+		if uint32(parsed) == deviceID {
+			return true
+		}
+	}
+
+	return false
+}
+
+func initialAttendanceMode(deviceID uint32, manual bool) byte {
+	if !manual && useRecentFirstForDevice(deviceID) {
+		return 0x02
+	}
+
+	return 0x01
+}
+
+func formatActionHistogram(actionCounts map[string]int) string {
+	if len(actionCounts) == 0 {
+		return "none"
+	}
+
+	keys := make([]string, 0, len(actionCounts))
+	for key := range actionCounts {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, fmt.Sprintf("%s=%d", key, actionCounts[key]))
+	}
+
+	return strings.Join(parts, ",")
 }
 
 const (
@@ -203,7 +290,7 @@ func readFullAnvizPacket(conn net.Conn) []byte {
 	// Il pacchetto di base ha sempre 9 byte di Header prima dei Dati e del CRC.
 	// STX(1) + ID(4) + ACK(1) + RET(1) + LEN(2) = 9
 	header := make([]byte, 9)
-	_ = conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(20 * time.Second))
 	if _, err := io.ReadFull(conn, header); err != nil {
 		return nil
 	}
@@ -226,7 +313,7 @@ func readFullAnvizPacket(conn net.Conn) []byte {
 
 	// Leggiamo la parte rimanente (Data + 2 bytes di CRC)
 	rest := make([]byte, dataLen+2)
-	_ = conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(20 * time.Second))
 	if _, err := io.ReadFull(conn, rest); err != nil {
 		return nil
 	}
@@ -285,6 +372,7 @@ func parseAnvizResponse(res []byte, ip string, deviceID uint32) SyncStats {
 	if cmdResponse == 0xC0 {
 		log.Printf("TCP Worker: Parsing %d timbrature dall'hardware Anviz %s.", recordCount, ip)
 		stats.Received += recordCount
+		actionCounts := map[string]int{}
 		
 		validRecordCount := int(data[0]) // Il primo byte è il "count"
 		idx := 2 // Nei pacchetti 0x40 il payload inizia da byte indice 2 (dopo i due header count)
@@ -319,10 +407,12 @@ func parseAnvizResponse(res []byte, ip string, deviceID uint32) SyncStats {
 			localTZ, _ := time.LoadLocation("Europe/Rome")
 			anvizEpoch := time.Date(2000, 1, 2, 0, 0, 0, 0, localTZ)
 			recordTime := anvizEpoch.Add(time.Duration(timestampSecs) * time.Second)
+			stats.ObserveTimestamp(recordTime)
 
 			// Nei pacchetti TC_B il codice stato presenze e` normalmente nel backup/status byte.
 			// Manteniamo un fallback all'offset legacy per compatibilita` con firmware differenti.
 			statusCode, action := decodeAttendanceAction(recordBytes)
+			actionCounts[action]++
 			log.Printf("TCP Worker: Attendance record scaricato device=%d ip=%s employee=%d raw_ts=%d parsed_ts=%s action=%s status=%d %s", deviceID, ip, userID, timestampSecs, recordTime.Format(time.RFC3339), action, statusCode, summarizeAttendanceRecordBytes(recordBytes))
 
 			employeeName := GetEmployeeName(int(userID))
@@ -348,6 +438,12 @@ func parseAnvizResponse(res []byte, ip string, deviceID uint32) SyncStats {
 			}
 
 			stats.Inserted++
+		}
+
+		if stats.HasWindow {
+			log.Printf("TCP Worker: Attendance chunk summary device=%d ip=%s earliest=%s latest=%s actions=%s", deviceID, ip, stats.Earliest.Format(time.RFC3339), stats.Latest.Format(time.RFC3339), formatActionHistogram(actionCounts))
+		} else {
+			log.Printf("TCP Worker: Attendance chunk summary device=%d ip=%s no-parseable-timestamps actions=%s", deviceID, ip, formatActionHistogram(actionCounts))
 		}
 	} else if cmdResponse == 0xF2 {
 		log.Printf("TCP Worker: Parsing %d Profili Dipendenti dall'hardware Anviz %s.", recordCount, ip)
@@ -418,16 +514,16 @@ func SyncAnvizWorker(ip string, deviceID uint32) {
 	defer ticker.Stop()
 
 	// Tentativo di sync iniziale all'avvio dell'app!
-	_, _ = syncFromDevice(ip, deviceID)
+	_, _ = syncFromDevice(ip, deviceID, false)
 
 	for {
 		<-ticker.C
-		_, _ = syncFromDevice(ip, deviceID)
+		_, _ = syncFromDevice(ip, deviceID, false)
 	}
 }
 
 // syncFromDevice esegue una socket net.Dial vera verso l'hardware e implementa timeout in caso esso sia offline
-func syncFromDevice(ip string, deviceID uint32) (SyncStats, error) {
+func syncFromDevice(ip string, deviceID uint32, manual bool) (SyncStats, error) {
 	stats := SyncStats{}
 	guard := getDeviceSyncGuard(deviceID)
 	guard.Lock()
@@ -447,7 +543,7 @@ func syncFromDevice(ip string, deviceID uint32) (SyncStats, error) {
 	// La password fornita è vuota (0). Protocollo Anviz tipicamente usa Little Endian per i payload DATA numerici.
 	pwdZero := make([]byte, 4) // Password di default/vuota
 	loginPacket := BuildAnvizPacket(deviceID, 0x38, pwdZero)
-	_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 	if _, err := conn.Write(loginPacket); err != nil {
 		log.Printf("TCP Worker: Errore durante tcp write (login): %v", err)
 		return stats, fmt.Errorf("errore comunicazione login %s", ip)
@@ -474,7 +570,7 @@ func syncFromDevice(ip string, deviceID uint32) (SyncStats, error) {
 		staffPacket := BuildAnvizPacket(deviceID, 0x72, staffReqData)
 		log.Printf("TCP Worker: Request staff chunk device=%d ip=%s mode=0x%02X payload_len=%d", deviceID, ip, staffMode, len(staffReqData))
 
-		_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 		if _, err := conn.Write(staffPacket); err != nil {
 			log.Printf("TCP Worker: Errore durante tcp write (staff): %v", err)
 			break
@@ -502,16 +598,21 @@ func syncFromDevice(ip string, deviceID uint32) (SyncStats, error) {
 
 	// --- 2. Scaricamento Presenze (Command 0x40) ---
 	// Mode: 1 (All Records), 2 (New Records), 0 (Next chunk of previous command)
-	// Usiamo sempre "All Records" per non dipendere dallo stato del puntatore nuovi record del device.
-	mode := byte(0x01)
+	// Il protocollo non espone un vero reverse-order: il massimo che possiamo fare per i device lenti
+	// e` usare "New Records" sul polling automatico e tenere "All Records" per il recupero manuale.
+	mode := initialAttendanceMode(deviceID, manual)
+	log.Printf("TCP Worker: Attendance sync strategy device=%d ip=%s initial_mode=0x%02X (%s) manual=%v", deviceID, ip, mode, attendanceModeLabel(mode), manual)
 	limit := byte(0x19) // 25 records alla volta (max supportato da molti vecchi firmware in un colpo)
+	chunkIndex := 0
 
 	for {
+		chunkIndex++
+		requestMode := mode
 		reqData := []byte{mode, limit}
 		packet := BuildAnvizPacket(deviceID, 0x40, reqData)
-		log.Printf("TCP Worker: Request attendance chunk device=%d ip=%s mode=0x%02X limit=%d", deviceID, ip, mode, limit)
+		log.Printf("TCP Worker: Request attendance chunk device=%d ip=%s chunk=%d mode=0x%02X (%s) limit=%d", deviceID, ip, chunkIndex, mode, attendanceModeLabel(mode), limit)
 
-		_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 		if _, err := conn.Write(packet); err != nil {
 			log.Printf("TCP Worker: Errore durante tcp write (dati): %v", err)
 			break
@@ -520,10 +621,31 @@ func syncFromDevice(ip string, deviceID uint32) (SyncStats, error) {
 		recordRes := readFullAnvizPacket(conn)
 		if recordRes != nil && recordRes[6] == 0x00 { // 0x00 Success
 			count := int(recordRes[9])
-			log.Printf("TCP Worker: Ricevuti %d record nel chunk corrente.", count)
+			responseDataLen := binary.BigEndian.Uint16(recordRes[7:9])
+			if responseDataLen > 40000 {
+				responseDataLen = binary.LittleEndian.Uint16(recordRes[7:9])
+			}
+			log.Printf("TCP Worker: Attendance chunk ack device=%d ip=%s chunk=%d request_mode=0x%02X (%s) ack=0x%02X ret=0x%02X data_len=%d count=%d", deviceID, ip, chunkIndex, requestMode, attendanceModeLabel(requestMode), recordRes[5], recordRes[6], responseDataLen, count)
 			chunkStats := parseAnvizResponse(recordRes, ip, deviceID)
 			stats.Add(chunkStats)
-			log.Printf("TCP Worker: Chunk %s ricevuti=%d nuovi=%d duplicati=%d errori=%d", ip, chunkStats.Received, chunkStats.Inserted, chunkStats.Duplicates, chunkStats.Errors)
+			windowSummary := "no-window"
+			if chunkStats.HasWindow {
+				windowSummary = fmt.Sprintf("%s -> %s", chunkStats.Earliest.Format(time.RFC3339), chunkStats.Latest.Format(time.RFC3339))
+			}
+			log.Printf("TCP Worker: Chunk %s chunk=%d ricevuti=%d nuovi=%d duplicati=%d errori=%d window=%s", ip, chunkIndex, chunkStats.Received, chunkStats.Inserted, chunkStats.Duplicates, chunkStats.Errors, windowSummary)
+
+			if requestMode == 0x02 {
+				if count == 0 {
+					log.Printf("TCP Worker: NEW-RECORDS diagnostica device=%d ip=%s chunk=%d count=0 -> il device non sta esponendo nuove timbrature via puntatore interno", deviceID, ip, chunkIndex)
+				} else if chunkStats.HasWindow {
+					staleThreshold := time.Now().AddDate(0, 0, -7)
+					if chunkStats.Latest.Before(staleThreshold) {
+						log.Printf("TCP Worker: NEW-RECORDS diagnostica device=%d ip=%s chunk=%d latest=%s troppo vecchio rispetto a now=%s -> puntatore new-records presumibilmente incoerente", deviceID, ip, chunkIndex, chunkStats.Latest.Format(time.RFC3339), time.Now().Format(time.RFC3339))
+					} else {
+						log.Printf("TCP Worker: NEW-RECORDS diagnostica device=%d ip=%s chunk=%d latest=%s coerente con record recenti", deviceID, ip, chunkIndex, chunkStats.Latest.Format(time.RFC3339))
+					}
+				}
+			}
 			pauseBetweenAnvizCommands()
 
 			// Se il server ci ha restituito meno di 25 record, significa che li abbiamo esauriti tutti
