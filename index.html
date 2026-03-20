@@ -765,57 +765,64 @@
                 const isToday = dateKey === todayStr;
                 const nowMins = today.getHours() * 60 + today.getMinutes();
 
-                // Handle Uscita missing
-                if (e !== null && u === null) {
-                    if (iT !== null && rT === null && isToday) {
-                        u = nowMins; 
-                    } else if (iT !== null && rT === null && !isToday) {
-                        u = e + 480; 
-                    } else {
-                        u = e + 480; 
-                    }
+                // Real-time sync for today
+                if (e !== null && u === null && isToday) { u = nowMins; }
+                if (iT !== null && rT === null && isToday) { rT = nowMins; }
+
+                // Collect all valid working intervals
+                let intervals = [];
+
+                // Segment 1: Office morning (from Entrata to first logical stop)
+                if (e !== null) {
+                    let limit = [u, iP, iT].filter(x => x !== null && x > e).sort((a, b) => a - b)[0];
+                    if (limit) intervals.push([e, limit]);
                 }
 
-                // Handle Ritorno Trasferta missing
-                if (iT !== null && rT === null) {
-                    if (isToday) {
-                        rT = nowMins;
-                    } else {
-                        rT = iT + 480; 
-                    }
+                // Segment 2: Office afternoon (from Fine Pausa to next logical stop)
+                if (fP !== null) {
+                    let limit = [u, iT].filter(x => x !== null && x > fP).sort((a, b) => a - b)[0];
+                    if (limit) intervals.push([fP, limit]);
+                }
+
+                // Segment 3: Trasferta (Travel duration)
+                if (iT !== null && rT !== null && rT > iT) {
+                    intervals.push([iT, rT]);
+                }
+
+                // Segment 4: Office post-travel (from Ritorno to Uscita)
+                if (rT !== null && u !== null && u > rT) {
+                    intervals.push([rT, u]);
                 }
 
                 let workedMins = 0;
-
-                if (e !== null && u !== null && u > e) {
-                    // Base worked minutes from start to end
-                    workedMins = u - e;
-                    
-                    // Pause Logic
-                    if (iP !== null && fP !== null && fP > iP) {
-                        // Scenario 1: Both pause markers present
-                        workedMins -= (fP - iP);
-                    } else if ((iP !== null && fP === null) || (iP === null && fP !== null)) {
-                        // Scenario 2: Partial pause marker
-                        workedMins -= 60;
-                    } else if (iP === null && fP === null && workedMins > 360) {
-                        // Scenario 3: No pause marker, but worked > 6h
-                        workedMins -= 60;
+                if (intervals.length > 0) {
+                    // Merge overlapping intervals to avoid double counting
+                    intervals.sort((a, b) => a[0] - b[0]);
+                    let merged = [intervals[0]];
+                    for (let i = 1; i < intervals.length; i++) {
+                        let last = merged[merged.length - 1];
+                        let curr = intervals[i];
+                        if (curr[0] <= last[1]) {
+                            last[1] = Math.max(last[1], curr[1]);
+                        } else {
+                            merged.push(curr);
+                        }
                     }
-                } else {
-                    // Fallback for missing IN or OUT (handled by u assignment above)
-                    if (e !== null && iP !== null && iP > e) {
-                        workedMins += (iP - e);
-                    }
-                    if (fP !== null && u !== null && u > fP) {
-                        workedMins += (u - fP);
-                    }
+                    workedMins = merged.reduce((acc, interval) => acc + (interval[1] - interval[0]), 0);
                 }
 
-                // Travel Segment (iT -> rT) is added separately if it exists
-                if (iT !== null && rT !== null && rT > iT) {
-                    workedMins += (rT - iT);
+                // Deduct pause if necessary
+                let pauseDeducted = 0;
+                if (iP !== null && fP !== null && fP > iP) {
+                    pauseDeducted = fP - iP;
+                } else if (iP !== null || fP !== null) {
+                    pauseDeducted = 60; // Partial pause marker
+                } else if (workedMins > 360) {
+                    // Automatic 1h deduction if > 6h and no manual pause marked
+                    pauseDeducted = 60;
                 }
+
+                workedMins -= pauseDeducted;
 
                 // Fallback for negative limits
                 if (workedMins < 0) workedMins = 0;
@@ -846,32 +853,39 @@
                     anomalyReasons.push('Inizio trasferta mancante');
                 }
 
-                // Generico warning sulle timbrature dispari solo se non abbiamo già trovato problemi specifici
-                // e se il ciclo principale (entrata/uscita) non è completo.
-                if (dayData.totalMarkingsCount % 2 !== 0 && anomalyReasons.length === 0) {
-                    if (!dayData.entrata || !dayData.uscita) {
-                        anomalyReasons.push(`Timbrature dispari (${dayData.totalMarkingsCount})`);
-                    }
-                }
-
                 if (dayData.extraMarks && dayData.extraMarks.length > 0) {
+                    const actionLabels = {
+                        'entrata': 'Entrata',
+                        'uscita': 'Uscita',
+                        'inizio_pausa': 'Inizio Pausa',
+                        'fine_pausa': 'Fine Pausa',
+                        'inizio_trasferta': 'Inizio Trasferta',
+                        'ritorno_trasferta': 'Ritorno Trasferta'
+                    };
                     dayData.extraMarks.forEach(em => {
-                        const actName = (ACTION_MAP[em.action] || em.action).replace('_', ' ');
-                        anomalyReasons.push(`Marcatura EXTRA nascosta: ${actName} alle ${em.time}`);
+                        const label = actionLabels[em.action] || em.action || 'Sconosciuta';
+                        anomalyReasons.push(`Marcatura EXTRA (${label}) alle ${em.time}`);
                     });
                 }
 
                 if (workedMins > 0) {
                     dailyMinutes = workedMins;
                     
-                    // Solo se non è OGGI, oppure se è oggi ed è stata segnata l'USCITA, sommiamo al totale complessivo
-                    const isToday = (dateKey === new Date().toISOString().split('T')[0]);
-                    if (!isToday || (isToday && dayData.uscita)) {
+                    const todayStr = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0];
+                    const isTodayLocal = (dateKey === todayStr);
+                    const isFinished = dayData.uscita || (dayData.inizio_trasferta && dayData.ritorno_trasferta && !dayData.entrata);
+
+                    if (!isTodayLocal || (isTodayLocal && isFinished)) {
                         totalWorkedMinutes += workedMins;
                     }
                     hoursDisplay = minutesToHHMM(workedMins);
                     hoursClass = 'hours-cell';
-                    const theoreticalMins = isHolidayToday ? 0 : 480;
+                    let theoreticalMins = isHolidayToday ? 0 : 480;
+                    
+                    if (isTodayLocal && !isFinished) {
+                        theoreticalMins = workedMins; // Nasconde la negatività teorica fittizia per il giorno in corso
+                    }
+                    
                     const diffMins = workedMins - theoreticalMins;
                     balanceDisplay = diffMins >= 0 ? '+' + minutesToHHMM(diffMins) : '-' + minutesToHHMM(Math.abs(diffMins));
 
@@ -887,7 +901,7 @@
                 } else if (!isWeekend && !isHolidayToday) {
                     const todayNode = new Date();
                     const todayStrNode = new Date(todayNode.getTime() - todayNode.getTimezoneOffset() * 60000).toISOString().split('T')[0];
-                    if (dateKey > todayStrNode) {
+                    if (dateKey >= todayStrNode) {
                         hoursDisplay = '—';
                         balanceDisplay = '—';
                     } else {
@@ -937,7 +951,7 @@
             let isTodayFinished = false;
             const todayStr = toLocalDateKey(new Date());
             const todayDayData = dailyMap[todayStr];
-            if (todayDayData && todayDayData.uscita) {
+            if (todayDayData && (todayDayData.uscita || (todayDayData.inizio_trasferta && todayDayData.ritorno_trasferta && !todayDayData.entrata))) {
                 isTodayFinished = true;
             }
 
