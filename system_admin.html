@@ -8,57 +8,13 @@
     <!-- Modern Tech Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="system_admin.css">
-    <style>
-        /* Small overrides or specific adjustments */
-        #adminLink {
-            margin-top: auto;
-            border-top: 1px solid var(--border);
-            padding-top: 20px;
-        }
-        
-        .backup-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-
-        .backup-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 16px;
-            border-bottom: 1px solid var(--border);
-            transition: background 0.2s;
-        }
-
-        .backup-item:hover {
-            background: rgba(255, 255, 255, 0.02);
-        }
-
-        .backup-info {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .backup-name {
-            font-weight: 500;
-            font-size: 0.9rem;
-        }
-
-        .backup-meta {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            font-family: 'JetBrains Mono', monospace;
-        }
-    </style>
 </head>
 
 <body>
 
     <div id="loginOverlay" class="login-overlay">
         <div class="login-box">
-            <div style="width: 64px; height: 64px; background: rgba(99, 102, 241, 0.1); border-radius: 16px; margin: 0 auto 24px; display: flex; align-items: center; justify-content: center; color: var(--primary);">
+            <div class="login-icon-wrap">
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
                 </svg>
@@ -67,45 +23,41 @@
             <p>Accesso riservato all'amministratore tecnico</p>
             <div class="form-group">
                 <label>Username</label>
-                <input type="text" id="sysUsername" placeholder="superadmin">
+                <input type="text" value="admin" disabled>
             </div>
             <div class="form-group">
                 <label>Password</label>
-                <input type="password" id="sysPassword" placeholder="0000">
+                <input type="password" id="sysPassword" placeholder="Inserisci password">
             </div>
             <button class="btn-system" onclick="handleLogin()">Accedi al Sistema</button>
-            <div style="margin-top: 12px; font-size: 0.8rem; color: var(--text-secondary); text-align: center;">Default locale: <strong>superadmin</strong> / <strong>superadmin</strong></div>
-            <div style="margin-top: 16px; text-align: center;">
-                <a href="/" style="color: var(--text-secondary); text-decoration: none; font-size: 0.875rem; display: flex; align-items: center; justify-content: center; gap: 6px; transition: color 0.2s;">
+            <div class="login-footer">
+                <a href="/" class="portal-link">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <line x1="19" y1="12" x2="5" y2="12"></line>
                         <polyline points="12 19 5 12 12 5"></polyline>
                     </svg>
                     Torna al Portale Dipendenti
                 </a>
-                <style>
-                    .login-box a:hover { color: var(--primary) !important; }
-                </style>
             </div>
-            <div id="loginError" style="color: #ef4444; font-size: 0.875rem; margin-top: 16px; display: none;">Credenziali non valide</div>
+            <div id="loginError" class="form-error">Credenziali non valide</div>
         </div>
     </div>
 
     <div class="container">
         <div class="header">
             <div class="header-title">
-                <h2>Marcatempo Core</h2>
-                <p>System Administration Shell v1.1</p>
+                <h2>Marcatempo</h2>
+                <p>System Administration Dashboard</p>
             </div>
-            <div style="display: flex; gap: 12px; align-items: center;">
+            <div class="header-actions">
                 <div class="admin-info">
-                    <span id="sysUserNameDisplay" style="font-weight: 700; font-size: 1.1rem; letter-spacing: 0.02em;">admin</span>
+                    <span id="sysUserNameDisplay" class="username-display">admin</span>
                     <div class="status-container">
                         <span class="status-dot"></span>
                         <span id="syncStatus">Online</span>
                     </div>
                 </div>
-                <button class="btn-logout" onclick="logout()">Logout</button>
+                <button class="btn-logout" onclick="logout()">Esci</button>
             </div>
         </div>
 
@@ -133,7 +85,7 @@
                 </div>
                 
                 <div id="adminLink">
-                    <div class="nav-item" onclick="window.location.href='/admin'" style="border: 1px solid var(--border);">
+                    <div class="nav-item nav-item-bordered" onclick="window.location.href='/admin'">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
                         HR Admin Panel
                     </div>
@@ -142,7 +94,7 @@
 
             <div class="main-panel">
                 <div id="panel-overview">
-                    <h3 style="margin-top: 0; margin-bottom: 24px; font-weight: 500;">System Health</h3>
+                    <h3 class="section-title">System Health</h3>
                     <div class="card-grid">
                         <div class="stat-card">
                             <span class="label">Database Size</span>
@@ -160,20 +112,16 @@
                         </div>
                     </div>
                     
-                    <div style="background: white; padding: 20px; border-radius: 12px; border: 1px solid var(--border); box-shadow: var(--shadow-sm);">
-                        <h4 style="margin-top: 0; color: var(--primary); font-family: 'JetBrains Mono'; font-size: 0.8rem;">Recent System Logs</h4>
-                        <div id="smallLogs" style="font-family: 'JetBrains Mono'; font-size: 0.75rem; color: #64748b; line-height: 1.8;">
-                            [SYSTEM] Dashboard initialized...<br>
-                            [AUTH] Multi-role authentication ready.<br>
-                            [DB] Connection pool verified.
-                        </div>
+                    <div class="surface-card">
+                        <h4 class="mono-heading">Recent System Logs</h4>
+                        <div id="smallLogs" class="logs-default" aria-live="polite"></div>
                     </div>
                 </div>
 
-                <div id="panel-admins" style="display: none;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                        <h3 style="margin: 0; font-weight: 500;">Gestione Privilegi HR</h3>
-                        <div style="width: 300px;">
+                <div id="panel-admins" class="panel-hidden" hidden>
+                    <div class="section-row">
+                        <h3 class="section-title-tight">Gestione Privilegi HR</h3>
+                        <div class="search-wrap">
                             <input type="text" id="adminSearch" placeholder="Cerca dipendente..." oninput="filterAdmins()">
                         </div>
                     </div>
@@ -211,29 +159,29 @@
                     </div>
                 </div>
 
-                <div id="panel-backups" style="display: none;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                        <h3 style="margin: 0; font-weight: 500;">History Backups</h3>
-                        <button class="btn-system" style="width: auto; padding: 8px 16px;" onclick="triggerBackup()">Esegui Backup Ora</button>
+                <div id="panel-backups" class="panel-hidden" hidden>
+                    <div class="section-row-compact">
+                        <h3 class="section-title-tight">History Backups</h3>
+                        <button class="btn-system btn-system-compact" onclick="triggerBackup()">Esegui Backup Ora</button>
                     </div>
-                    <div style="background: white; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow-sm);">
-                        <div id="backupWait" style="padding: 24px; text-align: center; color: var(--text-secondary);">Recupero lista backup...</div>
+                    <div class="panel-shell">
+                        <div id="backupWait" class="table-placeholder">Recupero lista backup...</div>
                         <ul class="backup-list" id="backupList"></ul>
                     </div>
                 </div>
 
-                <div id="panel-devices" style="display: none;">
-                    <h3 style="margin-top: 0; margin-bottom: 24px; font-weight: 500;">Anviz Communication Status</h3>
-                    <div id="deviceDiagnosticsGrid" class="card-grid" style="margin-bottom: 20px;"></div>
-                    <div style="background: white; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow-sm); margin-bottom: 20px;">
-                        <div style="padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <div id="panel-devices" class="panel-hidden" hidden>
+                    <h3 class="section-title">Anviz Communication Status</h3>
+                    <div id="deviceDiagnosticsGrid" class="card-grid devices-grid-spaced"></div>
+                    <div class="panel-shell panel-shell-spaced">
+                        <div class="panel-shell-head-row">
                             <div>
-                                <div style="font-weight: 600;">Raw Device Diagnostics</div>
-                                <div id="deviceDiagnosticsMeta" style="font-size: 0.8rem; color: var(--text-secondary);">Caricamento diagnostica...</div>
+                                <div class="panel-heading">Raw Device Diagnostics</div>
+                                <div id="deviceDiagnosticsMeta" class="panel-meta">Caricamento diagnostica...</div>
                             </div>
-                            <button class="btn-download" style="border-radius: 8px;" onclick="loadDeviceDiagnostics()">Aggiorna Diagnostica</button>
+                            <button class="btn-download btn-rounded" onclick="loadDeviceDiagnostics()">Aggiorna Diagnostica</button>
                         </div>
-                        <div class="table-container" style="box-shadow:none; border:none; border-radius:0;">
+                        <div class="table-container table-container-flat">
                             <table id="deviceDiagnosticsTable">
                                 <thead>
                                     <tr>
@@ -247,17 +195,17 @@
                                     </tr>
                                 </thead>
                                 <tbody id="deviceDiagnosticsBody">
-                                    <tr><td colspan="7" style="text-align:center; color: var(--text-secondary); padding: 20px;">Caricamento...</td></tr>
+                                    <tr><td colspan="7" class="table-placeholder">Caricamento...</td></tr>
                                 </tbody>
                             </table>
                         </div>
                     </div>
-                    <div style="background: white; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow-sm); margin-bottom: 20px;">
-                        <div style="padding: 16px 20px; border-bottom: 1px solid var(--border);">
-                            <div style="font-weight: 600;">Record Device Finali Senza Raw</div>
-                            <div id="legacyDeviceDiagnosticsMeta" style="font-size: 0.8rem; color: var(--text-secondary);">Caricamento diagnostica...</div>
+                    <div class="panel-shell panel-shell-spaced">
+                        <div class="panel-shell-head">
+                            <div class="panel-heading">Record Device Finali Senza Raw</div>
+                            <div id="legacyDeviceDiagnosticsMeta" class="panel-meta">Caricamento diagnostica...</div>
                         </div>
-                        <div class="table-container" style="box-shadow:none; border:none; border-radius:0;">
+                        <div class="table-container table-container-flat">
                             <table>
                                 <thead>
                                     <tr>
@@ -268,20 +216,20 @@
                                     </tr>
                                 </thead>
                                 <tbody id="legacyDeviceDiagnosticsBody">
-                                    <tr><td colspan="4" style="text-align:center; color: var(--text-secondary); padding: 20px;">Caricamento...</td></tr>
+                                    <tr><td colspan="4" class="table-placeholder">Caricamento...</td></tr>
                                 </tbody>
                             </table>
                         </div>
                     </div>
-                    <div style="margin-top: 24px; text-align: right;">
-                        <button class="btn-download" style="border-radius: 8px;" onclick="loadDeviceDiagnostics()">Refresh Stack</button>
+                    <div class="action-row-right">
+                        <button class="btn-download btn-rounded" onclick="loadDeviceDiagnostics()">Refresh Stack</button>
                     </div>
                 </div>
 
-                <div id="panel-security" style="display: none;">
-                    <h3 style="margin-top: 0; margin-bottom: 24px; font-weight: 500;">Accesso e Sicurezza</h3>
-                    <div class="stat-card" style="max-width: 500px;">
-                        <h4 style="margin-top: 0; margin-bottom: 20px;">Cambia Password Super Admin</h4>
+                <div id="panel-security" class="panel-hidden" hidden>
+                    <h3 class="section-title">Accesso e Sicurezza</h3>
+                    <div class="stat-card security-card">
+                        <h4 class="security-card-title">Cambia Password Super Admin</h4>
                         <div class="form-group">
                             <label>Nuova Password</label>
                             <input type="password" id="newSysPassword" placeholder="Inserisci nuova password">
@@ -291,7 +239,7 @@
                             <input type="password" id="confirmSysPassword" placeholder="Conferma nuova password">
                         </div>
                         <button class="btn-system" onclick="updatePassword()">Aggiorna Password</button>
-                        <div id="passwordError" style="color: #ef4444; font-size: 0.875rem; margin-top: 16px; display: none;"></div>
+                        <div id="passwordError" class="form-error"></div>
                     </div>
                 </div>
             </div>
@@ -348,25 +296,33 @@
         }
 
         async function handleLogin() {
-            const u = document.getElementById('sysUsername').value;
-            const p = document.getElementById('sysPassword').value;
+            const p = document.getElementById('sysPassword').value.trim();
             const err = document.getElementById('loginError');
+            const fixedUsername = 'admin';
+            err.style.display = 'none';
+
+            if (!p) {
+                err.textContent = 'Inserisci la password';
+                err.style.display = 'block';
+                return;
+            }
             
             try {
                 const res = await fetch('/api/system/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: u, password: p })
+                    body: JSON.stringify({ username: fixedUsername, password: p })
                 });
                 
                 if (res.ok) {
                     const data = await res.json();
-                    currentSystemAdminName = data.name || u;
+                    currentSystemAdminName = data.name || fixedUsername;
                     loginOverlay.style.display = 'none';
                     sysUserNameDisplay.textContent = currentSystemAdminName;
                     initDashboard();
                     showToast(`Bentornato, ${currentSystemAdminName}`, 'success');
                 } else {
+                    err.textContent = 'Credenziali non valide';
                     err.style.display = 'block';
                 }
             } catch (e) {
@@ -395,8 +351,14 @@
         }
 
         function showPanel(id) {
-            document.querySelectorAll('.main-panel > div').forEach(p => p.style.display = 'none');
-            document.getElementById('panel-' + id).style.display = 'block';
+            document.querySelectorAll('.main-panel > div').forEach(p => {
+                p.style.display = '';
+                p.hidden = true;
+            });
+            const selectedPanel = document.getElementById('panel-' + id);
+            if (selectedPanel) {
+                selectedPanel.hidden = false;
+            }
             
             document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
             document.getElementById('nav-' + id).classList.add('active');
@@ -423,8 +385,8 @@
             if (!grid || !body || !meta || !legacyBody || !legacyMeta) return;
 
             grid.innerHTML = '<div class="stat-card"><span class="label">Device Diagnostics</span><span class="value">...</span><span class="trend">Recupero dati in corso</span></div>';
-            body.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-secondary); padding: 20px;">Caricamento...</td></tr>';
-            legacyBody.innerHTML = '<tr><td colspan="4" style="text-align:center; color: var(--text-secondary); padding: 20px;">Caricamento...</td></tr>';
+            body.innerHTML = '<tr><td colspan="7" class="table-placeholder">Caricamento...</td></tr>';
+            legacyBody.innerHTML = '<tr><td colspan="4" class="table-placeholder">Caricamento...</td></tr>';
             meta.textContent = 'Caricamento diagnostica...';
             legacyMeta.textContent = 'Caricamento diagnostica...';
 
@@ -443,9 +405,9 @@
                 grid.innerHTML = devices.map(device => {
                     const latestRaw = formatDiagnosticDate(device.latest_raw_timestamp);
                     const latestFinal = formatDiagnosticDate(device.latest_final_timestamp);
-                    const badgeColor = device.raw_count >= device.final_count ? 'var(--accent)' : 'var(--warning)';
+                    const warningClass = device.raw_count >= device.final_count ? '' : ' diag-card-warn';
                     return `
-                        <div class="stat-card" style="border-left: 4px solid ${badgeColor};">
+                        <div class="stat-card diag-card${warningClass}">
                             <span class="label">Terminal ID #${device.device_id}</span>
                             <span class="value">${device.raw_count} raw / ${device.final_count} finali</span>
                             <span class="trend">${device.ip ? `IP ${device.ip}` : 'Device non configurato'} • Raw: ${latestRaw} • Finale: ${latestFinal}</span>
@@ -461,29 +423,29 @@
                 legacyMeta.textContent = `Ultimi record finali device senza raw/metadati: ${recentLegacyUnassigned.length}`;
 
                 if (recentRaw.length === 0) {
-                    body.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-secondary); padding: 20px;">Nessun raw record disponibile</td></tr>';
+                    body.innerHTML = '<tr><td colspan="7" class="table-placeholder">Nessun raw record disponibile</td></tr>';
                 } else {
                     body.innerHTML = recentRaw.map(row => `
                         <tr>
-                            <td><span style="font-size: 0.75rem; color: var(--text-secondary);">${row.origin || 'raw'}</span></td>
+                            <td><span class="text-secondary-xs">${row.origin || 'raw'}</span></td>
                             <td><code>#${row.device_id}</code></td>
-                            <td>${escapeHtml(row.employee_name || '')} <span style="color: var(--text-secondary);">(#${row.employee_id})</span></td>
+                            <td>${escapeHtml(row.employee_name || '')} <span class="text-secondary">(#${row.employee_id})</span></td>
                             <td><code>${row.raw_device_timestamp}</code></td>
                             <td>${formatDiagnosticDate(row.parsed_timestamp)}</td>
-                            <td>${escapeHtml(row.action)} <span style="color: var(--text-secondary);">(${row.status_code})</span></td>
+                            <td>${escapeHtml(row.action)} <span class="text-secondary">(${row.status_code})</span></td>
                             <td>${formatDiagnosticDate(row.imported_at)}</td>
                         </tr>
                     `).join('');
                 }
 
                 if (recentLegacyUnassigned.length === 0) {
-                    legacyBody.innerHTML = '<tr><td colspan="4" style="text-align:center; color: var(--text-secondary); padding: 20px;">Nessun record finale device senza raw</td></tr>';
+                    legacyBody.innerHTML = '<tr><td colspan="4" class="table-placeholder">Nessun record finale device senza raw</td></tr>';
                 } else {
                     legacyBody.innerHTML = recentLegacyUnassigned.map(row => `
                         <tr>
-                            <td>${escapeHtml(row.employee_name || '')} <span style="color: var(--text-secondary);">(#${row.employee_id})</span></td>
+                            <td>${escapeHtml(row.employee_name || '')} <span class="text-secondary">(#${row.employee_id})</span></td>
                             <td>${formatDiagnosticDate(row.parsed_timestamp)}</td>
-                            <td>${escapeHtml(row.action)} <span style="color: var(--text-secondary);">(${row.status_code})</span></td>
+                            <td>${escapeHtml(row.action)} <span class="text-secondary">(${row.status_code})</span></td>
                             <td><code>${row.raw_device_timestamp || '—'}</code></td>
                         </tr>
                     `).join('');
@@ -492,24 +454,26 @@
                 meta.textContent = 'Errore caricamento diagnostica device';
                 legacyMeta.textContent = 'Errore caricamento diagnostica legacy';
                 grid.innerHTML = '<div class="stat-card"><span class="label">Device Diagnostics</span><span class="value">ERR</span><span class="trend">Impossibile leggere la diagnostica</span></div>';
-                body.innerHTML = '<tr><td colspan="7" style="text-align:center; color: #ef4444; padding: 20px;">Errore caricamento diagnostica device</td></tr>';
-                legacyBody.innerHTML = '<tr><td colspan="4" style="text-align:center; color: #ef4444; padding: 20px;">Errore caricamento diagnostica legacy</td></tr>';
+                body.innerHTML = '<tr><td colspan="7" class="table-placeholder table-placeholder-error">Errore caricamento diagnostica device</td></tr>';
+                legacyBody.innerHTML = '<tr><td colspan="4" class="table-placeholder table-placeholder-error">Errore caricamento diagnostica legacy</td></tr>';
             }
         }
 
         async function addSystemLog(message, type = 'info') {
             const logsContainer = document.getElementById('smallLogs');
             const time = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            
-            let color = '#64748b';
-            if (type === 'success') color = '#10b981';
-            if (type === 'error') color = '#ef4444';
-            if (type === 'auth') color = '#6366f1';
-            if (type === 'db') color = '#f59e0b';
+            const colorByType = {
+                info: '#e2e8f0',
+                success: '#10b981',
+                error: '#ef4444',
+                auth: '#6366f1',
+                db: '#f59e0b',
+            };
+            const messageColor = colorByType[type] || colorByType.info;
 
             const logEntry = document.createElement('div');
-            logEntry.style.marginBottom = '4px';
-            logEntry.innerHTML = `<span style="color: #94a3b8; font-size: 0.7rem;">[${time}]</span> <span style="color: ${color}; font-weight: 500;">${message}</span>`;
+            logEntry.className = `log-entry log-${type}`;
+            logEntry.innerHTML = `<span class="log-timestamp">[${time}]</span> <span class="log-message" style="color: ${messageColor};">${message}</span>`;
             
             logsContainer.prepend(logEntry);
             
@@ -697,7 +661,7 @@
             body.innerHTML = paginatedItems.map(e => `
                 <tr>
                     <td><code>#${e.id}</code></td>
-                    <td style="font-weight: 600; color: var(--text-dark);">${e.name}</td>
+                    <td class="admin-name-cell">${e.name}</td>
                     <td><span class="badge ${e.isAdmin ? 'badge-admin' : 'badge-user'}">${e.isAdmin ? 'ADMIN HR' : 'Utente'}</span></td>
                     <td>
                         <button class="btn-toggle ${e.isAdmin ? 'active' : ''}" onclick="toggleAdmin(${e.id}, '${e.name.replace(/'/g, "\\'")}', ${!e.isAdmin})">

@@ -315,9 +315,17 @@ func handleSystemLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	const fixedSystemAdminUsername = "admin"
+
 	var data SystemLoginData
 	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
 		http.Error(w, "Errore payload JSON", http.StatusBadRequest)
+		return
+	}
+	data.Password = strings.TrimSpace(data.Password)
+	data.Username = fixedSystemAdminUsername
+	if data.Password == "" {
+		http.Error(w, "Password obbligatoria", http.StatusBadRequest)
 		return
 	}
 

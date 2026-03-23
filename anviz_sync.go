@@ -28,6 +28,39 @@ type SyncStats struct {
 
 var deviceSyncGuards sync.Map
 
+type syncRunConfig struct {
+	RunID                string
+	IP                   string
+	DeviceID             uint32
+	Manual               bool
+	AttendanceMode       byte
+	AttendanceLimit      byte
+	SyncStaff            bool
+	CommandDelay         time.Duration
+	SyncInterval         time.Duration
+	ReadTimeout          time.Duration
+	WriteTimeout         time.Duration
+	ConnectionTimeout    time.Duration
+	StartedAt            time.Time
+	StaffChunks          int
+	AttendanceChunks     int
+	LastSuccessfulChunk  int
+	LastChunkRecordCount int
+	LastChunkMode        byte
+}
+
+func (cfg syncRunConfig) prefix() string {
+	mode := "auto"
+	if cfg.Manual {
+		mode = "manual"
+	}
+	return fmt.Sprintf("ANVIZ sync run=%s device=%d ip=%s mode=%s", cfg.RunID, cfg.DeviceID, cfg.IP, mode)
+}
+
+func (cfg syncRunConfig) logf(format string, args ...interface{}) {
+	log.Printf("%s "+format, append([]interface{}{cfg.prefix()}, args...)...)
+}
+
 func (s *SyncStats) Add(other SyncStats) {
 	s.Received += other.Received
 	s.Inserted += other.Inserted
@@ -114,25 +147,107 @@ func getDeviceSyncGuard(deviceID uint32) *sync.Mutex {
 	return guard.(*sync.Mutex)
 }
 
-func anvizCommandDelay() time.Duration {
-	raw := os.Getenv("ANVIZ_COMMAND_DELAY_MS")
+func envInt(name string, defaultValue int) int {
+	raw := strings.TrimSpace(os.Getenv(name))
 	if raw == "" {
-		return 5000 * time.Millisecond
+		return defaultValue
 	}
 
 	value, err := strconv.Atoi(raw)
-	if err != nil || value < 0 {
-		return 5000 * time.Millisecond
+	if err != nil {
+		return defaultValue
+	}
+
+	return value
+}
+
+func envBool(name string, defaultValue bool) bool {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return defaultValue
+	}
+
+	return raw != "0" && !strings.EqualFold(raw, "false") && !strings.EqualFold(raw, "no")
+}
+
+func parseAttendanceMode(raw string, defaultMode byte) byte {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", "default":
+		return defaultMode
+	case "all", "all-records", "full":
+		return 0x01
+	case "new", "new-records", "recent":
+		return 0x02
+	case "next", "next-page":
+		return 0x00
+	default:
+		return defaultMode
+	}
+}
+
+func anvizCommandDelay() time.Duration {
+	value := envInt("ANVIZ_COMMAND_DELAY_MS", 5000)
+	if value < 0 {
+		value = 5000
 	}
 
 	return time.Duration(value) * time.Millisecond
 }
 
-func pauseBetweenAnvizCommands() {
-	delay := anvizCommandDelay()
+func pauseBetweenAnvizCommands(delay time.Duration) {
 	if delay > 0 {
 		time.Sleep(delay)
 	}
+}
+
+func anvizReadTimeout() time.Duration {
+	seconds := envInt("ANVIZ_READ_TIMEOUT_SECONDS", 20)
+	if seconds <= 0 {
+		seconds = 20
+	}
+	return time.Duration(seconds) * time.Second
+}
+
+func anvizWriteTimeout() time.Duration {
+	seconds := envInt("ANVIZ_WRITE_TIMEOUT_SECONDS", 10)
+	if seconds <= 0 {
+		seconds = 10
+	}
+	return time.Duration(seconds) * time.Second
+}
+
+func anvizConnectionTimeout() time.Duration {
+	seconds := envInt("ANVIZ_CONNECT_TIMEOUT_SECONDS", 5)
+	if seconds <= 0 {
+		seconds = 5
+	}
+	return time.Duration(seconds) * time.Second
+}
+
+func anvizSyncInterval() time.Duration {
+	minutes := envInt("ANVIZ_SYNC_INTERVAL_MINUTES", 30)
+	if minutes <= 0 {
+		minutes = 30
+	}
+	return time.Duration(minutes) * time.Minute
+}
+
+func anvizAttendanceChunkLimit() byte {
+	limit := envInt("ANVIZ_ATTENDANCE_CHUNK_LIMIT", 25)
+	if limit <= 0 {
+		limit = 25
+	}
+	if limit > 25 {
+		limit = 25
+	}
+	return byte(limit)
+}
+
+func shouldSyncStaff(manual bool) bool {
+	if manual {
+		return envBool("ANVIZ_MANUAL_SYNC_STAFF", true)
+	}
+	return envBool("ANVIZ_AUTO_SYNC_STAFF", false)
 }
 
 func attendanceModeLabel(mode byte) string {
@@ -172,11 +287,15 @@ func useRecentFirstForDevice(deviceID uint32) bool {
 }
 
 func initialAttendanceMode(deviceID uint32, manual bool) byte {
-	if !manual && useRecentFirstForDevice(deviceID) {
+	if manual {
+		return parseAttendanceMode(os.Getenv("ANVIZ_MANUAL_ATTENDANCE_MODE"), 0x01)
+	}
+
+	if useRecentFirstForDevice(deviceID) {
 		return 0x02
 	}
 
-	return 0x01
+	return parseAttendanceMode(os.Getenv("ANVIZ_AUTO_ATTENDANCE_MODE"), 0x02)
 }
 
 func formatActionHistogram(actionCounts map[string]int) string {
@@ -286,11 +405,11 @@ func BuildAnvizPacket(deviceID uint32, command byte, data []byte) []byte {
 }
 
 // readFullAnvizPacket legge deterministicamente un pacchetto in arrivo risolvendo l'eventuale frammentazione TCP
-func readFullAnvizPacket(conn net.Conn) []byte {
+func readFullAnvizPacket(conn net.Conn, timeout time.Duration) []byte {
 	// Il pacchetto di base ha sempre 9 byte di Header prima dei Dati e del CRC.
 	// STX(1) + ID(4) + ACK(1) + RET(1) + LEN(2) = 9
 	header := make([]byte, 9)
-	_ = conn.SetReadDeadline(time.Now().Add(20 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(timeout))
 	if _, err := io.ReadFull(conn, header); err != nil {
 		return nil
 	}
@@ -313,7 +432,7 @@ func readFullAnvizPacket(conn net.Conn) []byte {
 
 	// Leggiamo la parte rimanente (Data + 2 bytes di CRC)
 	rest := make([]byte, dataLen+2)
-	_ = conn.SetReadDeadline(time.Now().Add(20 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(timeout))
 	if _, err := io.ReadFull(conn, rest); err != nil {
 		return nil
 	}
@@ -510,7 +629,8 @@ func parseAnvizResponse(res []byte, ip string, deviceID uint32) SyncStats {
 
 // SyncAnvizWorker è il worker che fa il polling all'hardware a scadenza temporale.
 func SyncAnvizWorker(ip string, deviceID uint32) {
-	ticker := time.NewTicker(30 * time.Minute)
+	interval := anvizSyncInterval()
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	// Tentativo di sync iniziale all'avvio dell'app!
@@ -518,12 +638,13 @@ func SyncAnvizWorker(ip string, deviceID uint32) {
 
 	for {
 		<-ticker.C
+		log.Printf("ANVIZ worker device=%d ip=%s scheduling automatic sync interval=%s", deviceID, ip, interval)
 		_, _ = syncFromDevice(ip, deviceID, false)
 	}
 }
 
 // syncFromDevice esegue una socket net.Dial vera verso l'hardware e implementa timeout in caso esso sia offline
-func syncFromDevice(ip string, deviceID uint32, manual bool) (SyncStats, error) {
+func syncFromDeviceLegacy(ip string, deviceID uint32, manual bool) (SyncStats, error) {
 	stats := SyncStats{}
 	guard := getDeviceSyncGuard(deviceID)
 	guard.Lock()
@@ -550,7 +671,7 @@ func syncFromDevice(ip string, deviceID uint32, manual bool) (SyncStats, error) 
 	}
 
 	// Leggiamo la risposta del login
-	loginRes := readFullAnvizPacket(conn)
+	loginRes := readFullAnvizPacket(conn, anvizReadTimeout())
 	if loginRes == nil {
 		log.Printf("TCP Worker: Timeout lettura login Anviz %s", ip)
 		return stats, fmt.Errorf("timeout login %s", ip)
@@ -561,7 +682,7 @@ func syncFromDevice(ip string, deviceID uint32, manual bool) (SyncStats, error) 
 	} else {
 		log.Printf("TCP Worker: Login riuscito su %s!", ip)
 	}
-	pauseBetweenAnvizCommands()
+	pauseBetweenAnvizCommands(anvizCommandDelay())
 
 	// --- 1. Scaricamento Profili Staff (Command 0x72) ---
 	staffMode := byte(0x01) // 0x01 per iniziare, 0x00 per le pagine successive
@@ -576,11 +697,11 @@ func syncFromDevice(ip string, deviceID uint32, manual bool) (SyncStats, error) 
 			break
 		}
 		
-		staffRes := readFullAnvizPacket(conn)
+		staffRes := readFullAnvizPacket(conn, anvizReadTimeout())
 		if staffRes != nil && staffRes[6] == 0x00 { // 0x00 Success
 			count := int(staffRes[9])
 			_ = parseAnvizResponse(staffRes, ip, deviceID)
-			pauseBetweenAnvizCommands()
+			pauseBetweenAnvizCommands(anvizCommandDelay())
 
 			if count < 8 { // L'Anviz tipicamente invia blocchi da 8 per lo staff
 				break
@@ -618,7 +739,7 @@ func syncFromDevice(ip string, deviceID uint32, manual bool) (SyncStats, error) 
 			break
 		}
 
-		recordRes := readFullAnvizPacket(conn)
+		recordRes := readFullAnvizPacket(conn, anvizReadTimeout())
 		if recordRes != nil && recordRes[6] == 0x00 { // 0x00 Success
 			count := int(recordRes[9])
 			responseDataLen := binary.BigEndian.Uint16(recordRes[7:9])
@@ -646,7 +767,7 @@ func syncFromDevice(ip string, deviceID uint32, manual bool) (SyncStats, error) 
 					}
 				}
 			}
-			pauseBetweenAnvizCommands()
+			pauseBetweenAnvizCommands(anvizCommandDelay())
 
 			// Se il server ci ha restituito meno di 25 record, significa che li abbiamo esauriti tutti
 			if count < 25 {
@@ -665,5 +786,179 @@ func syncFromDevice(ip string, deviceID uint32, manual bool) (SyncStats, error) 
 	}
 
 	log.Printf("TCP Worker: Sync completata %s ricevuti=%d nuovi=%d duplicati=%d errori=%d", ip, stats.Received, stats.Inserted, stats.Duplicates, stats.Errors)
+	return stats, nil
+}
+
+func syncFromDevice(ip string, deviceID uint32, manual bool) (SyncStats, error) {
+	stats := SyncStats{}
+	cfg := syncRunConfig{
+		RunID:             fmt.Sprintf("%d", time.Now().UnixNano()),
+		IP:                ip,
+		DeviceID:          deviceID,
+		Manual:            manual,
+		AttendanceMode:    initialAttendanceMode(deviceID, manual),
+		AttendanceLimit:   anvizAttendanceChunkLimit(),
+		SyncStaff:         shouldSyncStaff(manual),
+		CommandDelay:      anvizCommandDelay(),
+		SyncInterval:      anvizSyncInterval(),
+		ReadTimeout:       anvizReadTimeout(),
+		WriteTimeout:      anvizWriteTimeout(),
+		ConnectionTimeout: anvizConnectionTimeout(),
+		StartedAt:         time.Now(),
+	}
+
+	guard := getDeviceSyncGuard(deviceID)
+	cfg.logf("waiting for sync lock")
+	guard.Lock()
+	defer guard.Unlock()
+
+	cfg.logf("starting sync attendance_mode=%s chunk_limit=%d sync_staff=%v command_delay=%s read_timeout=%s write_timeout=%s connect_timeout=%s interval=%s",
+		attendanceModeLabel(cfg.AttendanceMode), cfg.AttendanceLimit, cfg.SyncStaff, cfg.CommandDelay, cfg.ReadTimeout, cfg.WriteTimeout, cfg.ConnectionTimeout, cfg.SyncInterval)
+
+	defer func() {
+		duration := time.Since(cfg.StartedAt)
+		windowSummary := "no-window"
+		if stats.HasWindow {
+			windowSummary = fmt.Sprintf("%s -> %s", stats.Earliest.Format(time.RFC3339), stats.Latest.Format(time.RFC3339))
+		}
+		cfg.logf("finished sync duration=%s staff_chunks=%d attendance_chunks=%d last_successful_chunk=%d last_chunk_records=%d last_chunk_mode=%s received=%d inserted=%d duplicates=%d errors=%d window=%s",
+			duration.Round(time.Millisecond), cfg.StaffChunks, cfg.AttendanceChunks, cfg.LastSuccessfulChunk, cfg.LastChunkRecordCount, attendanceModeLabel(cfg.LastChunkMode), stats.Received, stats.Inserted, stats.Duplicates, stats.Errors, windowSummary)
+	}()
+
+	conn, err := net.DialTimeout("tcp", ip+":5010", cfg.ConnectionTimeout)
+	if err != nil {
+		cfg.logf("device unreachable err=%v", err)
+		return stats, fmt.Errorf("dispositivo %s irraggiungibile", ip)
+	}
+	defer conn.Close()
+
+	pwdZero := make([]byte, 4)
+	loginPacket := BuildAnvizPacket(deviceID, 0x38, pwdZero)
+	_ = conn.SetWriteDeadline(time.Now().Add(cfg.WriteTimeout))
+	if _, err := conn.Write(loginPacket); err != nil {
+		cfg.logf("login write error err=%v", err)
+		return stats, fmt.Errorf("errore comunicazione login %s", ip)
+	}
+
+	loginRes := readFullAnvizPacket(conn, cfg.ReadTimeout)
+	if loginRes == nil {
+		cfg.logf("login read timeout/corrupted packet")
+		return stats, fmt.Errorf("timeout login %s", ip)
+	}
+	if loginRes[6] != 0x00 {
+		cfg.logf("login returned non-zero ret=0x%X, continuing for compatibility", loginRes[6])
+	} else {
+		cfg.logf("login successful")
+	}
+	pauseBetweenAnvizCommands(cfg.CommandDelay)
+
+	if cfg.SyncStaff {
+		staffMode := byte(0x01)
+		for {
+			cfg.StaffChunks++
+			staffReqData := []byte{staffMode}
+			staffPacket := BuildAnvizPacket(deviceID, 0x72, staffReqData)
+			cfg.logf("requesting staff chunk=%d mode=%s", cfg.StaffChunks, attendanceModeLabel(staffMode))
+
+			_ = conn.SetWriteDeadline(time.Now().Add(cfg.WriteTimeout))
+			if _, err := conn.Write(staffPacket); err != nil {
+				cfg.logf("staff write error chunk=%d err=%v", cfg.StaffChunks, err)
+				break
+			}
+
+			staffRes := readFullAnvizPacket(conn, cfg.ReadTimeout)
+			if staffRes != nil && staffRes[6] == 0x00 {
+				count := int(staffRes[9])
+				_ = parseAnvizResponse(staffRes, ip, deviceID)
+				cfg.logf("staff chunk ack chunk=%d count=%d ret=0x%X", cfg.StaffChunks, count, staffRes[6])
+				pauseBetweenAnvizCommands(cfg.CommandDelay)
+
+				if count < 8 {
+					break
+				}
+				staffMode = 0x00
+			} else {
+				if staffRes != nil {
+					cfg.logf("staff chunk failed chunk=%d ret=0x%X", cfg.StaffChunks, staffRes[6])
+				} else {
+					cfg.logf("staff chunk timeout/corrupted packet chunk=%d", cfg.StaffChunks)
+				}
+				break
+			}
+		}
+	} else {
+		cfg.logf("staff sync skipped for this run")
+	}
+
+	mode := cfg.AttendanceMode
+	limit := cfg.AttendanceLimit
+
+	for chunkIndex := 1; ; chunkIndex++ {
+		cfg.AttendanceChunks = chunkIndex
+		cfg.LastChunkMode = mode
+
+		reqData := []byte{mode, limit}
+		packet := BuildAnvizPacket(deviceID, 0x40, reqData)
+		cfg.logf("requesting attendance chunk=%d mode=%s limit=%d", chunkIndex, attendanceModeLabel(mode), limit)
+
+		_ = conn.SetWriteDeadline(time.Now().Add(cfg.WriteTimeout))
+		if _, err := conn.Write(packet); err != nil {
+			cfg.logf("attendance write error chunk=%d err=%v", chunkIndex, err)
+			break
+		}
+
+		recordRes := readFullAnvizPacket(conn, cfg.ReadTimeout)
+		if recordRes == nil {
+			cfg.logf("attendance chunk timeout/corrupted packet chunk=%d", chunkIndex)
+			break
+		}
+		if recordRes[6] != 0x00 {
+			cfg.logf("attendance chunk failed chunk=%d ret=0x%X", chunkIndex, recordRes[6])
+			break
+		}
+
+		count := int(recordRes[9])
+		cfg.LastChunkRecordCount = count
+		cfg.LastSuccessfulChunk = chunkIndex
+
+		responseDataLen := binary.BigEndian.Uint16(recordRes[7:9])
+		if responseDataLen > 40000 {
+			responseDataLen = binary.LittleEndian.Uint16(recordRes[7:9])
+		}
+		cfg.logf("attendance chunk ack chunk=%d mode=%s ack=0x%02X ret=0x%02X data_len=%d count=%d",
+			chunkIndex, attendanceModeLabel(cfg.LastChunkMode), recordRes[5], recordRes[6], responseDataLen, count)
+
+		chunkStats := parseAnvizResponse(recordRes, ip, deviceID)
+		stats.Add(chunkStats)
+		windowSummary := "no-window"
+		if chunkStats.HasWindow {
+			windowSummary = fmt.Sprintf("%s -> %s", chunkStats.Earliest.Format(time.RFC3339), chunkStats.Latest.Format(time.RFC3339))
+		}
+		cfg.logf("attendance chunk summary chunk=%d received=%d inserted=%d duplicates=%d errors=%d window=%s",
+			chunkIndex, chunkStats.Received, chunkStats.Inserted, chunkStats.Duplicates, chunkStats.Errors, windowSummary)
+
+		if cfg.LastChunkMode == 0x02 {
+			if count == 0 {
+				cfg.logf("new-records diagnostic chunk=%d count=0 device did not expose fresh records", chunkIndex)
+			} else if chunkStats.HasWindow {
+				staleThreshold := time.Now().AddDate(0, 0, -7)
+				if chunkStats.Latest.Before(staleThreshold) {
+					cfg.logf("new-records diagnostic chunk=%d latest=%s older than threshold now=%s pointer likely stale",
+						chunkIndex, chunkStats.Latest.Format(time.RFC3339), time.Now().Format(time.RFC3339))
+				} else {
+					cfg.logf("new-records diagnostic chunk=%d latest=%s consistent with recent data",
+						chunkIndex, chunkStats.Latest.Format(time.RFC3339))
+				}
+			}
+		}
+
+		pauseBetweenAnvizCommands(cfg.CommandDelay)
+
+		if count < int(limit) {
+			break
+		}
+		mode = 0x00
+	}
+
 	return stats, nil
 }

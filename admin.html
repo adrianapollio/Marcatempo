@@ -2136,12 +2136,14 @@
 
             let workedMins = merged.reduce((acc, interval) => acc + (interval[1] - interval[0]), 0);
 
-            // Deduct pause if necessary
+            // Deduct pause only when the pause is not fully represented by the intervals
             let pauseDeducted = 0;
-            if (iP !== null && fP !== null && fP > iP) {
-                pauseDeducted = fP - iP;
-            } else if (iP !== null || fP !== null) {
+            if (iP !== null || fP !== null) {
+                if (iP !== null && fP !== null && fP > iP) {
+                    pauseDeducted = 0; // Gia esclusa spezzando gli intervalli tra inizio e fine pausa
+                } else {
                 pauseDeducted = 60; // Partial pause marker
+                }
             } else if (workedMins > 360) {
                 // Automatic 1h deduction if > 6h and no manual pause marked
                 pauseDeducted = 60;

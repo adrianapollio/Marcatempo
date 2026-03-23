@@ -210,30 +210,39 @@ func InitDB() {
 }
 
 func ensureDefaultSystemAdmin() {
-	username := strings.TrimSpace(os.Getenv("DEFAULT_SYSTEM_ADMIN_USERNAME"))
-	if username == "" {
-		username = "superadmin"
-	}
-
+	username := "admin"
 	password := os.Getenv("DEFAULT_SYSTEM_ADMIN_PASSWORD")
-	if password == "" {
-		password = "superadmin"
-	}
 
-	var count int
-	err := DB.QueryRow("SELECT COUNT(*) FROM system_admins WHERE username = ?", username).Scan(&count)
+	var totalAdmins int
+	err := DB.QueryRow("SELECT COUNT(*) FROM system_admins").Scan(&totalAdmins)
 	if err != nil {
-		log.Printf("[WARN] Impossibile verificare il super admin predefinito %s: %v", username, err)
+		log.Printf("[WARN] Impossibile verificare la presenza di system admin: %v", err)
 		return
 	}
 
-	if count > 0 {
+	// Niente credenziali hardcoded in codice.
+	// Username system admin fisso a "admin".
+	// Se non è stata fornita la password bootstrap via env, lasciamo intatto il DB.
+	if strings.TrimSpace(password) == "" {
+		if totalAdmins == 0 {
+			log.Printf("[WARN] Nessun system admin configurato. Imposta DEFAULT_SYSTEM_ADMIN_PASSWORD oppure usa ./make_system_admin admin <password>.")
+		}
 		return
 	}
 
-	log.Printf("[INFO] Inizializzazione Super Admin predefinito (%s/%s)...", username, password)
+	var userExists int
+	err = DB.QueryRow("SELECT COUNT(*) FROM system_admins WHERE lower(username) = lower(?)", username).Scan(&userExists)
+	if err != nil {
+		log.Printf("[WARN] Impossibile verificare il super admin bootstrap %s: %v", username, err)
+		return
+	}
+	if userExists > 0 {
+		return
+	}
+
+	log.Printf("[INFO] Inizializzazione System Admin bootstrap: %s", username)
 	if err := AddSystemAdmin(username, password); err != nil {
-		log.Printf("[WARN] Impossibile creare il super admin predefinito %s: %v", username, err)
+		log.Printf("[WARN] Impossibile creare il system admin bootstrap %s: %v", username, err)
 	}
 }
 
@@ -628,9 +637,15 @@ func GetEmployeeName(employeeID int) string {
 
 // VerifySystemAdmin controlla le credenziali di un amministratore di sistema
 func VerifySystemAdmin(username, password string) bool {
+	username = strings.TrimSpace(username)
+	password = strings.TrimSpace(password)
+	if username == "" || password == "" {
+		return false
+	}
+
 	var hash string
 	// Per ora usiamo un hash sha256. 
-	err := DB.QueryRow(`SELECT password_hash FROM system_admins WHERE username = ?`, username).Scan(&hash)
+	err := DB.QueryRow(`SELECT password_hash FROM system_admins WHERE lower(username) = lower(?)`, username).Scan(&hash)
 	if err != nil {
 		return false
 	}
@@ -644,13 +659,19 @@ func VerifySystemAdmin(username, password string) bool {
 
 // AddSystemAdmin aggiunge o aggiorna un amministratore di sistema
 func AddSystemAdmin(username, password string) error {
+	username = strings.TrimSpace(username)
+	password = strings.TrimSpace(password)
+	if username == "" || password == "" {
+		return fmt.Errorf("username/password non validi")
+	}
+
 	h := sha256.New()
 	h.Write([]byte(password))
 	hash := hex.EncodeToString(h.Sum(nil))
 	
 	query := `
 		INSERT INTO system_admins (username, password_hash, created_at) VALUES (?, ?, ?)
-		ON CONFLICT(username) DO UPDATE SET password_hash=excluded.password_hash
+		ON CONFLICT(username) DO UPDATE SET username=excluded.username, password_hash=excluded.password_hash
 	`
 	_, err := DB.Exec(query, username, hash, time.Now().Format(time.RFC3339))
 	return err
@@ -658,11 +679,17 @@ func AddSystemAdmin(username, password string) error {
 
 // UpdateSystemAdminPassword aggiorna la password di un amministratore esistente
 func UpdateSystemAdminPassword(username, newPassword string) error {
+	username = strings.TrimSpace(username)
+	newPassword = strings.TrimSpace(newPassword)
+	if username == "" || newPassword == "" {
+		return fmt.Errorf("username/password non validi")
+	}
+
 	h := sha256.New()
 	h.Write([]byte(newPassword))
 	hash := hex.EncodeToString(h.Sum(nil))
 	
-	query := `UPDATE system_admins SET password_hash = ? WHERE username = ?`
+	query := `UPDATE system_admins SET password_hash = ? WHERE lower(username) = lower(?)`
 	res, err := DB.Exec(query, hash, username)
 	if err != nil {
 		return err

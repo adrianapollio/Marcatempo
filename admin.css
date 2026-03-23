@@ -70,7 +70,8 @@ pre,
     box-shadow: var(--shadow-xl);
     width: 100%;
     max-width: 98%;
-    /* overflow: hidden; removed to allow sticky elements to work */
+    overflow: visible;
+    clip-path: inset(0 round 20px);
     position: relative;
     border: 1px solid var(--border);
     animation: fadeInContainer 0.6s cubic-bezier(0.16, 1, 0.3, 1);
@@ -110,6 +111,7 @@ pre,
     display: flex;
     justify-content: space-between;
     align-items: center;
+    border-radius: 20px 20px 0 0;
     position: sticky;
     top: 0;
     z-index: 1000;
@@ -446,6 +448,7 @@ button:active {
 .filter-item {
     flex: 1;
     min-width: 200px;
+    height: 48px;
 }
 
 .filter-item label {
