@@ -12,44 +12,13 @@
 
 <body>
 
-    <div id="loginOverlay" class="login-overlay">
-        <div class="login-box">
-            <div class="login-icon-wrap">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                </svg>
-            </div>
-            <h1>System Login</h1>
-            <p>Accesso riservato all'amministratore tecnico</p>
-            <div class="form-group">
-                <label>Username</label>
-                <input type="text" value="admin" disabled>
-            </div>
-            <div class="form-group">
-                <label>Password</label>
-                <input type="password" id="sysPassword" placeholder="Inserisci password">
-            </div>
-            <button class="btn-system" onclick="handleLogin()">Accedi al Sistema</button>
-            <div class="login-footer">
-                <a href="/" class="portal-link">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="19" y1="12" x2="5" y2="12"></line>
-                        <polyline points="12 19 5 12 12 5"></polyline>
-                    </svg>
-                    Torna al Portale Dipendenti
-                </a>
-            </div>
-            <div id="loginError" class="form-error">Credenziali non valide</div>
-        </div>
-    </div>
-
     <div class="container">
         <div class="header">
             <div class="header-title">
                 <h2>Marcatempo</h2>
                 <p>System Administration Dashboard</p>
             </div>
-            <div class="header-actions">
+            <div class="header-actions" id="sysHeaderActions" hidden>
                 <div class="admin-info">
                     <span id="sysUserNameDisplay" class="username-display">admin</span>
                     <div class="status-container">
@@ -62,184 +31,233 @@
         </div>
 
         <div class="content">
-            <div class="sidebar">
-                <div class="nav-item active" id="nav-overview" onclick="showPanel('overview')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-                    Overview
-                </div>
-                <div class="nav-item" id="nav-admins" onclick="showPanel('admins')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><polyline points="16 11 18 13 22 9"></polyline></svg>
-                    Gestione Admin HR
-                </div>
-                <div class="nav-item" id="nav-backups" onclick="showPanel('backups')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    Data Backups
-                </div>
-                <div class="nav-item" id="nav-devices" onclick="showPanel('devices')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
-                    Devices Status
-                </div>
-                <div class="nav-item" id="nav-security" onclick="showPanel('security')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg>
-                    Sicurezza
-                </div>
-                
-                <div id="adminLink">
-                    <div class="nav-item nav-item-bordered" onclick="window.location.href='/admin'">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-                        HR Admin Panel
+            <div id="loginScreen" class="active-screen">
+                <div class="content-inner login-card">
+                    <div class="login-icon-wrap">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        </svg>
                     </div>
+                    <h3 class="login-title">Accesso System Admin</h3>
+                    <p class="login-subtitle">Credenziali tecniche per gestione e sicurezza</p>
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" value="admin" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <div class="password-wrapper">
+                            <input type="password" id="sysPassword" placeholder="Inserisci password">
+                            <button type="button" class="password-toggle" onclick="toggleSystemPassword()"
+                                aria-label="Mostra password system admin">
+                                <svg id="sysEyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                    stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                                <svg id="sysEyeOffIcon" style="display:none" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path
+                                        d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24">
+                                    </path>
+                                    <line x1="1" y1="1" x2="23" y2="23"></line>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <button class="btn-system" onclick="handleLogin()">Accedi</button>
+                    <div class="login-link-wrap">
+                        <a href="/" class="login-system-link">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="19" y1="12" x2="5" y2="12"></line>
+                                <polyline points="12 19 5 12 12 5"></polyline>
+                            </svg>
+                            Torna al Portale Dipendenti
+                        </a>
+                    </div>
+                    <div id="loginError" class="form-error login-status">Credenziali non valide</div>
                 </div>
             </div>
 
-            <div class="main-panel">
-                <div id="panel-overview">
-                    <h3 class="section-title">System Health</h3>
-                    <div class="card-grid">
-                        <div class="stat-card">
-                            <span class="label">Database Size</span>
-                            <span class="value" id="dbSize">-</span>
-                            <span class="trend">SQLite WAL Enabled</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="label">Connected Devices</span>
-                            <span class="value">2</span>
-                            <span class="trend">Anviz TCP/IP Stack</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="label">Server Uptime</span>
-                            <span class="value" id="serverUptime">Calculated...</span>
-                        </div>
+            <div id="dashboardScreen" hidden>
+                <div class="sidebar">
+                    <div class="nav-item active" id="nav-overview" onclick="showPanel('overview')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                        Overview
+                    </div>
+                    <div class="nav-item" id="nav-admins" onclick="showPanel('admins')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><polyline points="16 11 18 13 22 9"></polyline></svg>
+                        Gestione Admin HR
+                    </div>
+                    <div class="nav-item" id="nav-backups" onclick="showPanel('backups')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        Data Backups
+                    </div>
+                    <div class="nav-item" id="nav-devices" onclick="showPanel('devices')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                        Devices Status
+                    </div>
+                    <div class="nav-item" id="nav-security" onclick="showPanel('security')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg>
+                        Sicurezza
                     </div>
                     
-                    <div class="surface-card">
-                        <h4 class="mono-heading">Recent System Logs</h4>
-                        <div id="smallLogs" class="logs-default" aria-live="polite"></div>
-                    </div>
-                </div>
-
-                <div id="panel-admins" class="panel-hidden" hidden>
-                    <div class="section-row">
-                        <h3 class="section-title-tight">Gestione Privilegi HR</h3>
-                        <div class="search-wrap">
-                            <input type="text" id="adminSearch" placeholder="Cerca dipendente..." oninput="filterAdmins()">
+                    <div id="adminLink">
+                        <div class="nav-item nav-item-bordered" onclick="window.location.href='/admin'">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                            HR Admin Panel
                         </div>
                     </div>
-                    <div class="table-container">
-                        <table id="adminTable">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Nome</th>
-                                    <th>Stato Admin</th>
-                                    <th>Azione</th>
-                                </tr>
-                            </thead>
-                            <tbody id="adminListBody"></tbody>
-                        </table>
-                    </div>
-                    <!-- Pagination (DataGrid Style) -->
-                    <div class="pagination">
-                        <div class="page-size-selector">
-                            <label>Record per pagina:</label>
-                            <select id="pageSize" onchange="changePageSize()">
-                                <option value="15">15</option>
-                                <option value="20" selected>20</option>
-                                <option value="50">50</option>
-                                <option value="100">100</option>
-                            </select>
-                        </div>
-                        <button class="btn-page" id="prevPage" onclick="changePage(-1)" disabled title="Pagina Precedente">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-                        </button>
-                        <span class="pagination-info" id="pageInfo">Pagina 1 di 1</span>
-                        <button class="btn-page" id="nextPage" onclick="changePage(1)" disabled title="Pagina Successiva">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                        </button>
-                    </div>
                 </div>
-
-                <div id="panel-backups" class="panel-hidden" hidden>
-                    <div class="section-row-compact">
-                        <h3 class="section-title-tight">History Backups</h3>
-                        <button class="btn-system btn-system-compact" onclick="triggerBackup()">Esegui Backup Ora</button>
-                    </div>
-                    <div class="panel-shell">
-                        <div id="backupWait" class="table-placeholder">Recupero lista backup...</div>
-                        <ul class="backup-list" id="backupList"></ul>
-                    </div>
-                </div>
-
-                <div id="panel-devices" class="panel-hidden" hidden>
-                    <h3 class="section-title">Anviz Communication Status</h3>
-                    <div id="deviceDiagnosticsGrid" class="card-grid devices-grid-spaced"></div>
-                    <div class="panel-shell panel-shell-spaced">
-                        <div class="panel-shell-head-row">
-                            <div>
-                                <div class="panel-heading">Raw Device Diagnostics</div>
-                                <div id="deviceDiagnosticsMeta" class="panel-meta">Caricamento diagnostica...</div>
+                <div class="main-panel">
+                    <div id="panel-overview">
+                        <h3 class="section-title">System Health</h3>
+                        <div class="card-grid">
+                            <div class="stat-card">
+                                <span class="label">Database Size</span>
+                                <span class="value" id="dbSize">-</span>
+                                <span class="trend">SQLite WAL Enabled</span>
                             </div>
-                            <button class="btn-download btn-rounded" onclick="loadDeviceDiagnostics()">Aggiorna Diagnostica</button>
+                            <div class="stat-card">
+                                <span class="label">Connected Devices</span>
+                                <span class="value">2</span>
+                                <span class="trend">Anviz TCP/IP Stack</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="label">Server Uptime</span>
+                                <span class="value" id="serverUptime">Calculated...</span>
+                            </div>
                         </div>
-                        <div class="table-container table-container-flat">
-                            <table id="deviceDiagnosticsTable">
-                                <thead>
-                                    <tr>
-                                        <th>Origine</th>
-                                        <th>Device</th>
-                                        <th>Dipendente</th>
-                                        <th>Raw TS</th>
-                                        <th>Timestamp Parse</th>
-                                        <th>Azione</th>
-                                        <th>Import</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="deviceDiagnosticsBody">
-                                    <tr><td colspan="7" class="table-placeholder">Caricamento...</td></tr>
-                                </tbody>
-                            </table>
+                        
+                        <div class="surface-card">
+                            <h4 class="mono-heading">Recent System Logs</h4>
+                            <div id="smallLogs" class="logs-default" aria-live="polite"></div>
                         </div>
                     </div>
-                    <div class="panel-shell panel-shell-spaced">
-                        <div class="panel-shell-head">
-                            <div class="panel-heading">Record Device Finali Senza Raw</div>
-                            <div id="legacyDeviceDiagnosticsMeta" class="panel-meta">Caricamento diagnostica...</div>
-                        </div>
-                        <div class="table-container table-container-flat">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Dipendente</th>
-                                        <th>Timestamp Finale</th>
-                                        <th>Azione</th>
-                                        <th>Raw TS Stimato</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="legacyDeviceDiagnosticsBody">
-                                    <tr><td colspan="4" class="table-placeholder">Caricamento...</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div class="action-row-right">
-                        <button class="btn-download btn-rounded" onclick="loadDeviceDiagnostics()">Refresh Stack</button>
-                    </div>
-                </div>
 
-                <div id="panel-security" class="panel-hidden" hidden>
-                    <h3 class="section-title">Accesso e Sicurezza</h3>
-                    <div class="stat-card security-card">
-                        <h4 class="security-card-title">Cambia Password Super Admin</h4>
-                        <div class="form-group">
-                            <label>Nuova Password</label>
-                            <input type="password" id="newSysPassword" placeholder="Inserisci nuova password">
+                    <div id="panel-admins" class="panel-hidden" hidden>
+                        <div class="section-row">
+                            <h3 class="section-title-tight">Gestione Privilegi HR</h3>
+                            <div class="search-wrap">
+                                <input type="text" id="adminSearch" placeholder="Cerca dipendente..." oninput="filterAdmins()">
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label>Conferma Nuova Password</label>
-                            <input type="password" id="confirmSysPassword" placeholder="Conferma nuova password">
+                        <div class="table-container">
+                            <table id="adminTable">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Nome</th>
+                                        <th>Stato Admin</th>
+                                        <th>Azione</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="adminListBody"></tbody>
+                            </table>
                         </div>
-                        <button class="btn-system" onclick="updatePassword()">Aggiorna Password</button>
-                        <div id="passwordError" class="form-error"></div>
+                        <!-- Pagination (DataGrid Style) -->
+                        <div class="pagination">
+                            <div class="page-size-selector">
+                                <label>Record per pagina:</label>
+                                <select id="pageSize" onchange="changePageSize()">
+                                    <option value="15">15</option>
+                                    <option value="20" selected>20</option>
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                </select>
+                            </div>
+                            <button class="btn-page" id="prevPage" onclick="changePage(-1)" disabled title="Pagina Precedente">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                            </button>
+                            <span class="pagination-info" id="pageInfo">Pagina 1 di 1</span>
+                            <button class="btn-page" id="nextPage" onclick="changePage(1)" disabled title="Pagina Successiva">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="panel-backups" class="panel-hidden" hidden>
+                        <div class="section-row-compact">
+                            <h3 class="section-title-tight">History Backups</h3>
+                            <button class="btn-system btn-system-compact" onclick="triggerBackup()">Esegui Backup Ora</button>
+                        </div>
+                        <div class="panel-shell">
+                            <div id="backupWait" class="table-placeholder">Recupero lista backup...</div>
+                            <ul class="backup-list" id="backupList"></ul>
+                        </div>
+                    </div>
+
+                    <div id="panel-devices" class="panel-hidden" hidden>
+                        <h3 class="section-title">Anviz Communication Status</h3>
+                        <div id="deviceDiagnosticsGrid" class="card-grid devices-grid-spaced"></div>
+                        <div class="panel-shell panel-shell-spaced">
+                            <div class="panel-shell-head-row">
+                                <div>
+                                    <div class="panel-heading">Raw Device Diagnostics</div>
+                                    <div id="deviceDiagnosticsMeta" class="panel-meta">Caricamento diagnostica...</div>
+                                </div>
+                                <button class="btn-download btn-rounded" onclick="loadDeviceDiagnostics()">Aggiorna Diagnostica</button>
+                            </div>
+                            <div class="table-container table-container-flat">
+                                <table id="deviceDiagnosticsTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Origine</th>
+                                            <th>Device</th>
+                                            <th>Dipendente</th>
+                                            <th>Raw TS</th>
+                                            <th>Timestamp Parse</th>
+                                            <th>Azione</th>
+                                            <th>Import</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="deviceDiagnosticsBody">
+                                        <tr><td colspan="7" class="table-placeholder">Caricamento...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="panel-shell panel-shell-spaced">
+                            <div class="panel-shell-head">
+                                <div class="panel-heading">Record Device Finali Senza Raw</div>
+                                <div id="legacyDeviceDiagnosticsMeta" class="panel-meta">Caricamento diagnostica...</div>
+                            </div>
+                            <div class="table-container table-container-flat">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Dipendente</th>
+                                            <th>Timestamp Finale</th>
+                                            <th>Azione</th>
+                                            <th>Raw TS Stimato</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="legacyDeviceDiagnosticsBody">
+                                        <tr><td colspan="4" class="table-placeholder">Caricamento...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="action-row-right">
+                            <button class="btn-download btn-rounded" onclick="loadDeviceDiagnostics()">Refresh Stack</button>
+                        </div>
+                    </div>
+
+                    <div id="panel-security" class="panel-hidden" hidden>
+                        <h3 class="section-title">Accesso e Sicurezza</h3>
+                        <div class="stat-card security-card">
+                            <h4 class="security-card-title">Cambia Password Super Admin</h4>
+                            <div class="form-group">
+                                <label>Nuova Password</label>
+                                <input type="password" id="newSysPassword" placeholder="Inserisci nuova password">
+                            </div>
+                            <div class="form-group">
+                                <label>Conferma Nuova Password</label>
+                                <input type="password" id="confirmSysPassword" placeholder="Conferma nuova password">
+                            </div>
+                            <button class="btn-system" onclick="updatePassword()">Aggiorna Password</button>
+                            <div id="passwordError" class="form-error"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -262,7 +280,9 @@
     <div id="toastContainer" class="toast-container"></div>
 
     <script>
-        const loginOverlay = document.getElementById('loginOverlay');
+        const loginScreen = document.getElementById('loginScreen');
+        const dashboardScreen = document.getElementById('dashboardScreen');
+        const headerActions = document.getElementById('sysHeaderActions');
         const sysUserNameDisplay = document.getElementById('sysUserNameDisplay');
         let currentSystemAdminName = '';
         let allEmployees = [];
@@ -285,7 +305,12 @@
 
                 currentSystemAdminName = session.name || session.username || '';
                 sysUserNameDisplay.textContent = currentSystemAdminName;
-                loginOverlay.style.display = 'none';
+                if (headerActions) headerActions.hidden = false;
+                if (loginScreen) loginScreen.classList.remove('active-screen');
+                if (dashboardScreen) {
+                    dashboardScreen.hidden = false;
+                    dashboardScreen.classList.add('active-screen');
+                }
 
                 localStorage.setItem('sysAdminName', currentSystemAdminName);
                 return true;
@@ -317,7 +342,12 @@
                 if (res.ok) {
                     const data = await res.json();
                     currentSystemAdminName = data.name || fixedUsername;
-                    loginOverlay.style.display = 'none';
+                    if (headerActions) headerActions.hidden = false;
+                    if (loginScreen) loginScreen.classList.remove('active-screen');
+                    if (dashboardScreen) {
+                        dashboardScreen.hidden = false;
+                        dashboardScreen.classList.add('active-screen');
+                    }
                     sysUserNameDisplay.textContent = currentSystemAdminName;
                     initDashboard();
                     showToast(`Bentornato, ${currentSystemAdminName}`, 'success');
@@ -328,6 +358,24 @@
             } catch (e) {
                 console.error(e);
                 showToast("Errore di connessione al server", "error");
+            }
+        }
+
+        function toggleSystemPassword() {
+            const input = document.getElementById('sysPassword');
+            const eyeOpen = document.getElementById('sysEyeIcon');
+            const eyeOff = document.getElementById('sysEyeOffIcon');
+
+            if (!input || !eyeOpen || !eyeOff) return;
+
+            if (input.type === 'password') {
+                input.type = 'text';
+                eyeOpen.style.display = 'none';
+                eyeOff.style.display = 'block';
+            } else {
+                input.type = 'password';
+                eyeOpen.style.display = 'block';
+                eyeOff.style.display = 'none';
             }
         }
 
@@ -347,6 +395,15 @@
             localStorage.removeItem('empPin');
             localStorage.removeItem('empName');
             currentSystemAdminName = '';
+            if (headerActions) headerActions.hidden = true;
+            if (dashboardScreen) {
+                dashboardScreen.classList.remove('active-screen');
+                dashboardScreen.hidden = true;
+            }
+            if (loginScreen) {
+                loginScreen.hidden = false;
+                loginScreen.classList.add('active-screen');
+            }
             location.reload();
         }
 
@@ -558,6 +615,14 @@
             const hasSession = await restoreSystemSession();
             if (hasSession) {
                 initDashboard();
+            } else if (loginScreen) {
+                if (headerActions) headerActions.hidden = true;
+                loginScreen.hidden = false;
+                loginScreen.classList.add('active-screen');
+                if (dashboardScreen) {
+                    dashboardScreen.hidden = true;
+                    dashboardScreen.classList.remove('active-screen');
+                }
             }
         });
 
@@ -639,7 +704,17 @@
             try {
                 const res = await fetch('/api/system/employees');
                 if (res.ok) {
-                    allEmployees = await res.json();
+                    const rawEmployees = await res.json();
+                    allEmployees = rawEmployees.filter(e => {
+                        const empName = (e.name || '').trim();
+                        const empId = String(e.id || '').trim();
+
+                        if (empId.toUpperCase().startsWith('EX')) return false;
+                        if (empName.toUpperCase().startsWith('EX')) return false;
+                        if (!empName || empName.toLowerCase().startsWith('nome vuoto')) return false;
+
+                        return true;
+                    });
                     filteredEmployees = [...allEmployees];
                     currentPage = 1;
                     renderEmployees();
@@ -688,13 +763,9 @@
                 filteredEmployees = [...allEmployees];
             } else {
                 filteredEmployees = allEmployees.filter(e => {
-                    const name = e.name.toLowerCase();
-                    const id = e.id.toString();
-                    
-                    if (id.startsWith(q)) return true;
-                    
-                    const words = name.split(/\s+/);
-                    return words.some(word => word.startsWith(q));
+                    const name = (e.name || '').toLowerCase();
+                    const id = String(e.id || '').toLowerCase();
+                    return id.startsWith(q) || name.startsWith(q);
                 });
             }
             currentPage = 1;

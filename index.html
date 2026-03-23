@@ -69,7 +69,15 @@
         <div class="content">
             <!-- LOGIN SCREEN -->
             <div id="loginScreen" class="active-screen">
-                <div class="content-inner">
+                <div class="content-inner login-card">
+                    <div class="login-icon-wrap">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="login-title">Accesso Dipendente</h3>
+                    <p class="login-subtitle">Inserisci le tue credenziali per registrare la presenza</p>
                     <div class="form-group">
                         <label>ID Dipendente</label>
                         <input type="text" inputmode="numeric" pattern="[0-9]*" id="loginId"
@@ -98,10 +106,10 @@
                         </div>
                     </div>
                     <button class="btn-primary" onclick="login()">Accedi</button>
-                    <div style="text-align: center; margin-top: 20px;">
-                        <a href="/system-admin" style="color: var(--text-secondary); font-size: 0.8rem; text-decoration: none; border-bottom: 1px dashed var(--border);">Accesso Amministratore di Sistema</a>
+                    <div class="login-link-wrap">
+                        <a href="/system-admin" class="login-system-link">Accesso Amministratore di Sistema</a>
                     </div>
-                    <p id="loginStatus" class="error" style="text-align:center; font-size: 16px; margin-top:10px;"></p>
+                    <p id="loginStatus" class="error login-status"></p>
                 </div>
             </div>
 
@@ -765,8 +773,7 @@
                 const isToday = dateKey === todayStr;
                 const nowMins = today.getHours() * 60 + today.getMinutes();
 
-                // Real-time sync for today
-                if (e !== null && u === null && isToday) { u = nowMins; }
+                // Real-time sync only for open trasferte on current day
                 if (iT !== null && rT === null && isToday) { rT = nowMins; }
 
                 // Collect all valid working intervals
@@ -819,8 +826,8 @@
                     } else {
                     pauseDeducted = 60; // Partial pause marker
                     }
-                } else if (workedMins > 360) {
-                    // Automatic 1h deduction if > 6h and no manual pause marked
+                } else if (workedMins >= 480) {
+                    // Automatic 1h deduction on standard full-day shift when no pause is marked
                     pauseDeducted = 60;
                 }
 
@@ -828,6 +835,11 @@
 
                 // Fallback for negative limits
                 if (workedMins < 0) workedMins = 0;
+
+                const hasUnclosedDay = (e !== null && u === null) || (iT !== null && rT === null);
+                if (!isToday && hasUnclosedDay) {
+                    workedMins = 480;
+                }
 
                 let anomalyReasons = [];
                 const makeWarningSvg = (tooltip) => {
@@ -856,18 +868,25 @@
                 }
 
                 if (dayData.extraMarks && dayData.extraMarks.length > 0) {
-                    const actionLabels = {
-                        'entrata': 'Entrata',
-                        'uscita': 'Uscita',
-                        'inizio_pausa': 'Inizio Pausa',
-                        'fine_pausa': 'Fine Pausa',
-                        'inizio_trasferta': 'Inizio Trasferta',
-                        'ritorno_trasferta': 'Ritorno Trasferta'
-                    };
-                    dayData.extraMarks.forEach(em => {
-                        const label = actionLabels[em.action] || em.action || 'Sconosciuta';
-                        anomalyReasons.push(`Marcatura EXTRA (${label}) alle ${em.time}`);
-                    });
+                    const isCompleteOfficeDay = !!dayData.entrata && !!dayData.inizio_pausa && !!dayData.fine_pausa && !!dayData.uscita;
+                    const officeDupActions = new Set(['entrata', 'uscita', 'inizio_pausa', 'fine_pausa']);
+                    const hasOnlyOfficeDuplicates = dayData.extraMarks.every(em => officeDupActions.has(em.action));
+                    const suppressExtraWarning = isCompleteOfficeDay && hasOnlyOfficeDuplicates;
+
+                    if (!suppressExtraWarning) {
+                        const actionLabels = {
+                            'entrata': 'Entrata',
+                            'uscita': 'Uscita',
+                            'inizio_pausa': 'Inizio Pausa',
+                            'fine_pausa': 'Fine Pausa',
+                            'inizio_trasferta': 'Inizio Trasferta',
+                            'ritorno_trasferta': 'Ritorno Trasferta'
+                        };
+                        dayData.extraMarks.forEach(em => {
+                            const label = actionLabels[em.action] || em.action || 'Sconosciuta';
+                            anomalyReasons.push(`Marcatura EXTRA (${label}) alle ${em.time}`);
+                        });
+                    }
                 }
 
                 if (workedMins > 0) {
@@ -1272,3 +1291,4 @@
 </body>
 
 </html>
+

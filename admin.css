@@ -445,18 +445,66 @@ button:active {
     z-index: 999;
 }
 
+.filters-primary-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    width: 100%;
+    align-items: flex-end;
+}
+
 .filter-item {
-    flex: 1;
+    flex: 1 1 240px;
+    min-width: 220px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.filter-item-period {
+    flex: 2.8 1 460px;
+    min-width: 380px;
+}
+
+.filter-item-employee,
+.filter-item-search {
+    flex: 0.85 1 220px;
     min-width: 200px;
-    height: 48px;
 }
 
 .filter-item label {
     font-size: 14px;
-    margin-bottom: 5px;
+    margin-bottom: 0;
     display: block;
     color: var(--text-dark);
     font-weight: 600;
+}
+
+.filter-item > input,
+.filter-item > select,
+.filter-item > .multi-select-container {
+    width: 100%;
+}
+
+#filterSearch {
+    height: 48px;
+}
+
+.filter-item > input[type="text"],
+.filter-item > select,
+.multi-select-trigger {
+    min-height: 48px;
+}
+
+.filters-secondary-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    width: 100%;
+    align-items: center;
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(0, 0, 0, 0.12);
 }
 
 .filter-actions {
@@ -931,6 +979,11 @@ button:active {
         padding: 15px;
     }
 
+    .filters-primary-row {
+        gap: 12px;
+        align-items: stretch;
+    }
+
     /* Date Picker alignment on mobile */
     .filter-item>div {
         flex-direction: column;
@@ -945,6 +998,13 @@ button:active {
     .filter-item {
         flex: unset;
         width: 100%;
+    }
+
+    .filter-item-period,
+    .filter-item-employee,
+    .filter-item-search {
+        flex: 1 1 100%;
+        min-width: 0;
     }
 
     .filter-actions {
@@ -1188,20 +1248,27 @@ button:active {
     transform: rotate(180deg);
 }
 
+.multi-select-container.open .multi-select-trigger {
+    border-color: var(--primary);
+    border-radius: 10px 10px 0 0;
+    border-bottom-color: var(--border);
+}
+
 .multi-select-dropdown {
     position: absolute;
-    top: 100%;
+    top: calc(100% - 1px);
     left: 0;
     right: 0;
     background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: 12px;
+    border: 1px solid var(--input-border);
+    border-top: none;
+    border-radius: 0 0 12px 12px;
     box-shadow: var(--shadow-xl);
     z-index: 10001;
     display: none;
     flex-direction: column;
     max-height: 400px;
-    margin-top: 5px;
+    margin-top: 0;
     overflow: hidden;
 }
 

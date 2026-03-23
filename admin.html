@@ -236,8 +236,8 @@
             <div id="dashboardScreen" class="active-screen">
 
                 <div class="filters-bar">
-                    <div style="display: flex; flex-wrap: wrap; gap: 15px; width: 100%; align-items: flex-end;">
-                        <div class="filter-item" style="flex: 2; min-width: 280px;">
+                    <div class="filters-primary-row">
+                        <div class="filter-item filter-item-period">
                             <label>Periodo di Riferimento</label>
                             <div style="display: flex; gap: 10px; align-items: center;">
                                 <div class="month-nav" style="flex: 1;">
@@ -275,7 +275,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="filter-item">
+                        <div class="filter-item filter-item-employee">
                             <label>Dipendente</label>
                             <div class="multi-select-container" id="empMultiSelectContainer">
                                 <div class="multi-select-trigger" onclick="toggleMultiSelect(event)">
@@ -297,14 +297,14 @@
                             </div>
                             <input type="hidden" id="filterEmp">
                         </div>
-                        <div class="filter-item">
+                        <div class="filter-item filter-item-search">
                             <label>Cerca</label>
                             <input type="text" id="filterSearch" placeholder="Cerca nome o ID..."
                                 oninput="filterLocalRecords()">
                         </div>
                     </div>
 
-                    <div style="display: flex; flex-wrap: wrap; gap: 20px; width: 100%; align-items: center; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(0,0,0,0.06);">
+                    <div class="filters-secondary-row">
                         <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 0; font-size: 14px; font-weight: 600; color: var(--text-dark);">
                             <input type="checkbox" id="filterAnomaly" onchange="filterLocalRecords()" style="width: 18px; height: 18px; cursor: pointer;">
                             Solo Anomalie
@@ -886,8 +886,9 @@
         }
 
         let pendingValidationAction = null;
+        let pendingCancelAction = null;
 
-        function showCustomConfirm(message, title, confirmText, confirmColor, onConfirmCallback) {
+        function showCustomConfirm(message, title, confirmText, confirmColor, onConfirmCallback, onCancelCallback = null) {
             document.getElementById('confirmModalTitle').textContent = title || "Conferma";
             document.getElementById('confirmModalBody').textContent = message;
 
@@ -896,6 +897,7 @@
             confirmBtn.style.background = confirmColor || "var(--primary)";
 
             pendingValidationAction = onConfirmCallback;
+            pendingCancelAction = onCancelCallback;
             document.getElementById('confirmModal').classList.add('active');
         }
 
@@ -904,7 +906,11 @@
             if (confirmed && pendingValidationAction) {
                 pendingValidationAction();
             }
+            if (!confirmed && pendingCancelAction) {
+                pendingCancelAction();
+            }
             pendingValidationAction = null;
+            pendingCancelAction = null;
         }
 
         async function handleValidationAction(id, action) {
@@ -1913,10 +1919,17 @@
                     'ritorno_trasferta': 'Ritorno Trasferta'
                 };
                 if (dayData.extraMarks && dayData.extraMarks.length > 0) {
-                    dayData.extraMarks.forEach(em => {
-                        const label = actionLabels[em.action] || em.action || 'Sconosciuta';
-                        anomalyReasons.push(`Marcatura EXTRA (${label}) alle ${em.time}`);
-                    });
+                    const isCompleteOfficeDay = !!dayData.entrata && !!dayData.inizio_pausa && !!dayData.fine_pausa && !!dayData.uscita;
+                    const officeDupActions = new Set(['entrata', 'uscita', 'inizio_pausa', 'fine_pausa']);
+                    const hasOnlyOfficeDuplicates = dayData.extraMarks.every(em => officeDupActions.has(em.action));
+                    const suppressExtraWarning = isCompleteOfficeDay && hasOnlyOfficeDuplicates;
+
+                    if (!suppressExtraWarning) {
+                        dayData.extraMarks.forEach(em => {
+                            const label = actionLabels[em.action] || em.action || 'Sconosciuta';
+                            anomalyReasons.push(`Marcatura EXTRA (${label}) alle ${em.time}`);
+                        });
+                    }
                 }
             }
 
@@ -2090,8 +2103,7 @@
             const isToday = dayData.dateKey === todayStr;
             const nowMins = today.getHours() * 60 + today.getMinutes();
 
-            // Real-time sync for today
-            if (e !== null && u === null && isToday) { u = nowMins; }
+            // Real-time sync only for open trasferte on current day
             if (iT !== null && rT === null && isToday) { rT = nowMins; }
 
             // Collect all valid working intervals
@@ -2119,7 +2131,11 @@
                 intervals.push([rT, u]);
             }
 
-            if (intervals.length === 0) return 0;
+            if (intervals.length === 0) {
+                const hasUnclosedDay = (e !== null && u === null) || (iT !== null && rT === null);
+                if (!isToday && hasUnclosedDay) return 480;
+                return 0;
+            }
 
             // Merge overlapping intervals to avoid double counting
             intervals.sort((a, b) => a[0] - b[0]);
@@ -2144,13 +2160,18 @@
                 } else {
                 pauseDeducted = 60; // Partial pause marker
                 }
-            } else if (workedMins > 360) {
-                // Automatic 1h deduction if > 6h and no manual pause marked
+            } else if (workedMins >= 480) {
+                // Automatic 1h deduction on standard full-day shift when no pause is marked
                 pauseDeducted = 60;
             }
 
             workedMins -= pauseDeducted;
             if (workedMins < 0) workedMins = 0;
+
+            const hasUnclosedDay = (e !== null && u === null) || (iT !== null && rT === null);
+            if (!isToday && hasUnclosedDay) {
+                return 480;
+            }
 
             return workedMins;
         }
@@ -2359,8 +2380,14 @@
         window.addEventListener('DOMContentLoaded', async () => {
             const hasSession = await restoreAdminSession();
             if (!hasSession) {
-                const confirmLogin = confirm("Accesso Negato. Sei un Amministratore di Sistema? \n\nPremi OK per il login tecnico o Annulla per tornare al portale.");
-                window.location.href = confirmLogin ? '/system-admin' : '/';
+                showCustomConfirm(
+                    "Accesso riservato. Se sei un Amministratore di Sistema, accedi dal login tecnico. In caso contrario torna al portale dipendenti.",
+                    "Accesso Negato",
+                    "Vai al Login Tecnico",
+                    "var(--primary)",
+                    () => { window.location.href = '/system-admin'; },
+                    () => { window.location.href = '/'; }
+                );
                 return;
             }
 
@@ -2561,3 +2588,4 @@
 </body>
 
 </html>
+

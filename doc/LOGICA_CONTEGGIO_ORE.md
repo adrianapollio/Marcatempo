@@ -1,77 +1,71 @@
 # Logica di Calcolo Ore e Gestione Eccezioni
 
-Questo documento descrive in dettaglio come il sistema Marcatempo calcola le ore lavorate, il bilancio teorico e come gestisce le anomalie e le dimenticanze dei dipendenti.
+Questo documento descrive come Marcatempo calcola ore lavorate, ore teoriche e bilancio.
 
 ---
 
-## 1. Calcolo Ore Teoriche (Bilancio)
+## 1. Ore Teoriche (Bilancio)
 
-Il bilancio mensile o del periodo selezionato si basa su una giornata lavorativa standard di **8 ore**.
+La giornata teorica standard e di **8:00** ore.
 
-### Gestione del Giorno Corrente (Anti-Distorsione)
-Per evitare che il bilancio del mese in corso appaia distorto durante la giornata lavorativa, il sistema applica la seguente logica:
-*   **Esclusione Totale**: Le ore lavorate oggi e le 8 ore teoriche di oggi sono **escluse** dai totali complessivi (Totale Ore Lav. e Bilancio) per tutta la durata del turno.
-*   **Inclusione Post-Uscita**: Solo quando viene registrata una marcatura di **Uscita**, la giornata viene considerata "finita" e incorporata nei totali.
-*   **Vantaggio**: Il bilancio rimane stabile alla situazione di ieri sera per tutto il giorno, evitando che le ore lavorate al mattino sembrino un "falso attivo" (dato che il debito di 8 ore non è ancora stato pienamente maturato).
+### Giorno corrente (anti-distorsione)
+Per evitare un bilancio "falso" durante la giornata:
+- Le ore di oggi non entrano nei totali finche la giornata non risulta chiusa.
+- La giornata viene considerata chiusa quando e presente l'uscita (oppure quando una trasferta risulta completa nei casi dedicati).
+- In questo modo il bilancio resta stabile fino a fine giornata.
 
 ---
 
 ## 2. Calcolo Ore Lavorate Giornaliere
 
-La funzione principale sottrae l'orario di Entrata dall'Uscita, gestendo poi i vari segmenti.
+Le ore vengono ricavate sommando intervalli validi:
+- Entrata -> primo evento successivo coerente (pausa/trasferta/uscita)
+- Fine pausa -> evento successivo coerente
+- Inizio trasferta -> ritorno trasferta
+- Ritorno trasferta -> uscita
 
-### Scenari Standard
-1.  **Entrata e Uscita Presenti**: Si calcola la differenza temporale tra i due eventi.
-2.  **Trasferta**: I segmenti di trasferta (`Ritorno - Inizio`) vengono sommati alle ore ordinarie se registrati correttamente.
-
----
-
-## 3. Gestione della Pausa (Pena o Fallback)
-
-Il sistema applica una logica resiliente per la pausa pranzo (o break) per correggere le dimenticanze comuni:
-
-| Scenario | Azione del Sistema | Note |
-| :--- | :--- | :--- |
-| **Pausa Completa** | Sottrazione esatta dei minuti | Es: Inizio 13:00, Fine 13:45 -> -45 min. |
-| **Pausa Parziale** | Sottrazione fissa di **60 minuti** | Se manca l'Inizio o la Fine pausa. |
-| **Pausa Assente (> 6h)** | Sottrazione fissa di **60 minuti** | Se l'utente lavora più di 6h senza segnare pausa. |
-| **Pausa Assente (< 6h)** | Nessuna sottrazione | Assunto come part-time o mezza giornata. |
+Gli intervalli sovrapposti vengono uniti per evitare doppio conteggio.
 
 ---
 
-## 4. Gestione Dimenticanze (Uscita Mancante)
+## 3. Gestione Pausa
 
-Per evitare che una dimenticanza azzeri il conteggio della giornata, sono state introdotte delle regole di fallback:
+| Scenario | Azione del sistema |
+| :--- | :--- |
+| **Pausa completa** | La pausa e gia esclusa dagli intervalli, quindi nessuna sottrazione extra |
+| **Pausa parziale** | Sottrazione fissa di **60 minuti** |
+| **Pausa non marcata su giornata piena** | Sottrazione fissa di **60 minuti** (soglia: almeno 8:00 ore) |
 
-### In Sede (No Trasferta)
-Se un utente dimentica di timbrare l'uscita:
-*   Vengono assegnate d'ufficio **8 ore** di lavoro.
-*   Viene mostrata un'anomalia "Uscita mancante".
+---
 
-### In Trasferta
-*   **Oggi (In corso)**: Le ore vengono calcolate in **tempo reale** (ora attuale - inizio), permettendo di vedere il bilancio crescere.
-*   **Giorni Passati**: Se la trasferta è rimasta aperta, il sistema assegna d'ufficio **8 ore** per chiudere il conteggio in modo sensato.
+## 4. Giornata Non Chiusa (Fallback)
+
+Per le giornate passate non chiuse:
+- Se manca la chiusura (uscita mancante o trasferta aperta), il sistema applica fallback a **8:00** ore lavorate.
+- L'anomalia resta visibile nel warning (es. "Uscita mancante").
+
+Per la giornata odierna:
+- In sede, senza uscita, non viene fatta stima in tempo reale.
+- Per trasferta aperta, resta attiva la stima in tempo reale solo per il segmento di trasferta.
 
 ---
 
 ## 5. Visualizzazione Anomalie (Warning)
 
-Un'icona a forma di triangolo giallo appare accanto alle ore se il sistema rileva dati incompleti. Passando il mouse sopra l'icona, il sistema specifica il problema:
-
-*   **Entrata / Uscita mancante**
-*   **Inizio / Fine pausa mancante**
-*   **Inizio / Ritorno trasferta mancante**
-*   **Timbrature dispari**: Indica un errore nella sequenza di timbratura fisica sul dispositivo.
-
-*Nota per Trasferte: L'anomalia "Ritorno trasferta mancante" non viene mostrata se l'utente non ha ancora timbrato l'uscita finale (permettendo trasferte notturne).*
+Il triangolo giallo appare quando i dati sono incompleti o incoerenti. Esempi:
+- Entrata mancante
+- Uscita mancante
+- Inizio/Fine pausa mancanti
+- Inizio/Ritorno trasferta mancanti
+- Marcature extra non allineate alla sequenza attesa
 
 ---
 
-## 6. Portale Dipendenti e Normalizzazione
+## 6. Normalizzazione Marcature
 
-Per garantire coerenza tra i vari tipi di dispositivi (hardware Anviz, timbratura via web), il sistema normalizza ogni marcatura secondo uno standard canonico:
-*   **In / Out**: Per l'inizio e la fine della giornata lavorativa.
-*   **I_pausa / F_pausa**: Per l'inizio e la fine della pausa pranzo.
-*   **U_trasf / R_trasf**: Per gli spostamenti in trasferta.
+Le marcature vengono normalizzate in uno schema comune:
+- `In` / `Out`
+- `I_pausa` / `F_pausa`
+- `U_trasf` / `R_trasf`
 
-Questo assicura che il calcolo delle ore sia sempre accurato, indipendentemente dalla lingua o dalla dicitura originale usata dal dispositivo.
+Questo mantiene coerente il calcolo ore tra dispositivo fisico e portale web.

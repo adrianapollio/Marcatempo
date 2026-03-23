@@ -37,7 +37,7 @@
 }
 
 body {
-    font-family: 'Outfit', 'Inter', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+    font-family: 'Outfit', 'Inter', sans-serif;
     background-color: var(--bg);
     display: flex;
     align-items: flex-start;
@@ -54,10 +54,13 @@ body {
     border-radius: 20px;
     box-shadow: var(--shadow-xl);
     width: 100%;
-    max-width: 98%;
+    max-width: none;
     overflow: hidden;
     position: relative;
     border: 1px solid var(--border);
+    height: calc(100vh - 48px);
+    display: flex;
+    flex-direction: column;
     animation: fadeInContainer 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -105,7 +108,7 @@ body {
 .header-actions {
     display: none;
     align-items: center;
-    gap: 12px;
+    gap: 18px;
 }
 
 .header-actions .btn-header {
@@ -149,7 +152,10 @@ body {
 }
 
 .content {
-    padding: 30px;
+    padding: 24px;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
 }
 
 /* Form Elements */
@@ -241,17 +247,17 @@ input:focus {
 
 /* Buttons */
 button {
-    width: 100%;
-    padding: 16px;
-    margin-top: 8px;
-    /* Added margin-top to separate button from inputs */
-    font-size: 18px;
+    background: var(--primary);
+    color: white;
     border: none;
     border-radius: 8px;
-    cursor: pointer;
+    padding: 12px 24px;
     font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
     font-family: inherit;
-    transition: transform 0.1s, opacity 0.2s;
+    align-items: center;
+    justify-content: center;
 }
 
 button:active {
@@ -265,13 +271,20 @@ button:active {
 }
 
 .btn-primary:hover {
-    opacity: 0.9;
+    background: var(--primary-dark);
+    box-shadow: 0 4px 12px rgba(0, 86, 179, 0.2);
 }
 
 .actions-grid button .btn-icon {
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    overflow: hidden;
+    flex-shrink: 0;
+    line-height: 0;
 }
 
 .actions-grid button .btn-icon svg {
@@ -280,6 +293,7 @@ button:active {
     stroke: currentColor;
     stroke-width: 2;
     fill: none;
+    display: block;
     stroke-linecap: round;
     stroke-linejoin: round;
 }
@@ -372,6 +386,7 @@ button:active {
 
 .btn-entrata .btn-icon {
     color: #1e7e34;
+    background: rgba(30, 126, 52, 0.12);
 }
 
 .btn-inizio-pausa {
@@ -386,6 +401,7 @@ button:active {
 
 .btn-inizio-pausa .btn-icon {
     color: #c67c00;
+    background: rgba(198, 124, 0, 0.14);
 }
 
 .btn-fine-pausa {
@@ -399,6 +415,7 @@ button:active {
 
 .btn-fine-pausa .btn-icon {
     color: #b57d1d;
+    background: rgba(181, 125, 29, 0.14);
 }
 
 .btn-uscita {
@@ -413,6 +430,7 @@ button:active {
 
 .btn-uscita .btn-icon {
     color: #bd2130;
+    background: rgba(189, 33, 48, 0.13);
 }
 
 .btn-inizio-trasferta {
@@ -427,6 +445,7 @@ button:active {
 
 .btn-inizio-trasferta .btn-icon {
     color: #5a32a3;
+    background: rgba(90, 50, 163, 0.14);
 }
 
 .btn-ritorno-trasferta {
@@ -440,6 +459,7 @@ button:active {
 
 .btn-ritorno-trasferta .btn-icon {
     color: #7048ac;
+    background: rgba(112, 72, 172, 0.14);
 }
 
 #clockStatus {
@@ -686,8 +706,107 @@ button:active {
 
 /* Login screen narrower */
 #loginScreen .content-inner {
-    max-width: 420px;
+    width: 100%;
+    max-width: 560px;
     margin: 0 auto;
+}
+
+#loginScreen.active-screen {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 100%;
+    padding: 32px;
+}
+
+.login-card {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    box-shadow: var(--shadow-lg);
+    padding: 34px 34px 28px;
+    width: 100%;
+}
+
+.login-icon-wrap {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 18px;
+    border-radius: 16px;
+    background: rgba(0, 86, 179, 0.1);
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-title {
+    margin: 0;
+    text-align: center;
+    color: var(--text-dark);
+    font-size: 1.35rem;
+    font-weight: 700;
+}
+
+.login-subtitle {
+    margin: 8px 0 24px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+}
+
+.login-link-wrap {
+    text-align: center;
+    margin-top: 20px;
+}
+
+#loginScreen .form-group {
+    margin-bottom: 20px;
+}
+
+#loginScreen .form-group label {
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.login-system-link {
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    text-decoration: none;
+    border-bottom: 1px dashed var(--border);
+    transition: color 0.2s, border-color 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.login-system-link:hover {
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+.login-status {
+    text-align: center;
+    font-size: 16px;
+    margin-top: 10px;
+    min-height: 24px;
+}
+
+#loginScreen .btn-primary {
+    display: block;
+    margin: 4px auto 0;
+    min-width: 160px;
+    width: fit-content;
+}
+
+#loginScreen input[type="text"],
+#loginScreen input[type="number"],
+#loginScreen input[type="password"] {
+    padding: 10px 14px;
+    border-width: 1px;
+    border-radius: 8px;
+    font-size: 1rem;
 }
 
 /* Responsive */
@@ -781,6 +900,16 @@ button:active {
         font-size: 13px;
         padding: 12px 6px;
         gap: 5px;
+    }
+
+    #loginScreen.active-screen {
+        min-height: auto;
+        align-items: flex-start;
+    }
+
+    .login-card {
+        padding: 24px 18px 20px;
+        border-radius: 18px;
     }
 
     .monthly-summary {
