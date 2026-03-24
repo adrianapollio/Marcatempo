@@ -16,6 +16,7 @@ type BackupConfig struct {
 	Retention int    // Numero di backup da mantenere
 	Hour      int    // Ora del giorno in cui eseguire il backup (0-23)
 	Minute    int    // Minuto dell'ora in cui eseguire il backup (0-59)
+	OnStartup bool   // Esegue un backup immediato all'avvio del server
 }
 
 // getBackupConfig legge la configurazione dai env vars o usa i default
@@ -35,11 +36,26 @@ func getBackupConfig() BackupConfig {
 		}
 	}
 
+	hour := 23
+	if val := os.Getenv("BACKUP_HOUR"); val != "" {
+		if n, err := fmt.Sscanf(val, "%d", &hour); n != 1 || err != nil || hour < 0 || hour > 23 {
+			hour = 23
+		}
+	}
+
+	minute := 59
+	if val := os.Getenv("BACKUP_MINUTE"); val != "" {
+		if n, err := fmt.Sscanf(val, "%d", &minute); n != 1 || err != nil || minute < 0 || minute > 59 {
+			minute = 59
+		}
+	}
+
 	return BackupConfig{
 		BackupDir: backupDir,
 		Retention: retention,
-		Hour:      0,  // Mezzanotte
-		Minute:    0,
+		Hour:      hour,
+		Minute:    minute,
+		OnStartup: envBool("BACKUP_ON_STARTUP", false),
 	}
 }
 
@@ -58,7 +74,7 @@ func PerformBackup() (string, error) {
 	backupFile := filepath.Join(config.BackupDir, fmt.Sprintf("attendance_backup_%s.db", timestamp))
 
 	// Usa VACUUM INTO per creare un backup atomico e consistente
-	// Questo è sicuro con WAL mode e non blocca lettori/scrittori concorrenti
+	// Questo e' sicuro con WAL mode e non blocca lettori/scrittori concorrenti
 	_, err := DB.Exec(fmt.Sprintf(`VACUUM INTO '%s'`, backupFile))
 	if err != nil {
 		return "", fmt.Errorf("errore VACUUM INTO: %w", err)
@@ -74,7 +90,7 @@ func PerformBackup() (string, error) {
 	return backupFile, nil
 }
 
-// rotateBackups mantiene solo gli ultimi N backup, eliminando i più vecchi
+// rotateBackups mantiene solo gli ultimi N backup, eliminando i piu' vecchi
 func rotateBackups(config BackupConfig) error {
 	entries, err := os.ReadDir(config.BackupDir)
 	if err != nil {
@@ -92,7 +108,7 @@ func rotateBackups(config BackupConfig) error {
 	// Ordina in ordine alfabetico (il timestamp nel nome garantisce l'ordine cronologico)
 	sort.Strings(backupFiles)
 
-	// Se ci sono più backup del consentito, elimina i più vecchi
+	// Se ci sono piu' backup del consentito, elimina i piu' vecchi
 	if len(backupFiles) > config.Retention {
 		toDelete := backupFiles[:len(backupFiles)-config.Retention]
 		for _, f := range toDelete {
@@ -109,15 +125,16 @@ func rotateBackups(config BackupConfig) error {
 }
 
 // StartBackupScheduler avvia il scheduler di backup giornaliero in background.
-// Esegue un backup immediato all'avvio, poi ogni giorno a mezzanotte.
+// Di default esegue un solo backup al giorno a fine giornata.
 func StartBackupScheduler() {
 	config := getBackupConfig()
-	log.Printf("[BACKUP] Scheduler avviato — backup giornaliero alle %02d:%02d, retention: %d copie, dir: %s",
-		config.Hour, config.Minute, config.Retention, config.BackupDir)
+	log.Printf("[BACKUP] Scheduler avviato - backup giornaliero alle %02d:%02d, retention: %d copie, avvio_immediato: %v, dir: %s",
+		config.Hour, config.Minute, config.Retention, config.OnStartup, config.BackupDir)
 
-	// Backup immediato all'avvio del server
-	if _, err := PerformBackup(); err != nil {
-		log.Printf("[BACKUP] Errore durante il backup iniziale: %v", err)
+	if config.OnStartup {
+		if _, err := PerformBackup(); err != nil {
+			log.Printf("[BACKUP] Errore durante il backup iniziale: %v", err)
+		}
 	}
 
 	go func() {
@@ -126,7 +143,7 @@ func StartBackupScheduler() {
 			// Calcola il prossimo orario di backup
 			next := time.Date(now.Year(), now.Month(), now.Day(), config.Hour, config.Minute, 0, 0, now.Location())
 			if !next.After(now) {
-				// Se l'orario di oggi è già passato, schedula per domani
+				// Se l'orario di oggi e' gia' passato, schedula per domani
 				next = next.Add(24 * time.Hour)
 			}
 
@@ -178,7 +195,7 @@ func GetBackupList() ([]BackupInfo, error) {
 		})
 	}
 
-	// Ordina dal più recente al più vecchio
+	// Ordina dal piu' recente al piu' vecchio
 	sort.Slice(backups, func(i, j int) bool {
 		return backups[i].CreatedAt.After(backups[j].CreatedAt)
 	})

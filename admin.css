@@ -1251,7 +1251,7 @@ button:active {
 .multi-select-container.open .multi-select-trigger {
     border-color: var(--primary);
     border-radius: 10px 10px 0 0;
-    border-bottom-color: var(--border);
+    border-bottom-color: var(--primary);
 }
 
 .multi-select-dropdown {
@@ -1260,7 +1260,7 @@ button:active {
     left: 0;
     right: 0;
     background: var(--card-bg);
-    border: 1px solid var(--input-border);
+    border: 1px solid var(--primary);
     border-top: none;
     border-radius: 0 0 12px 12px;
     box-shadow: var(--shadow-xl);

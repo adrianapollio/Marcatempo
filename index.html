@@ -767,6 +767,8 @@
                 let u = t(dayData.uscita);
                 const iT = t(dayData.inizio_trasferta);
                 let rT = t(dayData.ritorno_trasferta);
+                const hasCompletePause = iP !== null && fP !== null && fP > iP;
+                const hasAnyPauseMarker = iP !== null || fP !== null;
 
                 const today = new Date();
                 const todayStr = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().split('T')[0];
@@ -781,12 +783,14 @@
 
                 // Segment 1: Office morning (from Entrata to first logical stop)
                 if (e !== null) {
-                    let limit = [u, iP, iT].filter(x => x !== null && x > e).sort((a, b) => a - b)[0];
+                    const morningStops = [u, iT];
+                    if (hasCompletePause) morningStops.push(iP);
+                    let limit = morningStops.filter(x => x !== null && x > e).sort((a, b) => a - b)[0];
                     if (limit) intervals.push([e, limit]);
                 }
 
                 // Segment 2: Office afternoon (from Fine Pausa to next logical stop)
-                if (fP !== null) {
+                if (hasCompletePause) {
                     let limit = [u, iT].filter(x => x !== null && x > fP).sort((a, b) => a - b)[0];
                     if (limit) intervals.push([fP, limit]);
                 }
@@ -820,8 +824,8 @@
 
                 // Deduct pause only when the pause is not fully represented by the intervals
                 let pauseDeducted = 0;
-                if (iP !== null || fP !== null) {
-                    if (iP !== null && fP !== null && fP > iP) {
+                if (hasAnyPauseMarker) {
+                    if (hasCompletePause) {
                         pauseDeducted = 0; // Gia esclusa spezzando gli intervalli tra inizio e fine pausa
                     } else {
                     pauseDeducted = 60; // Partial pause marker
@@ -844,7 +848,7 @@
                 let anomalyReasons = [];
                 const makeWarningSvg = (tooltip) => {
                     const escapedTooltip = tooltip.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-                    return `<span title="${escapedTooltip}" style="cursor:help; display:inline-flex; vertical-align:middle; margin-left:4px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></span>`;
+                    return `<span class="hours-warning-icon" title="${escapedTooltip}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></span>`;
                 };
 
                 // Anomaly detection
@@ -909,16 +913,9 @@
                     
                     const diffMins = workedMins - theoreticalMins;
                     balanceDisplay = diffMins >= 0 ? '+' + minutesToHHMM(diffMins) : '-' + minutesToHHMM(Math.abs(diffMins));
-
-                    if (anomalyReasons.length > 0) {
-                        hoursDisplay += ' ' + makeWarningSvg(anomalyReasons.join(' | '));
-                    }
                 } else if (dayData.entrata && !dayData.uscita) {
                     hoursDisplay = '...';
                     hoursClass = 'hours-cell incomplete';
-                    if (anomalyReasons.length > 0) {
-                        hoursDisplay += ' ' + makeWarningSvg(anomalyReasons.join(' | '));
-                    }
                 } else if (!isWeekend && !isHolidayToday) {
                     const todayNode = new Date();
                     const todayStrNode = new Date(todayNode.getTime() - todayNode.getTimezoneOffset() * 60000).toISOString().split('T')[0];
@@ -928,9 +925,6 @@
                     } else {
                         hoursDisplay = '0:00';
                         balanceDisplay = '-8:00';
-                        if (anomalyReasons.length > 0) {
-                            hoursDisplay += ' ' + makeWarningSvg(anomalyReasons.join(' · '));
-                        }
                     }
                 }
 
@@ -951,6 +945,10 @@
                     const todayStrNode2 = new Date(todayNode2.getTime() - todayNode2.getTimezoneOffset() * 60000).toISOString().split('T')[0];
                     if (!isWeekend && !isHolidayToday && workedMins === 0 && (!dayData.entrata) && dateKey <= todayStrNode2) trClass += ' row-absence';
                     if (anomalyReasons.length > 0) trClass += ' row-anomaly';
+                    const warningHtml = anomalyReasons.length > 0
+                        ? makeWarningSvg(anomalyReasons.join(' | '))
+                        : '<span class="hours-warning-slot" aria-hidden="true"></span>';
+                    const hoursCellHtml = `<span class="hours-content">${warningHtml}<span class="hours-value">${hoursDisplay}</span></span>`;
 
                     html += `<tr class="${trClass.trim()}">
                         <td class="date-cell">${dateLabel}</td>
@@ -960,7 +958,7 @@
                         <td>${dayData.uscita || '—'}</td>
                         <td>${dayData.inizio_trasferta || '—'}</td>
                         <td>${dayData.ritorno_trasferta || '—'}</td>
-                        <td class="${hoursClass}">${hoursDisplay}</td>
+                        <td class="${hoursClass}">${hoursCellHtml}</td>
                     </tr>`;
                 }
             });
@@ -1291,4 +1289,5 @@
 </body>
 
 </html>
+
 

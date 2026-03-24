@@ -10,6 +10,9 @@ services:
       - TZ=Europe/Rome
       - PORT=8080
       - DB_PATH=/app/data/attendance.db
+      - BACKUP_HOUR=23
+      - BACKUP_MINUTE=59
+      - BACKUP_ON_STARTUP=false
       - ANVIZ_SYNC_ENABLED=true
       - ANVIZ_SYNC_INTERVAL_MINUTES=30
       - ANVIZ_AUTO_ATTENDANCE_MODE=new

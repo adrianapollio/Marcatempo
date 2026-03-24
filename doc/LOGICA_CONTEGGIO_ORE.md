@@ -36,6 +36,9 @@ Gli intervalli sovrapposti vengono uniti per evitare doppio conteggio.
 | **Pausa parziale** | Sottrazione fissa di **60 minuti** |
 | **Pausa non marcata su giornata piena** | Sottrazione fissa di **60 minuti** (soglia: almeno 8:00 ore) |
 
+Nota importante anti-distorsione:
+- Con `entrata` e `uscita` presenti, se manca solo `inizio_pausa` oppure solo `fine_pausa`, la giornata resta continua (non viene troncata a meta) e viene applicata solo la sottrazione fissa di 60 minuti.
+
 ---
 
 ## 4. Giornata Non Chiusa (Fallback)

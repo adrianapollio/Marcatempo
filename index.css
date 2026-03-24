@@ -285,6 +285,10 @@ button:active {
     overflow: hidden;
     flex-shrink: 0;
     line-height: 0;
+    background: transparent;
+    
+    box-shadow: none;
+    background-image: none;
 }
 
 .actions-grid button .btn-icon svg {
@@ -296,6 +300,9 @@ button:active {
     display: block;
     stroke-linecap: round;
     stroke-linejoin: round;
+    background: transparent;
+    background-image: none;
+    box-shadow: none;
 }
 
 /* Screens */
@@ -386,7 +393,6 @@ button:active {
 
 .btn-entrata .btn-icon {
     color: #1e7e34;
-    background: rgba(30, 126, 52, 0.12);
 }
 
 .btn-inizio-pausa {
@@ -401,7 +407,6 @@ button:active {
 
 .btn-inizio-pausa .btn-icon {
     color: #c67c00;
-    background: rgba(198, 124, 0, 0.14);
 }
 
 .btn-fine-pausa {
@@ -415,7 +420,6 @@ button:active {
 
 .btn-fine-pausa .btn-icon {
     color: #b57d1d;
-    background: rgba(181, 125, 29, 0.14);
 }
 
 .btn-uscita {
@@ -430,7 +434,6 @@ button:active {
 
 .btn-uscita .btn-icon {
     color: #bd2130;
-    background: rgba(189, 33, 48, 0.13);
 }
 
 .btn-inizio-trasferta {
@@ -445,7 +448,6 @@ button:active {
 
 .btn-inizio-trasferta .btn-icon {
     color: #5a32a3;
-    background: rgba(90, 50, 163, 0.14);
 }
 
 .btn-ritorno-trasferta {
@@ -459,7 +461,6 @@ button:active {
 
 .btn-ritorno-trasferta .btn-icon {
     color: #7048ac;
-    background: rgba(112, 72, 172, 0.14);
 }
 
 #clockStatus {
@@ -648,6 +649,35 @@ button:active {
 .attendance-table .hours-cell {
     font-weight: 700;
     color: var(--primary);
+}
+
+.attendance-table .hours-content {
+    display: inline-grid;
+    grid-template-columns: 18px auto;
+    align-items: center;
+    justify-content: center;
+    column-gap: 6px;
+}
+
+.attendance-table .hours-value {
+    display: inline-block;
+    min-width: 3.2ch;
+    text-align: left;
+}
+
+.attendance-table .hours-warning-slot {
+    width: 18px;
+    height: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.attendance-table .hours-warning-icon {
+    cursor: help;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .attendance-table .hours-cell.incomplete {

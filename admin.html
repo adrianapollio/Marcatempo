@@ -240,7 +240,7 @@
                         <div class="filter-item filter-item-period">
                             <label>Periodo di Riferimento</label>
                             <div style="display: flex; gap: 10px; align-items: center;">
-                                <div class="month-nav" style="flex: 1;">
+                                <div class="month-nav" style="flex: 1 1 auto; min-width: 0;">
                                     <button onclick="prevMonth()" title="Mese Precedente">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
                                             stroke-linecap="round" stroke-linejoin="round">
@@ -421,6 +421,9 @@
 
                 <!-- Period Summary Table -->
                 <div class="table-container" id="periodSummaryContainer" style="display: none;">
+                    <div style="padding: 12px 16px; font-size: 0.875rem; color: var(--text-secondary); border-bottom: 1px solid var(--border); background: var(--card-bg);">
+                        Bilancio calcolato su tutti i record del periodo selezionato (non influenzato dai filtri "Solo anomalie" e "Solo assenze").
+                    </div>
                     <table class="attendance-table">
                         <thead>
                             <tr>
@@ -468,7 +471,8 @@
         let itemsPerPage = 15;
         let currentSortOrder = 'desc'; // Default desc
         let globalProcessedData = []; // All records including empty ones
-        let globalFilteredData = [];  // Data currently matching the search filter
+        let globalFilteredData = [];  // Data shown in daily table (includes anomaly/absence filters)
+        let globalSummaryData = [];   // Data used in period summary (excludes anomaly/absence filters)
         let flatpickrInstance = null;
         let mcDateInstance = null;
         let mcTimeInstance = null;
@@ -1085,7 +1089,8 @@
 
         // --- PDF Generation ---
         function downloadPDFReport() {
-            if (globalFilteredData.length === 0) {
+            const exportData = currentTab === 'period' ? globalSummaryData : globalFilteredData;
+            if (exportData.length === 0) {
                 showToast("Nessun record da esportare!", "error");
                 return;
             }
@@ -1184,7 +1189,7 @@
 
                 const empSummary = {};
                 const periodTheo = getPeriodTheoretical();
-                globalFilteredData.forEach(day => {
+                globalSummaryData.forEach(day => {
                     if (!empSummary[day.empId]) {
                         empSummary[day.empId] = { id: day.empId, name: day.empDisplay, workedMins: 0, theoreticalMins: periodTheo.theoreticalMins, workedDays: 0, theoreticalDays: periodTheo.theoreticalDays };
                     }
@@ -1244,7 +1249,8 @@
 
         // --- CSV Generation ---
         function downloadCSVReport() {
-            if (globalFilteredData.length === 0) {
+            const exportData = currentTab === 'period' ? globalSummaryData : globalFilteredData;
+            if (exportData.length === 0) {
                 showToast("Nessun record da esportare!", "error");
                 return;
             }
@@ -1311,7 +1317,7 @@
 
                 const empSummary = {};
                 const periodTheo = getPeriodTheoretical();
-                globalFilteredData.forEach(day => {
+                globalSummaryData.forEach(day => {
                     if (!empSummary[day.empId]) {
                         empSummary[day.empId] = { id: day.empId, name: day.empDisplay, workedMins: 0, theoreticalMins: periodTheo.theoreticalMins, workedDays: 0, theoreticalDays: periodTheo.theoreticalDays };
                     }
@@ -1772,6 +1778,7 @@
             const onlyAbsence = document.getElementById('filterAbsence') ? document.getElementById('filterAbsence').checked : false;
 
             globalFilteredData = [];
+            globalSummaryData = [];
 
             globalProcessedData.forEach(dayData => {
                 // Search filter
@@ -1784,6 +1791,9 @@
                         return; // Skip
                     }
                 }
+
+                // Period summary is independent from anomaly/absence checkboxes
+                globalSummaryData.push(dayData);
 
                 // Anomaly/Absence filters
                 if (onlyAnomaly || onlyAbsence) {
@@ -1799,15 +1809,14 @@
                 globalFilteredData.push(dayData);
             });
 
-            if (globalFilteredData.length === 0) {
+            if (globalSummaryData.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; color:var(--text-light); padding:20px;">Nessun record trovato per i filtri selezionati</td></tr>';
                 document.getElementById('paginationControls').style.display = 'none';
                 document.getElementById('tabNavigationControls').style.display = 'none';
-
                 document.getElementById('periodSummaryBody').innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-light); padding:20px;">Nessun record trovato</td></tr>';
             } else {
-                currentPage = 1;
                 document.getElementById('tabNavigationControls').style.display = 'flex';
+                currentPage = 1;
                 switchSummaryTab(currentTab);
             }
         }
@@ -1818,7 +1827,12 @@
 
             const periodTheo = getPeriodTheoretical();
 
-            globalFilteredData.forEach(day => {
+            if (globalSummaryData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-light); padding:20px;">Nessun record trovato</td></tr>';
+                return;
+            }
+
+            globalSummaryData.forEach(day => {
                 if (!empSummary[day.empId]) {
                     empSummary[day.empId] = {
                         id: day.empId,
@@ -1944,6 +1958,12 @@
         function displayCurrentPage() {
             const tbody = document.getElementById('attendanceBody');
             const paginationControls = document.getElementById('paginationControls');
+
+            if (globalFilteredData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; color:var(--text-light); padding:20px;">Nessun record trovato per i filtri selezionati</td></tr>';
+                paginationControls.style.display = 'none';
+                return;
+            }
 
             const totalPages = Math.ceil(globalFilteredData.length / itemsPerPage);
             if (currentPage > totalPages) currentPage = totalPages;
@@ -2097,6 +2117,8 @@
             let u = t(dayData.uscita);
             const iT = t(dayData.inizio_trasferta);
             let rT = t(dayData.ritorno_trasferta);
+            const hasCompletePause = iP !== null && fP !== null && fP > iP;
+            const hasAnyPauseMarker = iP !== null || fP !== null;
 
             const today = new Date();
             const todayStr = formatDateLocal(today);
@@ -2111,12 +2133,14 @@
 
             // Segment 1: Office morning (from Entrata to first logical stop)
             if (e !== null) {
-                let limit = [u, iP, iT].filter(x => x !== null && x > e).sort((a, b) => a - b)[0];
+                const morningStops = [u, iT];
+                if (hasCompletePause) morningStops.push(iP);
+                let limit = morningStops.filter(x => x !== null && x > e).sort((a, b) => a - b)[0];
                 if (limit) intervals.push([e, limit]);
             }
 
             // Segment 2: Office afternoon (from Fine Pausa to next logical stop)
-            if (fP !== null) {
+            if (hasCompletePause) {
                 let limit = [u, iT].filter(x => x !== null && x > fP).sort((a, b) => a - b)[0];
                 if (limit) intervals.push([fP, limit]);
             }
@@ -2154,8 +2178,8 @@
 
             // Deduct pause only when the pause is not fully represented by the intervals
             let pauseDeducted = 0;
-            if (iP !== null || fP !== null) {
-                if (iP !== null && fP !== null && fP > iP) {
+            if (hasAnyPauseMarker) {
+                if (hasCompletePause) {
                     pauseDeducted = 0; // Gia esclusa spezzando gli intervalli tra inizio e fine pausa
                 } else {
                 pauseDeducted = 60; // Partial pause marker
