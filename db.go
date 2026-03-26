@@ -1001,8 +1001,26 @@ func GetRecords(startDate, endDate, employeeID string) ([]Record, error) {
 		args = append(args, endDate)
 	}
 	if employeeID != "" && employeeID != "null" {
-		query += " AND employee_id = ?"
-		args = append(args, employeeID)
+		rawIDs := strings.Split(employeeID, ",")
+		validIDs := make([]string, 0, len(rawIDs))
+		for _, rawID := range rawIDs {
+			trimmedID := strings.TrimSpace(rawID)
+			if trimmedID != "" {
+				validIDs = append(validIDs, trimmedID)
+			}
+		}
+
+		if len(validIDs) == 1 {
+			query += " AND employee_id = ?"
+			args = append(args, validIDs[0])
+		} else if len(validIDs) > 1 {
+			placeholders := make([]string, 0, len(validIDs))
+			for _, id := range validIDs {
+				placeholders = append(placeholders, "?")
+				args = append(args, id)
+			}
+			query += " AND employee_id IN (" + strings.Join(placeholders, ",") + ")"
+		}
 	}
 	query += " ORDER BY timestamp ASC"
 
@@ -1161,31 +1179,37 @@ func UpdateManualRecord(id int, timestamp time.Time, action string, statusCode i
 // actionGroup restituisce il gruppo semantico di un'azione per il controllo duplicati.
 // Ogni tipo di marcatura ha il proprio gruppo, così "Entrata" non blocca "Inizio Pausa".
 func actionGroup(action string) string {
-	switch action {
-	case "In", "in", "entrata":
+	normalized := strings.TrimSpace(strings.ToLower(action))
+	switch {
+	case normalized == "in" || normalized == "entrata":
 		return "entrata"
-	case "Out", "out", "uscita":
+	case normalized == "out" || normalized == "uscita":
 		return "uscita"
-	case "I_pausa", "inizio_pausa", "I_break":
+	case normalized == "i_pausa" || normalized == "inizio_pausa" || normalized == "i_break":
 		return "inizio_pausa"
-	case "F_pausa", "fine_pausa", "F_break":
+	case normalized == "f_pausa" || normalized == "fine_pausa" || normalized == "f_break":
 		return "fine_pausa"
-	case "U_trasf", "inizio_trasferta":
+	case normalized == "inizio_trasferta" || strings.HasPrefix(normalized, "u_trasf") || strings.HasPrefix(normalized, "u_trasfer") || strings.HasPrefix(normalized, "u_transfer"):
 		return "inizio_trasferta"
-	case "R_trasf", "ritorno_trasferta":
+	case normalized == "ritorno_trasferta" || strings.HasPrefix(normalized, "r_trasf") || strings.HasPrefix(normalized, "r_trasfer") || strings.HasPrefix(normalized, "r_transfer"):
 		return "ritorno_trasferta"
 	default:
-		return action
+		return normalized
 	}
 }
 
-// GetRecordHasDeviceEquivalent verifica se per quel dipendente esiste già una marcatura device
-// della stessa tipologia specifica (es. entrata, inizio_pausa) nello stesso giorno.
-func GetRecordHasDeviceEquivalent(employeeID int, date string, action string) bool {
+// GetRecordHasDeviceEquivalent verifica se per quel dipendente esiste gia una marcatura device
+// della stessa tipologia nello stesso minuto. Questo evita duplicati veri ma consente di
+// recuperare manualmente marcature mancanti della stessa categoria in orari diversi.
+func GetRecordHasDeviceEquivalent(employeeID int, timestamp time.Time, action string) bool {
 	targetGroup := actionGroup(action)
 
-	query := `SELECT action FROM records WHERE employee_id = ? AND date(timestamp) = date(?) AND source = 'device'`
-	rows, err := DB.Query(query, employeeID, date)
+	query := `SELECT action
+		FROM records
+		WHERE employee_id = ?
+		  AND source = 'device'
+		  AND strftime('%Y-%m-%d %H:%M', timestamp) = strftime('%Y-%m-%d %H:%M', ?)`
+	rows, err := DB.Query(query, employeeID, timestamp.Format(time.RFC3339))
 	if err != nil {
 		return false
 	}

@@ -526,8 +526,8 @@
             'out': 'uscita', 'uscita': 'uscita',
             'i_pausa': 'inizio_pausa', 'inizio_pausa': 'inizio_pausa',
             'f_pausa': 'fine_pausa', 'fine_pausa': 'fine_pausa',
-            'u_trasf': 'inizio_trasferta', 'inizio_trasferta': 'inizio_trasferta', 'u_trasfer': 'inizio_trasferta',
-            'r_trasf': 'ritorno_trasferta', 'ritorno_trasferta': 'ritorno_trasferta', 'r_trasfer': 'ritorno_trasferta',
+            'u_trasf': 'inizio_trasferta', 'inizio_trasferta': 'inizio_trasferta', 'u_trasfer': 'inizio_trasferta', 'u_transfer': 'inizio_trasferta',
+            'r_trasf': 'ritorno_trasferta', 'ritorno_trasferta': 'ritorno_trasferta', 'r_trasfer': 'ritorno_trasferta', 'r_transfer': 'ritorno_trasferta',
             'i_break': 'inizio_pausa', 'f_break': 'fine_pausa' // Casi legacy
         };
 
@@ -540,6 +540,15 @@
             'inizio_trasferta': 'Trasferta (U)',
             'ritorno_trasferta': 'Trasferta (R)'
         };
+
+        function normalizeAttendanceAction(rawAction) {
+            const action = (rawAction || "").trim().toLowerCase();
+            if (!action) return action;
+            if (ACTION_MAP[action]) return ACTION_MAP[action];
+            if (action.startsWith('u_trasf') || action.startsWith('u_trasfer') || action.startsWith('u_transfer')) return 'inizio_trasferta';
+            if (action.startsWith('r_trasf') || action.startsWith('r_trasfer') || action.startsWith('r_transfer')) return 'ritorno_trasferta';
+            return action;
+        }
 
         async function restoreAdminSession() {
             try {
@@ -785,6 +794,7 @@
                 
                 allEmployeesData = data.filter(e => {
                     let empName = e.name ? e.name.trim() : "";
+                    if (["33", "56"].includes(String(e.id))) return true;
                     if (empName.toUpperCase().startsWith("EX")) return false;
                     if (!empName || empName.toLowerCase().startsWith("nome vuoto")) return false;
                     return true;
@@ -1194,13 +1204,14 @@
                         empSummary[day.empId] = { id: day.empId, name: day.empDisplay, workedMins: 0, theoreticalMins: periodTheo.theoreticalMins, workedDays: 0, theoreticalDays: periodTheo.theoreticalDays };
                     }
                     const workedMins = calculateWorkedMinutes(day);
+                    const isFinished = day.uscita || (day.inizio_trasferta && day.ritorno_trasferta && !day.entrata) || (!day.inizio_trasferta && day.entrata && day.ritorno_trasferta);
                     if (workedMins > 0) { 
                         const isToday = (day.dateKey === formatDateLocal(new Date()));
-                        if (isToday && !day.isWeekend && !day.isHoliday && day.uscita) {
+                        if (isToday && !day.isWeekend && !day.isHoliday && isFinished) {
                             empSummary[day.empId].theoreticalMins += 480;
                             empSummary[day.empId].theoreticalDays++;
                         }
-                        if (!isToday || (isToday && day.uscita)) {
+                        if (!isToday || (isToday && isFinished)) {
                             empSummary[day.empId].workedMins += workedMins; 
                             empSummary[day.empId].workedDays++; 
                         }
@@ -1289,7 +1300,7 @@
                         hoursDisplay = minutesToHHMM(workedMins);
                         let theoreticalMins = dayData.isHoliday ? 0 : 480;
                         const isTodayLocal = (dayData.dateKey === formatDateLocal(new Date()));
-                        const isFinished = dayData.uscita || (dayData.inizio_trasferta && dayData.ritorno_trasferta && !dayData.entrata);
+                        const isFinished = dayData.uscita || (dayData.inizio_trasferta && dayData.ritorno_trasferta && !dayData.entrata) || (!dayData.inizio_trasferta && dayData.entrata && dayData.ritorno_trasferta);
                         if (isTodayLocal && !isFinished) {
                             theoreticalMins = workedMins; // Evita di sballare verso il negativo mostrando 8h teoriche
                         }
@@ -1322,7 +1333,7 @@
                         empSummary[day.empId] = { id: day.empId, name: day.empDisplay, workedMins: 0, theoreticalMins: periodTheo.theoreticalMins, workedDays: 0, theoreticalDays: periodTheo.theoreticalDays };
                     }
                     const workedMins = calculateWorkedMinutes(day);
-                    const isFinished = day.uscita || (day.inizio_trasferta && day.ritorno_trasferta && !day.entrata);
+                    const isFinished = day.uscita || (day.inizio_trasferta && day.ritorno_trasferta && !day.entrata) || (!day.inizio_trasferta && day.entrata && day.ritorno_trasferta);
                     if (workedMins > 0) { 
                         const isToday = (day.dateKey === formatDateLocal(new Date()));
                         if (isToday && !day.isWeekend && !day.isHoliday && isFinished) {
@@ -1539,11 +1550,87 @@
             pushExtraDailyMark(group, record);
         }
 
+        function normalizeTravelSelection(group) {
+            const isTravelAction = (action) => action === 'inizio_trasferta' || action === 'ritorno_trasferta';
+            const travelRecords = (group.rawRecords || [])
+                .filter(rec => isTravelAction(rec.mappedAction))
+                .sort((a, b) => a.tsMs - b.tsMs);
+
+            group.travelSelectionNote = null;
+            if (travelRecords.length === 0) return;
+
+            const travelStarts = travelRecords.filter(rec => rec.mappedAction === 'inizio_trasferta');
+            const travelReturns = travelRecords.filter(rec => rec.mappedAction === 'ritorno_trasferta');
+            let primaryStart = null;
+            let primaryReturn = null;
+
+            // Prefer the first coherent U_trasf -> R_trasf pair in chronological order.
+            for (const startRec of travelStarts) {
+                const matchingReturn = travelReturns.find(rec => rec.tsMs > startRec.tsMs);
+                if (matchingReturn) {
+                    primaryStart = startRec;
+                    primaryReturn = matchingReturn;
+                    break;
+                }
+            }
+
+            if (!primaryStart && !primaryReturn && travelStarts.length > 0) {
+                primaryStart = travelStarts[0];
+            } else if (!primaryStart && !primaryReturn && travelReturns.length > 0) {
+                // Fallback only when no coherent pair exists at all.
+                primaryReturn = travelReturns[0];
+            }
+
+            const clearTravelField = (key) => {
+                group[key] = null;
+                group[key + '_id'] = null;
+                group[key + '_source'] = null;
+                group[key + '_lat'] = null;
+                group[key + '_lon'] = null;
+                group[key + '_rawAction'] = null;
+            };
+
+            const applyTravelField = (key, rec) => {
+                group[key] = rec.timeStr;
+                group[key + '_id'] = rec.id;
+                group[key + '_source'] = rec.source;
+                group[key + '_lat'] = rec.lat;
+                group[key + '_lon'] = rec.lon;
+                group[key + '_rawAction'] = rec.rawAction;
+            };
+
+            clearTravelField('inizio_trasferta');
+            clearTravelField('ritorno_trasferta');
+            if (primaryStart) applyTravelField('inizio_trasferta', primaryStart);
+            if (primaryReturn) applyTravelField('ritorno_trasferta', primaryReturn);
+
+            // Keep only the selected travel pair in columns, move all other travel marks to tooltip extras.
+            group.extraMarks = (group.extraMarks || []).filter(em => !isTravelAction(em.action));
+            travelRecords.forEach(rec => {
+                const isPrimaryStart = primaryStart && rec === primaryStart;
+                const isPrimaryReturn = primaryReturn && rec === primaryReturn;
+                if (!isPrimaryStart && !isPrimaryReturn) {
+                    pushExtraDailyMark(group, rec);
+                }
+            });
+
+            if (travelRecords.length > 2) {
+                if (primaryStart && primaryReturn) {
+                    group.travelSelectionNote = `Trasferta multipla: mantenuta 1a coppia coerente (${primaryStart.timeStr}-${primaryReturn.timeStr}), altre in EXTRA`;
+                } else if (primaryStart) {
+                    group.travelSelectionNote = `Trasferta multipla: mantenuto 1o inizio trasferta (${primaryStart.timeStr}), altre in EXTRA`;
+                } else if (primaryReturn) {
+                    group.travelSelectionNote = `Trasferta multipla: mantenuto 1o ritorno trasferta (${primaryReturn.timeStr}), altre in EXTRA`;
+                }
+            }
+        }
+
         function renderAdminTable(records, currentNamesMap) {
             const tbody = document.getElementById('attendanceBody');
 
-            function isInvalidName(n) {
+            function isInvalidName(n, employeeId = null) {
                 if (!n) return true;
+                if (["33", "56"].includes(String(employeeId))) return false;
                 let lower = n.toLowerCase().trim();
                 if (lower.startsWith("ex")) return true;
                 if (lower.startsWith("nome vuoto")) return true;
@@ -1554,7 +1641,7 @@
             const allEmpIds = [];
 
             allEmployeesData.forEach(e => {
-                if (!isInvalidName(e.name)) {
+                if (!isInvalidName(e.name, e.id)) {
                     allEmpIds.push(String(e.id));
                 }
             });
@@ -1582,8 +1669,9 @@
 
             const groupedMap = {};
 
-            function isInvalidName(n) {
+            function isInvalidName(n, employeeId = null) {
                 if (!n) return true;
+                if (["33", "56"].includes(String(employeeId))) return false;
                 let lower = n.toLowerCase().trim();
                 if (lower.startsWith("ex")) return true;
                 if (lower.startsWith("nome vuoto")) return true;
@@ -1605,9 +1693,9 @@
                     // but we won't generate empty rows for them in the second pass.
 
                     let bestName = "";
-                    if (!isInvalidName(cName)) {
+                    if (!isInvalidName(cName, empId)) {
                         bestName = cName;
-                    } else if (!isInvalidName(hName)) {
+                    } else if (!isInvalidName(hName, empId)) {
                         bestName = hName;
                     } else {
                         bestName = "Dipendente ID: " + empId;
@@ -1647,7 +1735,7 @@
 
                     // Mappatura azione robusta: minuscolo e trim
                     const rawAction = (r.action || "").trim().toLowerCase();
-                    const mappedAction = ACTION_MAP[rawAction] || rawAction;
+                    const mappedAction = normalizeAttendanceAction(r.action);
                     groupedMap[dailyKey].rawRecords.push({
                         id: r.id, 
                         source: r.source,
@@ -1669,6 +1757,7 @@
 
                 group.rawRecords.sort((a, b) => a.tsMs - b.tsMs);
                 group.rawRecords.forEach(rec => assignDailyRecord(group, rec));
+                normalizeTravelSelection(group);
 
             });
 
@@ -1679,18 +1768,20 @@
                 records.forEach(r => {
                     const idStr = String(r.employee_id);
                     let cName = currentNamesMap[r.employee_id] || "";
-                    if (!isInvalidName(cName)) foundEmpIds.add(idStr);
+                    if (!isInvalidName(cName, idStr)) foundEmpIds.add(idStr);
                     // Accettiamo i recovery Excel
-                    else if (r.employee_name && !isInvalidName(r.employee_name)) foundEmpIds.add(idStr);
+                    else if (r.employee_name && !isInvalidName(r.employee_name, idStr)) foundEmpIds.add(idStr);
                 });
             }
 
             const empsToCheck = filterEmpIds.length > 0 ? filterEmpIds : Array.from(foundEmpIds);
+            const historicalOnlyEmployeeIds = new Set(["33", "56"]);
 
             const todayStr = formatDateLocal(new Date());
 
             empsToCheck.forEach(empId => {
                 let nameToUse = currentNamesMap[empId] || "";
+                const skipSyntheticEmptyRows = historicalOnlyEmployeeIds.has(String(empId));
                 
                 // Fallback attempt: if we don't have it in currentNamesMap, look inside records
                 if (!nameToUse && records) {
@@ -1708,6 +1799,7 @@
                     if (day.isSunday) return; // Domeniche escluse completamente
 
                     const dailyKey = empId + '_' + day.dateKey;
+                    if (skipSyntheticEmptyRows && !groupedMap[dailyKey]) return;
 
                     // I festivi e i sabati feriali vengono inclusi se hanno marcature
                     // O se vogliamo mostrarli come "Festivo" non lavorato (i festivi)
@@ -1846,7 +1938,7 @@
 
                 const workedMins = calculateWorkedMinutes(day);
                 const isToday = (day.dateKey === formatDateLocal(new Date()));
-                const isFinished = day.uscita || (day.inizio_trasferta && day.ritorno_trasferta && !day.entrata);
+                const isFinished = day.uscita || (day.inizio_trasferta && day.ritorno_trasferta && !day.entrata) || (!day.inizio_trasferta && day.entrata && day.ritorno_trasferta);
 
                 // Se è OGGI ed è finita, aggiungiamo le 8 ore teoriche al totale di questo dipendente
                 if (isToday && !day.isWeekend && !day.isHoliday && isFinished) {
@@ -1916,11 +2008,17 @@
                     anomalyReasons.push('Inizio pausa mancante');
                 }
                 // Controllo: trasferta incompleta
-                if (dayData.inizio_trasferta && !dayData.ritorno_trasferta && dayData.uscita) {
-                    anomalyReasons.push('Ritorno trasferta mancante');
+                const hasTravelSelectionNote = !!dayData.travelSelectionNote;
+                if (!hasTravelSelectionNote) {
+                    if (dayData.inizio_trasferta && !dayData.ritorno_trasferta && dayData.uscita) {
+                        anomalyReasons.push('Ritorno trasferta mancante');
+                    }
+                    if (!dayData.inizio_trasferta && dayData.ritorno_trasferta) {
+                        anomalyReasons.push('Inizio trasferta mancante');
+                    }
                 }
-                if (!dayData.inizio_trasferta && dayData.ritorno_trasferta) {
-                    anomalyReasons.push('Inizio trasferta mancante');
+                if (dayData.travelSelectionNote) {
+                    anomalyReasons.push(dayData.travelSelectionNote);
                 }
 
                 // Controllo: marcature extra o sconosciute
@@ -2025,7 +2123,7 @@
                     let theoreticalMins = dayData.isHoliday ? 0 : 480;
                     
                     const isTodayLocal = (dayData.dateKey === formatDateLocal(new Date()));
-                    const isFinished = dayData.uscita || (dayData.inizio_trasferta && dayData.ritorno_trasferta && !dayData.entrata);
+                    const isFinished = dayData.uscita || (dayData.inizio_trasferta && dayData.ritorno_trasferta && !dayData.entrata) || (!dayData.inizio_trasferta && dayData.entrata && dayData.ritorno_trasferta);
                     if (isTodayLocal && !isFinished) {
                         theoreticalMins = workedMins; // Nasconde la negatività teorica fittizia per il giorno in corso!
                     }
@@ -2117,6 +2215,8 @@
             let u = t(dayData.uscita);
             const iT = t(dayData.inizio_trasferta);
             let rT = t(dayData.ritorno_trasferta);
+            const inferredExitFromReturn = (e !== null && u === null && iT === null && rT !== null) ? rT : null;
+            const officeExit = (u !== null) ? u : inferredExitFromReturn;
             const hasCompletePause = iP !== null && fP !== null && fP > iP;
             const hasAnyPauseMarker = iP !== null || fP !== null;
 
@@ -2133,7 +2233,7 @@
 
             // Segment 1: Office morning (from Entrata to first logical stop)
             if (e !== null) {
-                const morningStops = [u, iT];
+                const morningStops = [officeExit, iT];
                 if (hasCompletePause) morningStops.push(iP);
                 let limit = morningStops.filter(x => x !== null && x > e).sort((a, b) => a - b)[0];
                 if (limit) intervals.push([e, limit]);
@@ -2141,7 +2241,7 @@
 
             // Segment 2: Office afternoon (from Fine Pausa to next logical stop)
             if (hasCompletePause) {
-                let limit = [u, iT].filter(x => x !== null && x > fP).sort((a, b) => a - b)[0];
+                let limit = [officeExit, iT].filter(x => x !== null && x > fP).sort((a, b) => a - b)[0];
                 if (limit) intervals.push([fP, limit]);
             }
 
@@ -2151,12 +2251,12 @@
             }
 
             // Segment 4: Office post-travel (from Ritorno to Uscita)
-            if (rT !== null && u !== null && u > rT) {
-                intervals.push([rT, u]);
+            if (rT !== null && officeExit !== null && officeExit > rT) {
+                intervals.push([rT, officeExit]);
             }
 
             if (intervals.length === 0) {
-                const hasUnclosedDay = (e !== null && u === null) || (iT !== null && rT === null);
+                const hasUnclosedDay = (e !== null && officeExit === null) || (iT !== null && rT === null);
                 if (!isToday && hasUnclosedDay) return 480;
                 return 0;
             }
@@ -2192,7 +2292,7 @@
             workedMins -= pauseDeducted;
             if (workedMins < 0) workedMins = 0;
 
-            const hasUnclosedDay = (e !== null && u === null) || (iT !== null && rT === null);
+            const hasUnclosedDay = (e !== null && officeExit === null) || (iT !== null && rT === null);
             if (!isToday && hasUnclosedDay) {
                 return 480;
             }

@@ -767,8 +767,8 @@ func handleAdminManualClock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Controllo duplicato dal dispositivo terminale
-	if GetRecordHasDeviceEquivalent(data.EmployeeID, data.Date, data.Action) {
-		log.Printf("MANUAL CLOCK BLOCKED: Dipendente %d ha già una marcatura dispositivo di questo tipo il %s", data.EmployeeID, data.Date)
+	if GetRecordHasDeviceEquivalent(data.EmployeeID, timestamp, data.Action) {
+		log.Printf("MANUAL CLOCK BLOCKED: Dipendente %d ha già una marcatura dispositivo equivalente a %s", data.EmployeeID, timestamp.Format(time.RFC3339))
 		http.Error(w, "Esiste già una marcatura proveniente dal dispositivo per questa azione nella data indicata", http.StatusBadRequest)
 		return
 	}
@@ -864,8 +864,8 @@ func handleEditAdminManualClock(w http.ResponseWriter, r *http.Request) {
 	// Controllo duplicato dal dispositivo terminale (per il giorno impostato)
 	// Essendo un edit, se il record fosse manual_web non c'è rischio di collisione con se stesso,
 	// ma la GetRecordHasDeviceEquivalent verifica i log con source = 'device' e questo va bene.
-	if GetRecordHasDeviceEquivalent(record.EmployeeID, data.Date, data.Action) {
-		log.Printf("EDIT MANUAL CLOCK BLOCKED: Dipendente %d ha già una marcatura dispositivo il %s", record.EmployeeID, data.Date)
+	if GetRecordHasDeviceEquivalent(record.EmployeeID, timestamp, data.Action) {
+		log.Printf("EDIT MANUAL CLOCK BLOCKED: Dipendente %d ha già una marcatura dispositivo equivalente a %s", record.EmployeeID, timestamp.Format(time.RFC3339))
 		http.Error(w, "Esiste già una marcatura proveniente dal dispositivo per questa azione nella data indicata", http.StatusBadRequest)
 		return
 	}

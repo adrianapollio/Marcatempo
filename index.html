@@ -286,26 +286,34 @@
         const DAY_NAMES = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 
         const ACTION_MAP = {
-            // Map old "in"/"out" to new columns for backward compatibility
             'in': 'entrata',
-            'out': 'uscita',
-            // New Anviz hardware action types
-            'In': 'entrata',
-            'Out': 'uscita',
-            'I_pausa': 'inizio_pausa',
-            'F_pausa': 'fine_pausa',
-            'U_trasf': 'inizio_trasferta',
-            'R_trasf': 'ritorno_trasferta',
-            'I_break': 'inizio_pausa', // Mapped visually to pausa
-            'F_break': 'fine_pausa',
-            // Web clock action types
             'entrata': 'entrata',
-            'inizio_pausa': 'inizio_pausa',
-            'fine_pausa': 'fine_pausa',
+            'out': 'uscita',
             'uscita': 'uscita',
+            'i_pausa': 'inizio_pausa',
+            'inizio_pausa': 'inizio_pausa',
+            'f_pausa': 'fine_pausa',
+            'fine_pausa': 'fine_pausa',
+            'u_trasf': 'inizio_trasferta',
+            'u_trasfer': 'inizio_trasferta',
+            'u_transfer': 'inizio_trasferta',
             'inizio_trasferta': 'inizio_trasferta',
-            'ritorno_trasferta': 'ritorno_trasferta'
+            'r_trasf': 'ritorno_trasferta',
+            'r_trasfer': 'ritorno_trasferta',
+            'r_transfer': 'ritorno_trasferta',
+            'ritorno_trasferta': 'ritorno_trasferta',
+            'i_break': 'inizio_pausa',
+            'f_break': 'fine_pausa'
         };
+
+        function normalizeAttendanceAction(rawAction) {
+            const action = (rawAction || "").trim().toLowerCase();
+            if (!action) return action;
+            if (ACTION_MAP[action]) return ACTION_MAP[action];
+            if (action.startsWith('u_trasf') || action.startsWith('u_trasfer') || action.startsWith('u_transfer')) return 'inizio_trasferta';
+            if (action.startsWith('r_trasf') || action.startsWith('r_trasfer') || action.startsWith('r_transfer')) return 'ritorno_trasferta';
+            return action;
+        }
         // --- Flatpickr ---
         function initFlatpickr() {
             const pickerInput = document.getElementById('hiddenMonthPicker');
@@ -668,6 +676,61 @@
             }
         }
 
+        function normalizeEmployeeTravelSelection(dayData) {
+            const isTravelAction = (action) => action === 'inizio_trasferta' || action === 'ritorno_trasferta';
+            const travelRecords = (dayData.rawRecords || [])
+                .filter(rec => isTravelAction(rec.mappedAction))
+                .sort((a, b) => a.tsMs - b.tsMs);
+
+            dayData.travelSelectionNote = null;
+            if (travelRecords.length === 0) return;
+
+            const travelStarts = travelRecords.filter(rec => rec.mappedAction === 'inizio_trasferta');
+            const travelReturns = travelRecords.filter(rec => rec.mappedAction === 'ritorno_trasferta');
+            let primaryStart = null;
+            let primaryReturn = null;
+
+            // Prefer the first coherent U_trasf -> R_trasf pair in chronological order.
+            for (const startRec of travelStarts) {
+                const matchingReturn = travelReturns.find(rec => rec.tsMs > startRec.tsMs);
+                if (matchingReturn) {
+                    primaryStart = startRec;
+                    primaryReturn = matchingReturn;
+                    break;
+                }
+            }
+
+            if (!primaryStart && !primaryReturn && travelStarts.length > 0) {
+                primaryStart = travelStarts[0];
+            } else if (!primaryStart && !primaryReturn && travelReturns.length > 0) {
+                // Fallback only when no coherent pair exists at all.
+                primaryReturn = travelReturns[0];
+            }
+
+            dayData.inizio_trasferta = primaryStart ? primaryStart.timeStr : null;
+            dayData.ritorno_trasferta = primaryReturn ? primaryReturn.timeStr : null;
+
+            // Keep only one coherent travel pair in columns, move all other travel marks to tooltip extras.
+            dayData.extraMarks = (dayData.extraMarks || []).filter(em => !isTravelAction(em.action));
+            travelRecords.forEach(rec => {
+                const isPrimaryStart = primaryStart && rec === primaryStart;
+                const isPrimaryReturn = primaryReturn && rec === primaryReturn;
+                if (!isPrimaryStart && !isPrimaryReturn) {
+                    pushEmployeeExtraMark(dayData, rec);
+                }
+            });
+
+            if (travelRecords.length > 2) {
+                if (primaryStart && primaryReturn) {
+                    dayData.travelSelectionNote = `Trasferta multipla: mantenuta 1a coppia coerente (${primaryStart.timeStr}-${primaryReturn.timeStr}), altre in EXTRA`;
+                } else if (primaryStart) {
+                    dayData.travelSelectionNote = `Trasferta multipla: mantenuto 1o inizio trasferta (${primaryStart.timeStr}), altre in EXTRA`;
+                } else if (primaryReturn) {
+                    dayData.travelSelectionNote = `Trasferta multipla: mantenuto 1o ritorno trasferta (${primaryReturn.timeStr}), altre in EXTRA`;
+                }
+            }
+        }
+
         function renderAttendanceTable() {
             const tbody = document.getElementById('attendanceBody');
             const records = rawAttendanceRecords;
@@ -691,7 +754,8 @@
                         rawRecords: []
                     };
                 }
-                const mappedAction = ACTION_MAP[r.action] || r.action;
+                const rawAction = (r.action || "").trim().toLowerCase();
+                const mappedAction = normalizeAttendanceAction(r.action);
                 dailyMap[dateKey].rawRecords.push({
                     tsMs: dateObj.getTime(),
                     mappedAction: mappedAction,
@@ -706,6 +770,7 @@
                 dayData.rawRecords.sort((a, b) => a.tsMs - b.tsMs);
 
                 dayData.rawRecords.forEach(rec => assignEmployeeDailyRecord(dayData, rec));
+                normalizeEmployeeTravelSelection(dayData);
             });
 
 
@@ -767,6 +832,8 @@
                 let u = t(dayData.uscita);
                 const iT = t(dayData.inizio_trasferta);
                 let rT = t(dayData.ritorno_trasferta);
+                const inferredExitFromReturn = (e !== null && u === null && iT === null && rT !== null) ? rT : null;
+                const officeExit = (u !== null) ? u : inferredExitFromReturn;
                 const hasCompletePause = iP !== null && fP !== null && fP > iP;
                 const hasAnyPauseMarker = iP !== null || fP !== null;
 
@@ -783,7 +850,7 @@
 
                 // Segment 1: Office morning (from Entrata to first logical stop)
                 if (e !== null) {
-                    const morningStops = [u, iT];
+                    const morningStops = [officeExit, iT];
                     if (hasCompletePause) morningStops.push(iP);
                     let limit = morningStops.filter(x => x !== null && x > e).sort((a, b) => a - b)[0];
                     if (limit) intervals.push([e, limit]);
@@ -791,7 +858,7 @@
 
                 // Segment 2: Office afternoon (from Fine Pausa to next logical stop)
                 if (hasCompletePause) {
-                    let limit = [u, iT].filter(x => x !== null && x > fP).sort((a, b) => a - b)[0];
+                    let limit = [officeExit, iT].filter(x => x !== null && x > fP).sort((a, b) => a - b)[0];
                     if (limit) intervals.push([fP, limit]);
                 }
 
@@ -801,8 +868,8 @@
                 }
 
                 // Segment 4: Office post-travel (from Ritorno to Uscita)
-                if (rT !== null && u !== null && u > rT) {
-                    intervals.push([rT, u]);
+                if (rT !== null && officeExit !== null && officeExit > rT) {
+                    intervals.push([rT, officeExit]);
                 }
 
                 let workedMins = 0;
@@ -840,7 +907,7 @@
                 // Fallback for negative limits
                 if (workedMins < 0) workedMins = 0;
 
-                const hasUnclosedDay = (e !== null && u === null) || (iT !== null && rT === null);
+                const hasUnclosedDay = (e !== null && officeExit === null) || (iT !== null && rT === null);
                 if (!isToday && hasUnclosedDay) {
                     workedMins = 480;
                 }
@@ -864,11 +931,17 @@
                 if (!dayData.inizio_pausa && dayData.fine_pausa) {
                     anomalyReasons.push('Inizio pausa mancante');
                 }
-                if (dayData.inizio_trasferta && !dayData.ritorno_trasferta && dayData.uscita) {
-                    anomalyReasons.push('Ritorno trasferta mancante');
+                const hasTravelSelectionNote = !!dayData.travelSelectionNote;
+                if (!hasTravelSelectionNote) {
+                    if (dayData.inizio_trasferta && !dayData.ritorno_trasferta && dayData.uscita) {
+                        anomalyReasons.push('Ritorno trasferta mancante');
+                    }
+                    if (!dayData.inizio_trasferta && dayData.ritorno_trasferta) {
+                        anomalyReasons.push('Inizio trasferta mancante');
+                    }
                 }
-                if (!dayData.inizio_trasferta && dayData.ritorno_trasferta) {
-                    anomalyReasons.push('Inizio trasferta mancante');
+                if (dayData.travelSelectionNote) {
+                    anomalyReasons.push(dayData.travelSelectionNote);
                 }
 
                 if (dayData.extraMarks && dayData.extraMarks.length > 0) {
@@ -898,7 +971,7 @@
                     
                     const todayStr = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0];
                     const isTodayLocal = (dateKey === todayStr);
-                    const isFinished = dayData.uscita || (dayData.inizio_trasferta && dayData.ritorno_trasferta && !dayData.entrata);
+                    const isFinished = dayData.uscita || (dayData.inizio_trasferta && dayData.ritorno_trasferta && !dayData.entrata) || (!dayData.inizio_trasferta && dayData.entrata && dayData.ritorno_trasferta);
 
                     if (!isTodayLocal || (isTodayLocal && isFinished)) {
                         totalWorkedMinutes += workedMins;
@@ -970,7 +1043,7 @@
             let isTodayFinished = false;
             const todayStr = toLocalDateKey(new Date());
             const todayDayData = dailyMap[todayStr];
-            if (todayDayData && (todayDayData.uscita || (todayDayData.inizio_trasferta && todayDayData.ritorno_trasferta && !todayDayData.entrata))) {
+            if (todayDayData && (todayDayData.uscita || (todayDayData.inizio_trasferta && todayDayData.ritorno_trasferta && !todayDayData.entrata) || (!todayDayData.inizio_trasferta && todayDayData.entrata && todayDayData.ritorno_trasferta))) {
                 isTodayFinished = true;
             }
 
