@@ -523,9 +523,7 @@ func parseAnvizResponse(res []byte, ip string, deviceID uint32) SyncStats {
 			userID := binary.BigEndian.Uint32(recordBytes[0:4])
 			// Time 4 byte (byte 4..7) - L'Anviz memorizza i secondi dall'epoca 2000-01-02 nell'orario LOCALE del dispositivo
 			timestampSecs := binary.BigEndian.Uint32(recordBytes[4:8])
-			localTZ, _ := time.LoadLocation("Europe/Rome")
-			anvizEpoch := time.Date(2000, 1, 2, 0, 0, 0, 0, localTZ)
-			recordTime := anvizEpoch.Add(time.Duration(timestampSecs) * time.Second)
+			recordTime := anvizRawTimestampToTime(timestampSecs)
 			stats.ObserveTimestamp(recordTime)
 
 			// Nei pacchetti TC_B il codice stato presenze e` normalmente nel backup/status byte.

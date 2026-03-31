@@ -262,9 +262,27 @@ func anvizEpochLocation() *time.Location {
 	return localTZ
 }
 
+func anvizRawTimestampToTime(raw uint32) time.Time {
+	loc := anvizEpochLocation()
+	baseUTC := time.Date(2000, 1, 2, 0, 0, 0, 0, time.UTC)
+	days := int(raw / 86400)
+	secondsOfDay := int(raw % 86400)
+	dateUTC := baseUTC.AddDate(0, 0, days)
+	hour := secondsOfDay / 3600
+	minute := (secondsOfDay % 3600) / 60
+	second := secondsOfDay % 60
+	return time.Date(dateUTC.Year(), dateUTC.Month(), dateUTC.Day(), hour, minute, second, 0, loc)
+}
+
 func rawDeviceTimestampFromTime(timestamp time.Time) (uint32, error) {
-	anvizEpoch := time.Date(2000, 1, 2, 0, 0, 0, 0, anvizEpochLocation())
-	seconds := timestamp.In(anvizEpoch.Location()).Sub(anvizEpoch) / time.Second
+	localTS := timestamp.In(anvizEpochLocation())
+	baseUTC := time.Date(2000, 1, 2, 0, 0, 0, 0, time.UTC)
+	targetUTC := time.Date(localTS.Year(), localTS.Month(), localTS.Day(), 0, 0, 0, 0, time.UTC)
+	days := targetUTC.Sub(baseUTC) / (24 * time.Hour)
+	if days < 0 {
+		return 0, fmt.Errorf("timestamp fuori range per protocollo Anviz")
+	}
+	seconds := days*86400 + time.Duration(localTS.Hour()*3600+localTS.Minute()*60+localTS.Second())
 	if seconds < 0 || uint64(seconds) > uint64(^uint32(0)) {
 		return 0, fmt.Errorf("timestamp fuori range per protocollo Anviz")
 	}

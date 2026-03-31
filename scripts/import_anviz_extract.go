@@ -706,8 +706,14 @@ func lookupEmployeeName(db *sql.DB, employeeID int) (string, error) {
 }
 
 func rawDeviceTimestampFromTime(timestamp time.Time) (uint32, error) {
-	anvizEpoch := time.Date(2000, 1, 2, 0, 0, 0, 0, europeRome())
-	seconds := timestamp.In(anvizEpoch.Location()).Sub(anvizEpoch) / time.Second
+	localTS := timestamp.In(europeRome())
+	baseUTC := time.Date(2000, 1, 2, 0, 0, 0, 0, time.UTC)
+	targetUTC := time.Date(localTS.Year(), localTS.Month(), localTS.Day(), 0, 0, 0, 0, time.UTC)
+	days := targetUTC.Sub(baseUTC) / (24 * time.Hour)
+	if days < 0 {
+		return 0, fmt.Errorf("timestamp fuori range protocollo Anviz")
+	}
+	seconds := days*86400 + time.Duration(localTS.Hour()*3600+localTS.Minute()*60+localTS.Second())
 	if seconds < 0 || uint64(seconds) > uint64(^uint32(0)) {
 		return 0, fmt.Errorf("timestamp fuori range protocollo Anviz")
 	}

@@ -22,6 +22,7 @@ type recordRow struct {
 	EmployeeName       string
 	Timestamp          time.Time
 	RawDeviceTimestamp sql.NullInt64
+	Action             string
 	StatusCode         int
 }
 
@@ -32,34 +33,57 @@ type rawRow struct {
 	EmployeeName       string
 	ParsedTimestamp    time.Time
 	RawDeviceTimestamp int64
+	Action             string
 	StatusCode         int
+}
+
+type shiftFilter struct {
+	StartTS        time.Time
+	HasStart       bool
+	EndExclusiveTS time.Time
+	HasEnd         bool
+	IncludeActions map[string]struct{}
+	ExcludeActions map[string]struct{}
 }
 
 func main() {
 	var (
-		dbPath     string
-		dateValue  string
-		shiftHours int
-		deviceIDs  string
-		dryRun     bool
+		dbPath         string
+		dateValue      string
+		fromDateValue  string
+		toDateValue    string
+		fromTSValue    string
+		toTSValue      string
+		shiftHours     int
+		deviceIDs      string
+		includeActions string
+		excludeActions string
+		dryRun         bool
 	)
 
 	flag.StringVar(&dbPath, "db", "", "Percorso database SQLite target")
 	flag.StringVar(&dateValue, "date", "", "Data da correggere (YYYY-MM-DD)")
+	flag.StringVar(&fromDateValue, "from-date", "", "Corregge da questa data inclusa (YYYY-MM-DD)")
+	flag.StringVar(&toDateValue, "to-date", "", "Corregge fino a questa data inclusa (YYYY-MM-DD)")
+	flag.StringVar(&fromTSValue, "from-ts", "", "Corregge da questo timestamp incluso (RFC3339, es. 2026-03-30T10:30:00+02:00)")
+	flag.StringVar(&toTSValue, "to-ts", "", "Corregge fino a questo timestamp escluso (RFC3339)")
 	flag.IntVar(&shiftHours, "hours", 0, "Ore da aggiungere")
 	flag.StringVar(&deviceIDs, "device-ids", "1,2", "Lista device_id separati da virgola")
+	flag.StringVar(&includeActions, "include-actions", "", "Azioni da includere separate da virgola, es. In,U_trasf")
+	flag.StringVar(&excludeActions, "exclude-actions", "", "Azioni da escludere separate da virgola, es. In")
 	flag.BoolVar(&dryRun, "dry-run", false, "Mostra quante righe verrebbero corrette senza modificare il DB")
 	flag.Parse()
 
-	if strings.TrimSpace(dateValue) == "" || shiftHours == 0 {
+	if shiftHours == 0 || (strings.TrimSpace(dateValue) == "" && strings.TrimSpace(fromDateValue) == "" && strings.TrimSpace(fromTSValue) == "") {
 		fmt.Println(`Uso: go run shift_device_records.go -date 2026-03-30 -hours 1 -device-ids 1,2`)
+		fmt.Println(`Oppure: go run shift_device_records.go -from-ts 2026-03-30T10:30:00+02:00 -hours -1 -device-ids 1,2 -include-actions In,U_trasf`)
 		os.Exit(2)
 	}
 
 	location := europeRome()
-	targetDate, err := time.ParseInLocation("2006-01-02", dateValue, location)
+	filter, err := buildShiftFilter(location, dateValue, fromDateValue, toDateValue, fromTSValue, toTSValue, includeActions, excludeActions)
 	if err != nil {
-		log.Fatalf("Data non valida: %v", err)
+		log.Fatalf("Filtro non valido: %v", err)
 	}
 
 	ids, err := parseDeviceIDs(deviceIDs)
@@ -74,16 +98,17 @@ func main() {
 	}
 	defer db.Close()
 
-	recordRows, err := loadRecordRows(db, targetDate, ids)
+	recordRows, err := loadRecordRows(db, ids, filter)
 	if err != nil {
 		log.Fatalf("Errore lettura records: %v", err)
 	}
-	rawRows, err := loadRawRows(db, targetDate, ids)
+	rawRows, err := loadRawRows(db, ids, filter)
 	if err != nil {
 		log.Fatalf("Errore lettura device_raw_records: %v", err)
 	}
 
-	log.Printf("Shift device records: db=%s date=%s hours=%d devices=%v dry_run=%v records=%d raw_records=%d", resolvedDB, dateValue, shiftHours, ids, dryRun, len(recordRows), len(rawRows))
+	log.Printf("Shift device records: db=%s date=%s from_date=%s to_date=%s from_ts=%s to_ts=%s hours=%d devices=%v include_actions=%v exclude_actions=%v dry_run=%v records=%d raw_records=%d",
+		resolvedDB, dateValue, fromDateValue, toDateValue, fromTSValue, toTSValue, shiftHours, ids, keysOf(filter.IncludeActions), keysOf(filter.ExcludeActions), dryRun, len(recordRows), len(rawRows))
 
 	if dryRun {
 		for i, row := range recordRows {
@@ -113,6 +138,63 @@ func main() {
 	}
 
 	log.Printf("Shift completato con successo: records=%d raw_records=%d", len(recordRows), len(rawRows))
+}
+
+func buildShiftFilter(loc *time.Location, dateValue string, fromDateValue string, toDateValue string, fromTSValue string, toTSValue string, includeActions string, excludeActions string) (shiftFilter, error) {
+	filter := shiftFilter{
+		IncludeActions: parseActionSet(includeActions),
+		ExcludeActions: parseActionSet(excludeActions),
+	}
+
+	if dateValue != "" {
+		targetDate, err := time.ParseInLocation("2006-01-02", dateValue, loc)
+		if err != nil {
+			return shiftFilter{}, fmt.Errorf("date non valida: %w", err)
+		}
+		filter.StartTS = targetDate
+		filter.EndExclusiveTS = targetDate.Add(24 * time.Hour)
+		filter.HasStart = true
+		filter.HasEnd = true
+		return filter, nil
+	}
+
+	if fromTSValue != "" {
+		startTS, err := time.Parse(time.RFC3339, fromTSValue)
+		if err != nil {
+			return shiftFilter{}, fmt.Errorf("from-ts non valido: %w", err)
+		}
+		filter.StartTS = startTS
+		filter.HasStart = true
+	} else if fromDateValue != "" {
+		startTS, err := time.ParseInLocation("2006-01-02", fromDateValue, loc)
+		if err != nil {
+			return shiftFilter{}, fmt.Errorf("from-date non valida: %w", err)
+		}
+		filter.StartTS = startTS
+		filter.HasStart = true
+	}
+
+	if toTSValue != "" {
+		endTS, err := time.Parse(time.RFC3339, toTSValue)
+		if err != nil {
+			return shiftFilter{}, fmt.Errorf("to-ts non valido: %w", err)
+		}
+		filter.EndExclusiveTS = endTS
+		filter.HasEnd = true
+	} else if toDateValue != "" {
+		endTS, err := time.ParseInLocation("2006-01-02", toDateValue, loc)
+		if err != nil {
+			return shiftFilter{}, fmt.Errorf("to-date non valida: %w", err)
+		}
+		filter.EndExclusiveTS = endTS.Add(24 * time.Hour)
+		filter.HasEnd = true
+	}
+
+	if filter.HasStart && filter.HasEnd && !filter.EndExclusiveTS.After(filter.StartTS) {
+		return shiftFilter{}, errors.New("to-date deve essere maggiore o uguale a from-date")
+	}
+
+	return filter, nil
 }
 
 func resolveDBPath(flagValue string) string {
@@ -163,18 +245,74 @@ func parseDeviceIDs(raw string) ([]int64, error) {
 	return ids, nil
 }
 
-func loadRecordRows(db *sql.DB, targetDate time.Time, deviceIDs []int64) ([]recordRow, error) {
+func parseActionSet(raw string) map[string]struct{} {
+	set := map[string]struct{}{}
+	for _, part := range strings.Split(raw, ",") {
+		action := normalizeAction(part)
+		if action == "" {
+			continue
+		}
+		set[action] = struct{}{}
+	}
+	return set
+}
+
+func normalizeAction(raw string) string {
+	return strings.ToLower(strings.TrimSpace(raw))
+}
+
+func keysOf(set map[string]struct{}) []string {
+	if len(set) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(set))
+	for key := range set {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
+func shouldSkipAction(action string, included map[string]struct{}, excluded map[string]struct{}) bool {
+	normalized := normalizeAction(action)
+	if len(included) > 0 {
+		if _, ok := included[normalized]; !ok {
+			return true
+		}
+	}
+	if len(excluded) == 0 {
+		return false
+	}
+	_, ok := excluded[normalized]
+	return ok
+}
+
+func buildTimeWhereClause(column string, filter shiftFilter) (string, []interface{}) {
+	clauses := []string{}
+	args := []interface{}{}
+	if filter.HasStart {
+		clauses = append(clauses, fmt.Sprintf("%s >= ?", column))
+		args = append(args, filter.StartTS.Format(time.RFC3339))
+	}
+	if filter.HasEnd {
+		clauses = append(clauses, fmt.Sprintf("%s < ?", column))
+		args = append(args, filter.EndExclusiveTS.Format(time.RFC3339))
+	}
+	return strings.Join(clauses, " AND "), args
+}
+
+func loadRecordRows(db *sql.DB, deviceIDs []int64, filter shiftFilter) ([]recordRow, error) {
+	timeClause, timeArgs := buildTimeWhereClause("timestamp", filter)
 	query := fmt.Sprintf(`
-		SELECT id, device_id, employee_id, employee_name, timestamp, raw_device_timestamp, status_code
+		SELECT id, device_id, employee_id, employee_name, timestamp, raw_device_timestamp, action, status_code
 		FROM records
 		WHERE source = 'device'
-		  AND timestamp LIKE ?
+		  %s
 		  AND device_id IN (%s)
 		ORDER BY id
-	`, placeholders(len(deviceIDs)))
+	`, prefixWithAnd(timeClause), placeholders(len(deviceIDs)))
 
-	args := make([]interface{}, 0, len(deviceIDs)+1)
-	args = append(args, targetDate.Format("2006-01-02")+"%")
+	args := make([]interface{}, 0, len(timeArgs)+len(deviceIDs))
+	args = append(args, timeArgs...)
 	for _, id := range deviceIDs {
 		args = append(args, id)
 	}
@@ -189,29 +327,34 @@ func loadRecordRows(db *sql.DB, targetDate time.Time, deviceIDs []int64) ([]reco
 	for rows.Next() {
 		var row recordRow
 		var timestampStr string
-		if err := rows.Scan(&row.ID, &row.DeviceID, &row.EmployeeID, &row.EmployeeName, &timestampStr, &row.RawDeviceTimestamp, &row.StatusCode); err != nil {
+		if err := rows.Scan(&row.ID, &row.DeviceID, &row.EmployeeID, &row.EmployeeName, &timestampStr, &row.RawDeviceTimestamp, &row.Action, &row.StatusCode); err != nil {
 			return nil, err
 		}
 		row.Timestamp, err = time.Parse(time.RFC3339, timestampStr)
 		if err != nil {
 			return nil, err
 		}
+		if shouldSkipAction(row.Action, filter.IncludeActions, filter.ExcludeActions) {
+			continue
+		}
 		result = append(result, row)
 	}
 	return result, rows.Err()
 }
 
-func loadRawRows(db *sql.DB, targetDate time.Time, deviceIDs []int64) ([]rawRow, error) {
+func loadRawRows(db *sql.DB, deviceIDs []int64, filter shiftFilter) ([]rawRow, error) {
+	timeClause, timeArgs := buildTimeWhereClause("parsed_timestamp", filter)
 	query := fmt.Sprintf(`
-		SELECT id, device_id, employee_id, employee_name, parsed_timestamp, raw_device_timestamp, status_code
+		SELECT id, device_id, employee_id, employee_name, parsed_timestamp, raw_device_timestamp, action, status_code
 		FROM device_raw_records
-		WHERE parsed_timestamp LIKE ?
+		WHERE 1=1
+		  %s
 		  AND device_id IN (%s)
 		ORDER BY id
-	`, placeholders(len(deviceIDs)))
+	`, prefixWithAnd(timeClause), placeholders(len(deviceIDs)))
 
-	args := make([]interface{}, 0, len(deviceIDs)+1)
-	args = append(args, targetDate.Format("2006-01-02")+"%")
+	args := make([]interface{}, 0, len(timeArgs)+len(deviceIDs))
+	args = append(args, timeArgs...)
 	for _, id := range deviceIDs {
 		args = append(args, id)
 	}
@@ -226,16 +369,26 @@ func loadRawRows(db *sql.DB, targetDate time.Time, deviceIDs []int64) ([]rawRow,
 	for rows.Next() {
 		var row rawRow
 		var parsedTS string
-		if err := rows.Scan(&row.ID, &row.DeviceID, &row.EmployeeID, &row.EmployeeName, &parsedTS, &row.RawDeviceTimestamp, &row.StatusCode); err != nil {
+		if err := rows.Scan(&row.ID, &row.DeviceID, &row.EmployeeID, &row.EmployeeName, &parsedTS, &row.RawDeviceTimestamp, &row.Action, &row.StatusCode); err != nil {
 			return nil, err
 		}
 		row.ParsedTimestamp, err = time.Parse(time.RFC3339, parsedTS)
 		if err != nil {
 			return nil, err
 		}
+		if shouldSkipAction(row.Action, filter.IncludeActions, filter.ExcludeActions) {
+			continue
+		}
 		result = append(result, row)
 	}
 	return result, rows.Err()
+}
+
+func prefixWithAnd(clause string) string {
+	if strings.TrimSpace(clause) == "" {
+		return ""
+	}
+	return "AND " + clause
 }
 
 func placeholders(n int) string {
