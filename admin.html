@@ -702,6 +702,26 @@
         let selectedEmployees = new Set();
         let allEmployeesData = [];
 
+        function normalizeEmployeeName(name) {
+            return typeof name === 'string' ? name.replace(/\s+/g, ' ').trim() : '';
+        }
+
+        function isPlaceholderEmployeeName(name, employeeId = null) {
+            if (["33", "56"].includes(String(employeeId))) return false;
+
+            const normalized = normalizeEmployeeName(name);
+            if (!normalized) return true;
+
+            const lower = normalized.toLowerCase();
+            if (lower.startsWith('ex')) return true;
+            if (lower.startsWith('nome vuoto')) return true;
+            if (lower.startsWith('senza nome')) return true;
+            if (['-', '--', 'n/a', 'null', 'undefined'].includes(lower)) return true;
+            if (/^(dipendente|employee)\s*id[:\s-]*\d+$/i.test(normalized)) return true;
+
+            return false;
+        }
+
         function toggleMultiSelect(event) {
             event.stopPropagation();
             document.getElementById('empMultiSelectContainer').classList.toggle('open');
@@ -794,17 +814,14 @@
                 const employees = Array.isArray(data) ? data : [];
                 
                 allEmployeesData = employees.filter(e => {
-                    let empName = e.name ? e.name.trim() : "";
-                    if (["33", "56"].includes(String(e.id))) return true;
-                    if (empName.toUpperCase().startsWith("EX")) return false;
-                    if (!empName || empName.toLowerCase().startsWith("nome vuoto")) return false;
-                    return true;
+                    return !isPlaceholderEmployeeName(e?.name, e?.id);
                 });
 
                 const optionsContainer = document.getElementById('empMultiSelectOptions');
                 optionsContainer.innerHTML = '';
                 
                 allEmployeesData.forEach(e => {
+                    const displayName = normalizeEmployeeName(e.name);
                     const option = document.createElement('div');
                     option.className = 'multi-select-option';
                     option.onclick = (event) => {
@@ -815,7 +832,7 @@
 
                     option.innerHTML = `
                         <input type="checkbox" value="${e.id}" onclick="event.stopPropagation(); handleOptionClick('${e.id}', this.checked)">
-                        <label>${e.name} (ID: ${e.id})</label>
+                        <label>${displayName} (ID: ${e.id})</label>
                     `;
                     optionsContainer.appendChild(option);
                 });
@@ -1663,12 +1680,7 @@
             const tbody = document.getElementById('attendanceBody');
 
             function isInvalidName(n, employeeId = null) {
-                if (!n) return true;
-                if (["33", "56"].includes(String(employeeId))) return false;
-                let lower = n.toLowerCase().trim();
-                if (lower.startsWith("ex")) return true;
-                if (lower.startsWith("nome vuoto")) return true;
-                return false;
+                return isPlaceholderEmployeeName(n, employeeId);
             }
 
             // We use allEmployeesData instead of select.options because filterEmp is now a hidden input
@@ -1704,12 +1716,7 @@
             const groupedMap = {};
 
             function isInvalidName(n, employeeId = null) {
-                if (!n) return true;
-                if (["33", "56"].includes(String(employeeId))) return false;
-                let lower = n.toLowerCase().trim();
-                if (lower.startsWith("ex")) return true;
-                if (lower.startsWith("nome vuoto")) return true;
-                return false;
+                return isPlaceholderEmployeeName(n, employeeId);
             }
 
             const filterEmpValue = document.getElementById('filterEmp').value;
@@ -1722,6 +1729,11 @@
 
                     let cName = currentNamesMap[r.employee_id] || "";
                     let hName = r.employee_name || "";
+                    const hasValidName = !isInvalidName(cName, empId) || !isInvalidName(hName, empId);
+
+                    if (!hasValidName) {
+                        return;
+                    }
 
                     // If it's an EX employee, we still process the record if it exists, 
                     // but we won't generate empty rows for them in the second pass.
@@ -1819,13 +1831,17 @@
                 
                 // Fallback attempt: if we don't have it in currentNamesMap, look inside records
                 if (!nameToUse && records) {
-                    const matchedRecord = records.find(r => String(r.employee_id) === empId && r.employee_name);
+                    const matchedRecord = records.find(r => {
+                        if (String(r.employee_id) !== empId) return false;
+                        return !isInvalidName(r.employee_name, empId);
+                    });
                     if (matchedRecord) {
                         nameToUse = matchedRecord.employee_name;
                     }
                 }
-                if (!nameToUse) {
-                    nameToUse = `Dipendente ID: ${empId}`;
+
+                if (isInvalidName(nameToUse, empId)) {
+                    return;
                 }
 
                 rangeDays.forEach(day => {
