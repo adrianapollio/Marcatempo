@@ -1,89 +1,167 @@
-# Guida al Deploy di Marcatempo
+# Guida Al Deploy Di Marcatempo
 
-Questo documento descrive in modo dettagliato le procedure per sviluppare, aggiornare e installare l'applicazione Marcatempo su diverse postazioni, utilizzando Docker.
+Questa guida descrive il deploy dopo la separazione tra:
 
----
+- codice della repository
+- dati runtime
+- certificati
+- configurazione locale di sede
 
-## 🚀 1. Sviluppo e Test in Locale
-Questa è la fase in cui modifichi il codice sul tuo PC (ad esempio i file `admin.html`, `index.html`, o i `.go`) e vuoi vedere subito il risultato.
+Il principio e semplice: `git clone` deve portare solo codice e file di esempio, non database reali, backup o certificati di produzione.
 
-### Cosa fare:
-Se hai modificato un qualsiasi file che fa parte dell'applicazione e vuoi testarlo al volo, il modo più rapido è forzare la ricostruzione (`--build`) dell'immagine usando docker-compose.
+## 1. Struttura raccomandata
 
-1. Apri un terminale (PowerShell o Git Bash) nella cartella `Marcatempo`.
-2. Lancia il comando per ricostruire l'immagine e riavviare il container:
-   ```bash
-   docker-compose up -d --build marcatempo
-   ```
-3. Il container verrà aggiornato e potrai visualizzare le tue modifiche navigando su [http://localhost:8080](http://localhost:8080) dal tuo browser.
+Repository:
 
-*(Se modifichi il file di configurazione `nginx.conf` o i certificati, dovrai riavviare anche nginx con `docker-compose up -d --build nginx`)*.
+- contiene codice, documentazione, `docker-compose.yml`, `nginx.conf`, `.env.example`
 
----
+Directory runtime della macchina:
 
-## ☁️ 2. Pubblicazione di un Aggiornamento (Dal PC di sviluppo a Docker Hub)
-Hai finito le modifiche sul tuo PC di sviluppo, le hai testate localmente e funzionano. Ora devi renderle disponibili per il server di produzione su cui si collegheranno effettivamente i dipendenti.
+- contiene `data/`
+- contiene `data/backups/`
+- contiene `certs/`
+- non viene versionata in Git
 
-### Cosa fare:
-Devi compilare la nuova versione dell'applicazione e caricarla nel tuo "magazzino" online su Docker Hub.
+Esempio:
 
-1. Ricrea l'immagine Docker specificando il nome finale `zibola/marcatempo:latest`:
-   ```bash
-   docker build -t zibola/marcatempo:latest .
-   ```
-2. Carica l'immagine aggiornata sul Docker Hub. Dal tuo PC esegui:
-   ```bash
-   docker push zibola/marcatempo:latest
-   ```
-   *(Nota: Se il terminale dice "denied" o simili, assicurati di esserti autenticato eseguendo prima `docker login` e inserendo nome utente `zibola` e tua password).*
+```text
+/opt/marcatempo/
+  docker-compose.yml
+  ...
 
----
+/opt/marcatempo-runtime/
+  data/
+  data/backups/
+  certs/
+    server.crt
+    server.key
+```
 
-## 🔄 3. Aggiornamento del Server di Produzione (La macchina "reale")
-Sul computer/server che ospita l'applicazione e a cui si collegano tutti i giorni i dipendenti (quello con IP fisso HTTPS, ecc.). 
-Qui i dati (*timbrature, database*) **NON andranno persi** perché salvati al sicuro in un volume montato (`./data`).
+Nel `docker-compose.yml` la directory runtime viene montata tramite `MARCATEMPO_RUNTIME_DIR`.
 
-### Cosa fare:
-Vuoi applicare le novità che hai appena caricato.
+## 2. File `.env`
 
-1. Accedi alla console/terminale del server di produzione.
-2. Spostati nella cartella in cui si trova il file `docker-compose.yml`.
-3. Scarica dal Docker Hub l'immagine più recente che hai caricato in precedenza:
-   ```bash
-   docker-compose pull marcatempo
-   ```
-4. Di' a Docker di riapplicare ed eseguire il container con l'immagine fresca usando:
-   ```bash
-   docker-compose up -d
-   ```
-L'applicazione si spegnerà e si riaccenderà nel giro di secondi (a meno che non modifichi anche nginx, l'IP resterà fermo su `host mode`).
+Ogni server deve avere un solo file attivo chiamato `.env`.
 
----
+Esempio operativo:
 
-## 🏗️ 4. Installazione da Zero (Nuovo Server o Nuova Sede)
-Se in futuro vuoi prendere un nuovo computer vuoto e usarlo per ospitare un'istanza separata (o rimpiazzare il server attuale), non hai bisogno di rimetterti a programmare. Ti basta recuperare le configurazioni essenziali e scaricare l'app.
+- server Napoli -> `.env` con configurazione Napoli
+- server Ferrara -> `.env` con configurazione Ferrara
 
-### Requisiti sul nuovo computer:
-- Docker installato
-- (Opzionale, ma consigliato) Docker Compose installato
-- Se vuoi importare i vecchi dati, la vecchia cartella `data/` del database deve essere copiata fisicamente sul PC nuovo.
+In locale puoi tenere piu file con nomi diversi, per esempio:
 
-### Cosa fare:
-1. Crea una nuova cartella per il progetto e chiamala come preferisci (es. `marcatempo-server`).
-2. Copia dentro a questa cartella i seguenti file vitali dal tuo progetto originario:
-   - `docker-compose.yml`
-   - `Dockerfile.nginx` (Se ti serve usare Nginx in produzione)
-   - `nginx.conf`
-   - Cartella `certs` con i certificati ssl (Se HTTPS)
-3. Apri il terminale nella cartella. **Non serve `docker build`**. Avvia semplicemente:
-   ```bash
-   docker-compose pull
-   docker-compose up -d
-   ```
-   *Docker andrà a prendere la pre-compilazione su internet e accenderà tutto magicamente.*
+- `.env.napoli`
+- `.env.ferrara`
 
-4. **[Primo Avvio] Impostare un amministratore**. Se il database fosse totalmente vuoto e avessi bisogno di nominare l'admin iniziale del portale per iniziare a usarlo:
-   ```bash
-   docker exec -it marcatempo_app ./make_admin [ID_DIPENDENTE]
-   ```
-   (es. `docker exec -it marcatempo_app ./make_admin 1`)
+e copiarne uno alla volta come `.env` sul server corretto.
+
+## 3. Primo deploy su una nuova sede
+
+1. Clona la repository.
+2. Crea la directory runtime della sede.
+3. Copia nella directory runtime i certificati reali:
+   - `server.crt`
+   - `server.key`
+4. Prepara il file `.env` della sede.
+   Imposta in particolare:
+   - `ANVIZ_SYNC_ENABLED=false` al primo avvio
+   - `ANVIZ_DEVICES=` con i soli device della sede corrente
+   - opzionalmente `ANVIZ_ACTIVE_DEVICE_IDS=` se vuoi attivarne solo un sottoinsieme
+5. Lascia `ANVIZ_SYNC_ENABLED=false` al primo avvio.
+6. Avvia lo stack:
+
+```bash
+docker compose up -d --build
+```
+
+7. Verifica che il database venga creato pulito nella directory runtime.
+8. Verifica lo stato bootstrap del system admin dalla UI system admin.
+9. Verifica l'accesso system admin.
+10. Se il bootstrap non e sufficiente o serve recovery password, usa:
+
+```bash
+docker exec -it marcatempo_app ./make_system_admin admin '<nuova_password>'
+```
+
+11. Solo dopo le verifiche, abilita la sync dei device della sede corretta.
+
+## 4. Aggiornamento di una sede esistente
+
+1. Aggiorna il codice:
+
+```bash
+git pull --ff-only origin dev
+```
+
+2. Verifica che il file `.env` della sede sia ancora corretto.
+3. Riapplica lo stack:
+
+```bash
+docker compose up -d --build
+```
+
+Poiche i dati stanno fuori dalla repository, l'aggiornamento del codice non deve sostituire il database o i certificati della sede.
+
+## 5. Certificati
+
+I certificati di produzione non devono stare nella repository.
+
+La procedura corretta e:
+
+1. conservare i certificati in un archivio sicuro aziendale o nel sistema di gestione certificati scelto
+2. copiarli sul server nella directory runtime
+3. montarli nel container nginx
+
+Non e consigliato committare in Git:
+
+- `server.key`
+- `server.crt` di produzione
+
+## 6. Dati e backup
+
+Il database SQLite e i backup:
+
+- non devono stare nella repository
+- devono vivere nella directory runtime della sede
+- devono essere trattati come dati locali di istanza
+
+Se il file DB viene cancellato e l'applicazione viene riavviata:
+
+- SQLite ricrea il file
+- l'app ricrea automaticamente le tabelle di base
+
+Questo permette di far partire una nuova sede con database pulito, a condizione che la sync device resti disattivata finche la configurazione non e pronta.
+
+## 7. Bootstrap system admin
+
+Il system admin usa username fisso:
+
+- `admin`
+
+Il comportamento raccomandato e:
+
+- se il DB e vuoto e `DEFAULT_SYSTEM_ADMIN_PASSWORD` e presente, il bootstrap crea l'utente `admin`
+- se `admin` esiste gia, il bootstrap non sovrascrive automaticamente la password
+- in caso di recovery si usa il tool `make_system_admin`
+
+La dashboard system admin espone anche uno stato bootstrap per chiarire se:
+
+- il system admin e pronto
+- manca la password bootstrap
+- serve recovery esplicita
+
+## 8. Nota operativa per Napoli e Ferrara
+
+Convenzione consigliata in locale:
+
+- `.env.napoli`
+- `.env.ferrara`
+
+Convenzione sui server:
+
+- un solo `.env` attivo per server
+
+Risultato atteso:
+
+- Napoli continua a usare solo la propria configurazione
+- Ferrara puo partire con DB vuoto e senza ereditare dati o device della sede originaria

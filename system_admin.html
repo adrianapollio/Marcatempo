@@ -23,7 +23,7 @@
                     <span id="sysUserNameDisplay" class="username-display">admin</span>
                     <div class="status-container">
                         <span class="status-dot"></span>
-                        <span id="syncStatus">Online</span>
+                        <span id="syncStatus">Sync non verificata</span>
                     </div>
                 </div>
                 <button class="btn-logout" onclick="logout()">Esci</button>
@@ -66,6 +66,7 @@
                         </div>
                     </div>
                     <button class="btn-system" onclick="handleLogin()">Accedi</button>
+                    <div id="bootstrapStatusLogin" class="form-error login-status" style="display:none;"></div>
                     <div class="login-link-wrap">
                         <a href="/" class="login-system-link">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -119,9 +120,9 @@
                                 <span class="trend">SQLite WAL Enabled</span>
                             </div>
                             <div class="stat-card">
-                                <span class="label">Connected Devices</span>
-                                <span class="value">2</span>
-                                <span class="trend">Anviz TCP/IP Stack</span>
+                                <span class="label">Configured Devices</span>
+                                <span class="value" id="configuredDeviceCount">-</span>
+                                <span class="trend" id="configuredDevicesTrend">Configurazione runtime non letta</span>
                             </div>
                             <div class="stat-card">
                                 <span class="label">Server Uptime</span>
@@ -231,6 +232,10 @@
                     <div id="panel-security" class="panel-hidden" hidden>
                         <h3 class="section-title">Accesso e Sicurezza</h3>
                         <div class="stat-card security-card">
+                            <h4 class="security-card-title">Stato Bootstrap System Admin</h4>
+                            <div id="bootstrapStatusSecurity" class="form-error" style="display:none;"></div>
+                        </div>
+                        <div class="stat-card security-card">
                             <h4 class="security-card-title">Cambia Password Super Admin</h4>
                             <div class="form-group">
                                 <label>Nuova Password</label>
@@ -275,6 +280,45 @@
         let currentPage = 1;
         let pageSize = 20;
         let pendingAction = null;
+
+        function renderBootstrapStatus(data) {
+            const loginBox = document.getElementById('bootstrapStatusLogin');
+            const securityBox = document.getElementById('bootstrapStatusSecurity');
+            const message = data?.message || 'Stato bootstrap non disponibile';
+            const recovery = data?.recovery_command ? ` Recovery: ${data.recovery_command}` : '';
+            const isReady = data?.status === 'ready';
+            const color = isReady ? '#10b981' : '#f59e0b';
+
+            if (loginBox) {
+                loginBox.style.display = 'block';
+                loginBox.style.color = color;
+                loginBox.textContent = message + recovery;
+            }
+
+            if (securityBox) {
+                securityBox.style.display = 'block';
+                securityBox.style.color = color;
+                securityBox.textContent = message + recovery;
+            }
+        }
+
+        async function loadSystemBootstrapStatus() {
+            try {
+                const res = await fetch('/api/system/bootstrap-status');
+                if (!res.ok) {
+                    throw new Error('bootstrap status fetch failed');
+                }
+
+                const data = await res.json();
+                renderBootstrapStatus(data);
+            } catch (err) {
+                console.error('Errore caricamento stato bootstrap system admin', err);
+                renderBootstrapStatus({
+                    message: 'Impossibile leggere lo stato bootstrap del system admin.',
+                    recovery_command: './make_system_admin admin <nuova_password>'
+                });
+            }
+        }
 
         async function restoreSystemSession() {
             try {
@@ -432,6 +476,42 @@
             `;
         }
 
+        function updateDeviceSummary(data) {
+            const configuredCount = Number.isFinite(data?.configured_devices_count) ? data.configured_devices_count : 0;
+            const activeCount = Number.isFinite(data?.active_devices_count) ? data.active_devices_count : 0;
+            const syncEnabled = Boolean(data?.sync_enabled);
+
+            const configuredCountEl = document.getElementById('configuredDeviceCount');
+            const configuredTrendEl = document.getElementById('configuredDevicesTrend');
+            const syncStatusEl = document.getElementById('syncStatus');
+
+            if (configuredCountEl) {
+                configuredCountEl.textContent = String(configuredCount);
+            }
+
+            if (configuredTrendEl) {
+                if (configuredCount === 0) {
+                    configuredTrendEl.textContent = 'Nessun device configurato per questa sede';
+                } else if (!syncEnabled) {
+                    configuredTrendEl.textContent = `${activeCount} device attivi, sync disattivata`;
+                } else {
+                    configuredTrendEl.textContent = `${activeCount} device attivi per la sincronizzazione`;
+                }
+            }
+
+            if (syncStatusEl) {
+                if (configuredCount === 0) {
+                    syncStatusEl.textContent = 'Nessun device configurato';
+                } else if (!syncEnabled) {
+                    syncStatusEl.textContent = 'Sync disattivata';
+                } else if (activeCount === 0) {
+                    syncStatusEl.textContent = 'Nessun device attivo';
+                } else {
+                    syncStatusEl.textContent = `Sync attiva (${activeCount})`;
+                }
+            }
+        }
+
         async function loadDeviceDiagnostics() {
             const grid = document.getElementById('deviceDiagnosticsGrid');
             const body = document.getElementById('deviceDiagnosticsBody');
@@ -452,25 +532,27 @@
                 const data = await res.json();
                 const devices = Array.isArray(data.devices) ? data.devices : [];
                 const recentRaw = Array.isArray(data.recent_raw) ? data.recent_raw : [];
+                updateDeviceSummary(data);
 
                 grid.innerHTML = devices.map(device => {
                     const latestRaw = formatDiagnosticDate(device.latest_raw_timestamp);
                     const latestFinal = formatDiagnosticDate(device.latest_final_timestamp);
-                    const warningClass = device.raw_count >= device.final_count ? '' : ' diag-card-warn';
+                    const warningClass = device.active && device.raw_count >= device.final_count ? '' : ' diag-card-warn';
                     return `
                         <div class="stat-card diag-card${warningClass}">
                             <span class="label">Terminal ID #${device.device_id}</span>
                             <span class="value">${device.raw_count} raw / ${device.final_count} finali</span>
+                            <span class="trend">Stato: ${device.active ? 'Attivo' : 'Non attivo'}</span>
                             <span class="trend">${device.ip ? `IP ${device.ip}` : 'Device non configurato'} • Raw: ${latestRaw} • Finale: ${latestFinal}</span>
                         </div>
                     `;
                 }).join('');
 
                 if (devices.length === 0) {
-                    grid.innerHTML = '<div class="stat-card"><span class="label">Device Diagnostics</span><span class="value">0</span><span class="trend">Nessun device diagnosticato</span></div>';
+                    grid.innerHTML = '<div class="stat-card"><span class="label">Device Diagnostics</span><span class="value">0</span><span class="trend">Nessun device configurato o diagnosticato</span></div>';
                 }
 
-                meta.textContent = `Ultimi raw mostrati per timestamp reale: ${recentRaw.length}`;
+                meta.textContent = `Configurati: ${data.configured_devices_count || 0} | Attivi: ${data.active_devices_count || 0} | Ultimi raw mostrati: ${recentRaw.length}`;
 
                 if (recentRaw.length === 0) {
                     body.innerHTML = '<tr><td colspan="7" class="table-placeholder">Nessun raw record disponibile</td></tr>';
@@ -488,6 +570,7 @@
                     `).join('');
                 }
             } catch (e) {
+                updateDeviceSummary({ configured_devices_count: 0, active_devices_count: 0, sync_enabled: false });
                 meta.textContent = 'Errore caricamento diagnostica device';
                 grid.innerHTML = '<div class="stat-card"><span class="label">Device Diagnostics</span><span class="value">ERR</span><span class="trend">Impossibile leggere la diagnostica</span></div>';
                 body.innerHTML = '<tr><td colspan="7" class="table-placeholder table-placeholder-error">Errore caricamento diagnostica device</td></tr>';
@@ -566,6 +649,7 @@
             document.getElementById('smallLogs').innerHTML = '';
             addSystemLog('System Administration Shell initialized.', 'auth');
             
+            loadSystemBootstrapStatus();
             loadBackups();
             loadEmployees();
             loadDeviceDiagnostics();
@@ -590,6 +674,7 @@
         }
 
         window.addEventListener('DOMContentLoaded', async () => {
+            loadSystemBootstrapStatus();
             const hasSession = await restoreSystemSession();
             if (hasSession) {
                 initDashboard();

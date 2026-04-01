@@ -4,28 +4,29 @@ services:
     image: zibola/marcatempo:latest
     container_name: marcatempo_app
     volumes:
-      - ./data:/app/data
+      - ${MARCATEMPO_RUNTIME_DIR:-./runtime}/data:/app/data
     restart: unless-stopped
     environment:
-      - TZ=Europe/Rome
-      - PORT=8080
+      - TZ=${TZ:-Europe/Rome}
+      - PORT=${PORT:-8080}
       - DB_PATH=/app/data/attendance.db
-      - BACKUP_HOUR=23
-      - BACKUP_MINUTE=59
-      - BACKUP_ON_STARTUP=false
-      - ANVIZ_SYNC_ENABLED=true
-      - ANVIZ_SYNC_INTERVAL_MINUTES=30
-      - ANVIZ_AUTO_ATTENDANCE_MODE=new
-      - ANVIZ_MANUAL_ATTENDANCE_MODE=all
-      - ANVIZ_ATTENDANCE_CHUNK_LIMIT=25
-      - ANVIZ_COMMAND_DELAY_MS=5000
-      - ANVIZ_READ_TIMEOUT_SECONDS=20
-      - ANVIZ_WRITE_TIMEOUT_SECONDS=10
-      - ANVIZ_CONNECT_TIMEOUT_SECONDS=5
-      - ANVIZ_AUTO_SYNC_STAFF=true
-      - ANVIZ_MANUAL_SYNC_STAFF=true
+      - BACKUP_DIR=/app/data/backups
+      - BACKUP_HOUR=${BACKUP_HOUR:-23}
+      - BACKUP_MINUTE=${BACKUP_MINUTE:-59}
+      - BACKUP_ON_STARTUP=${BACKUP_ON_STARTUP:-false}
+      - ANVIZ_SYNC_ENABLED=${ANVIZ_SYNC_ENABLED:-false}
+      - ANVIZ_SYNC_INTERVAL_MINUTES=${ANVIZ_SYNC_INTERVAL_MINUTES:-30}
+      - ANVIZ_AUTO_ATTENDANCE_MODE=${ANVIZ_AUTO_ATTENDANCE_MODE:-new}
+      - ANVIZ_MANUAL_ATTENDANCE_MODE=${ANVIZ_MANUAL_ATTENDANCE_MODE:-all}
+      - ANVIZ_ATTENDANCE_CHUNK_LIMIT=${ANVIZ_ATTENDANCE_CHUNK_LIMIT:-25}
+      - ANVIZ_COMMAND_DELAY_MS=${ANVIZ_COMMAND_DELAY_MS:-5000}
+      - ANVIZ_READ_TIMEOUT_SECONDS=${ANVIZ_READ_TIMEOUT_SECONDS:-20}
+      - ANVIZ_WRITE_TIMEOUT_SECONDS=${ANVIZ_WRITE_TIMEOUT_SECONDS:-10}
+      - ANVIZ_CONNECT_TIMEOUT_SECONDS=${ANVIZ_CONNECT_TIMEOUT_SECONDS:-5}
+      - ANVIZ_AUTO_SYNC_STAFF=${ANVIZ_AUTO_SYNC_STAFF:-true}
+      - ANVIZ_MANUAL_SYNC_STAFF=${ANVIZ_MANUAL_SYNC_STAFF:-true}
       # Bootstrap opzionale del system admin (senza hardcode nel repo)
-      - DEFAULT_SYSTEM_ADMIN_PASSWORD=${DEFAULT_SYSTEM_ADMIN_PASSWORD}
+      - DEFAULT_SYSTEM_ADMIN_PASSWORD=${DEFAULT_SYSTEM_ADMIN_PASSWORD:-}
     # Usiamo host mode per evitare problemi di routing interno
     network_mode: "host"
 
@@ -38,7 +39,7 @@ services:
     network_mode: "host"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./certs:/etc/nginx/certs:ro
+      - ${MARCATEMPO_RUNTIME_DIR:-./runtime}/certs:/etc/nginx/certs:ro
     depends_on:
       - marcatempo
     restart: unless-stopped

@@ -53,6 +53,9 @@ type SystemChangePasswordData struct {
 
 type SystemDeviceDiagnosticsResponse struct {
 	LegacyUnassignedRecords int                       `json:"legacy_unassigned_records"`
+	ConfiguredDevicesCount  int                       `json:"configured_devices_count"`
+	ActiveDevicesCount      int                       `json:"active_devices_count"`
+	SyncEnabled             bool                      `json:"sync_enabled"`
 	Devices                 []SystemDeviceDiagnostics `json:"devices"`
 	RecentRaw               []DeviceRawDiagnostic     `json:"recent_raw"`
 	RecentLegacyUnassigned  []DeviceRawDiagnostic     `json:"recent_legacy_unassigned"`
@@ -62,6 +65,7 @@ type SystemDeviceDiagnostics struct {
 	DeviceID             int        `json:"device_id"`
 	IP                   string     `json:"ip"`
 	Configured           bool       `json:"configured"`
+	Active               bool       `json:"active"`
 	RawCount             int        `json:"raw_count"`
 	FinalCount           int        `json:"final_count"`
 	LatestRawTimestamp   *time.Time `json:"latest_raw_timestamp,omitempty"`
@@ -74,19 +78,98 @@ type AnvizDevice struct {
 	ID uint32
 }
 
-var devices = []AnvizDevice{
-	{"192.168.1.245", 1},
-	{"192.168.1.246", 2},
-	{"192.168.2.245", 3},
-}
+var (
+	configuredDevices []AnvizDevice
+	activeDevices     []AnvizDevice
+)
 
-func activeAnvizDevices() []AnvizDevice {
-	configured := strings.TrimSpace(os.Getenv("ANVIZ_ACTIVE_DEVICE_IDS"))
-	if configured == "" {
-		return devices
+func anvizSyncEnabled() bool {
+	value := strings.TrimSpace(os.Getenv("ANVIZ_SYNC_ENABLED"))
+	if value == "" {
+		return true
 	}
 
-	selected := make(map[uint32]struct{})
+	return value != "0" && !strings.EqualFold(value, "false")
+}
+
+func parseAnvizDeviceEntry(entry string) (AnvizDevice, error) {
+	parts := strings.SplitN(strings.TrimSpace(entry), "@", 2)
+	if len(parts) != 2 {
+		parts = strings.SplitN(strings.TrimSpace(entry), "=", 2)
+	}
+	if len(parts) != 2 {
+		return AnvizDevice{}, fmt.Errorf("formato non valido")
+	}
+
+	idValue := strings.TrimSpace(parts[0])
+	ipValue := strings.TrimSpace(parts[1])
+	if idValue == "" || ipValue == "" {
+		return AnvizDevice{}, fmt.Errorf("id o ip mancanti")
+	}
+
+	parsedID, err := strconv.ParseUint(idValue, 10, 32)
+	if err != nil {
+		return AnvizDevice{}, fmt.Errorf("device id non valido: %w", err)
+	}
+
+	return AnvizDevice{
+		IP: ipValue,
+		ID: uint32(parsedID),
+	}, nil
+}
+
+func loadConfiguredAnvizDevices() []AnvizDevice {
+	raw := strings.TrimSpace(os.Getenv("ANVIZ_DEVICES"))
+	if raw == "" {
+		log.Println("ANVIZ_DEVICES non impostato: nessun device configurato")
+		return nil
+	}
+
+	entries := strings.Split(raw, ",")
+	devices := make([]AnvizDevice, 0, len(entries))
+	seen := make(map[uint32]struct{})
+
+	for _, entry := range entries {
+		trimmed := strings.TrimSpace(entry)
+		if trimmed == "" {
+			continue
+		}
+
+		device, err := parseAnvizDeviceEntry(trimmed)
+		if err != nil {
+			log.Printf("Configurazione ANVIZ_DEVICES ignorata per entry %q: %v", trimmed, err)
+			continue
+		}
+
+		if _, exists := seen[device.ID]; exists {
+			log.Printf("Configurazione ANVIZ_DEVICES duplicata per device id=%d, entry %q ignorata", device.ID, trimmed)
+			continue
+		}
+
+		seen[device.ID] = struct{}{}
+		devices = append(devices, device)
+	}
+
+	if len(devices) == 0 {
+		log.Println("ANVIZ_DEVICES impostato ma nessun device valido configurato")
+	}
+
+	return devices
+}
+
+func selectActiveAnvizDevices(devices []AnvizDevice) []AnvizDevice {
+	if len(devices) == 0 {
+		return nil
+	}
+
+	configured := strings.TrimSpace(os.Getenv("ANVIZ_ACTIVE_DEVICE_IDS"))
+	if configured == "" {
+		selected := make([]AnvizDevice, len(devices))
+		copy(selected, devices)
+		return selected
+	}
+
+	selectedIDs := make(map[uint32]struct{})
 	for _, token := range strings.Split(configured, ",") {
 		value := strings.TrimSpace(token)
 		if value == "" {
@@ -94,24 +177,54 @@ func activeAnvizDevices() []AnvizDevice {
 		}
 		parsed, err := strconv.ParseUint(value, 10, 32)
 		if err != nil {
+			log.Printf("Configurazione ANVIZ_ACTIVE_DEVICE_IDS ignorata per token %q: %v", value, err)
 			continue
 		}
-		selected[uint32(parsed)] = struct{}{}
+		selectedIDs[uint32(parsed)] = struct{}{}
 	}
 
 	filtered := make([]AnvizDevice, 0, len(devices))
 	for _, device := range devices {
-		if _, ok := selected[device.ID]; ok {
+		if _, ok := selectedIDs[device.ID]; ok {
 			filtered = append(filtered, device)
 		}
 	}
 
 	if len(filtered) == 0 {
-		log.Printf("ANVIZ_ACTIVE_DEVICE_IDS=%q non corrisponde a nessun device configurato; uso tutti i device", configured)
-		return devices
+		log.Printf("ANVIZ_ACTIVE_DEVICE_IDS=%q non corrisponde a nessun device configurato: nessun device attivo", configured)
+		return nil
 	}
 
 	return filtered
+}
+
+func initAnvizDeviceConfig() {
+	configuredDevices = loadConfiguredAnvizDevices()
+	activeDevices = selectActiveAnvizDevices(configuredDevices)
+
+	if len(configuredDevices) == 0 {
+		log.Println("Configurazione device Anviz assente: la sincronizzazione restera inattiva fino a configurazione completata")
+		return
+	}
+
+	if len(activeDevices) == 0 {
+		log.Printf("Configurazione device Anviz caricata (%d device), ma nessun device e attivo per la sync", len(configuredDevices))
+		return
+	}
+
+	log.Printf("Configurazione device Anviz caricata: configurati=%d attivi=%d", len(configuredDevices), len(activeDevices))
+}
+
+func configuredAnvizDevices() []AnvizDevice {
+	result := make([]AnvizDevice, len(configuredDevices))
+	copy(result, configuredDevices)
+	return result
+}
+
+func activeAnvizDevices() []AnvizDevice {
+	result := make([]AnvizDevice, len(activeDevices))
+	copy(result, activeDevices)
+	return result
 }
 
 // handleSyncNow triggers a manual synchronization with all configured Anviz devices
@@ -127,11 +240,23 @@ func handleSyncNow(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("Manuale: Richiesta sincronizzazione Anviz avviata dall'admin...")
 
+	devices := activeAnvizDevices()
+	if len(devices) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "warning",
+			"message": "Nessun device Anviz attivo configurato",
+			"results": map[string]string{},
+			"success": false,
+		})
+		return
+	}
+
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	results := make(map[string]string)
 
-	for _, d := range activeAnvizDevices() {
+	for _, d := range devices {
 		wg.Add(1)
 		go func(ip string, id uint32) {
 			defer wg.Done()
@@ -165,7 +290,6 @@ func handleSyncNow(w http.ResponseWriter, r *http.Request) {
 		"success": successCount == len(devices),
 	})
 }
-
 
 // handleClock gestire le TIMBRATURE via Web (Frontend)
 func handleClock(w http.ResponseWriter, r *http.Request) {
@@ -499,11 +623,18 @@ func handleSystemDeviceDiagnostics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	byDevice := make(map[int]SystemDeviceDiagnostics)
-	for _, device := range devices {
+	activeDeviceSet := make(map[int]struct{})
+	for _, device := range activeAnvizDevices() {
+		activeDeviceSet[int(device.ID)] = struct{}{}
+	}
+
+	for _, device := range configuredAnvizDevices() {
+		_, isActive := activeDeviceSet[int(device.ID)]
 		byDevice[int(device.ID)] = SystemDeviceDiagnostics{
 			DeviceID:   int(device.ID),
 			IP:         device.IP,
 			Configured: true,
+			Active:     isActive,
 		}
 	}
 
@@ -529,10 +660,30 @@ func handleSystemDeviceDiagnostics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(SystemDeviceDiagnosticsResponse{
 		LegacyUnassignedRecords: legacyCount,
+		ConfiguredDevicesCount:  len(configuredAnvizDevices()),
+		ActiveDevicesCount:      len(activeAnvizDevices()),
+		SyncEnabled:             anvizSyncEnabled(),
 		Devices:                 responseDevices,
 		RecentRaw:               recentRaw,
 		RecentLegacyUnassigned:  recentLegacyUnassigned,
 	})
+}
+
+func handleSystemBootstrapStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Metodo non consentito", http.StatusMethodNotAllowed)
+		return
+	}
+
+	status, err := GetSystemAdminBootstrapStatus()
+	if err != nil {
+		log.Printf("Errore lettura stato bootstrap system admin: %v", err)
+		http.Error(w, "Errore lettura stato bootstrap", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(status)
 }
 
 // handleEmployees restituisce la lista di tutti i dipendenti (per i filtri dell'admin)
@@ -750,7 +901,7 @@ func handleAdminManualClock(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Errore payload JSON", http.StatusBadRequest)
 		return
 	}
-	
+
 	log.Printf("MANUAL CLOCK REQ: %+v", data)
 
 	// Parse date and time
@@ -778,7 +929,7 @@ func handleAdminManualClock(w http.ResponseWriter, r *http.Request) {
 	if employeeName == "" {
 		employeeName = fmt.Sprintf("Utente %d", data.EmployeeID)
 	}
-	
+
 	log.Printf("MANUAL CLOCK: going to InsertRecord(empId=%d, name=%s, ts=%v, action=%s, sc=%d)", data.EmployeeID, employeeName, timestamp, data.Action, statusCode)
 
 	inserted, err := InsertRecord(data.EmployeeID, employeeName, timestamp, data.Action, statusCode, "manual_web", nil, nil)
@@ -795,7 +946,7 @@ func handleAdminManualClock(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Esiste gia una marcatura web/manuale con gli stessi dati", http.StatusConflict)
 		return
 	}
-	
+
 	log.Println("MANUAL CLOCK SUCCESS")
 
 	w.Header().Set("Content-Type", "application/json")
@@ -910,7 +1061,7 @@ func handleCustomHolidays(w http.ResponseWriter, r *http.Request) {
 
 		var data struct {
 			AdminID     int    `json:"adminId"`
-			Date        string `json:"date"`        // YYYY-MM-DD
+			Date        string `json:"date"` // YYYY-MM-DD
 			Description string `json:"description"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
@@ -1049,18 +1200,22 @@ func main() {
 	// 1. Inizializzazione Database
 	InitDB()
 
+	// 1b. Carica la configurazione device della sede dal runtime locale
+	initAnvizDeviceConfig()
+
 	// 2. Avvia il sistema di backup periodico del database
 	StartBackupScheduler()
 
 	// 3. Avvia Goroutine lavoratore in background per Anviz (uno per ogni IP)
 	// NOTA: il DeviceID tipicamente di default è 1.	// Avvia i worker TCP per ciascun orologio fisico in Goroutine con DeviceID corretto
-	syncEnabled := true
-	if value := strings.TrimSpace(os.Getenv("ANVIZ_SYNC_ENABLED")); value != "" {
-		syncEnabled = value != "0" && !strings.EqualFold(value, "false")
-	}
+	syncEnabled := anvizSyncEnabled()
 
 	if syncEnabled {
-		for _, d := range activeAnvizDevices() {
+		devices := activeAnvizDevices()
+		if len(devices) == 0 {
+			log.Println("Sync Anviz abilitata ma nessun device attivo configurato: nessun worker avviato")
+		}
+		for _, d := range devices {
 			go SyncAnvizWorker(d.IP, d.ID)
 		}
 	} else {
@@ -1100,7 +1255,7 @@ func main() {
 	http.HandleFunc("/api/system/toggle-admin", handleSystemToggleAdmin)
 	http.HandleFunc("/api/system/change-password", handleSystemChangePassword)
 	http.HandleFunc("/api/system/device-diagnostics", handleSystemDeviceDiagnostics)
-
+	http.HandleFunc("/api/system/bootstrap-status", handleSystemBootstrapStatus)
 
 	// Servire dashboard admin
 	http.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {

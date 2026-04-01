@@ -1,12 +1,16 @@
-# SQLite
+# Runtime database artifacts
 *.db
 *.db-wal
 *.db-shm
 
-# SSL Certificates & Keys
-certs/*.key
-certs/*.pem
-!certs/server.crt
+# Runtime data must stay out of Git
+data/*
+!data/README.md
+runtime/
+
+# SSL certificates and keys are deploy artifacts, not source files
+certs/*
+!certs/README.md
 
 # Binaries and build artifacts
 marcatempo
@@ -18,6 +22,8 @@ marcatempo
 
 # Environment variables
 .env
+.env.*
+!.env.example
 
 .gocache/
 .gotmp/

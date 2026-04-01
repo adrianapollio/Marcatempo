@@ -42,6 +42,18 @@ type SystemAdmin struct {
 	CreatedAt    string `json:"created_at"`
 }
 
+type SystemAdminBootstrapStatus struct {
+	FixedUsername               string `json:"fixed_username"`
+	SystemAdminCount            int    `json:"system_admin_count"`
+	FixedAdminExists            bool   `json:"fixed_admin_exists"`
+	BootstrapPasswordConfigured bool   `json:"bootstrap_password_configured"`
+	BootstrapCanInitialize      bool   `json:"bootstrap_can_initialize"`
+	Ready                       bool   `json:"ready"`
+	Status                      string `json:"status"`
+	Message                     string `json:"message"`
+	RecoveryCommand             string `json:"recovery_command"`
+}
+
 // PendingValidation rappresenta una marcatura web in attesa di approvazione admin
 type PendingValidation struct {
 	ID           int        `json:"id"`
@@ -237,6 +249,7 @@ func ensureDefaultSystemAdmin() {
 		return
 	}
 	if userExists > 0 {
+		log.Printf("[INFO] System admin bootstrap gia presente per username=%s; nessuna sovrascrittura automatica eseguita", username)
 		return
 	}
 
@@ -244,6 +257,46 @@ func ensureDefaultSystemAdmin() {
 	if err := AddSystemAdmin(username, password); err != nil {
 		log.Printf("[WARN] Impossibile creare il system admin bootstrap %s: %v", username, err)
 	}
+}
+
+func GetSystemAdminBootstrapStatus() (SystemAdminBootstrapStatus, error) {
+	status := SystemAdminBootstrapStatus{
+		FixedUsername:   "admin",
+		RecoveryCommand: "./make_system_admin admin <nuova_password>",
+	}
+
+	bootstrapPassword := strings.TrimSpace(os.Getenv("DEFAULT_SYSTEM_ADMIN_PASSWORD"))
+	status.BootstrapPasswordConfigured = bootstrapPassword != ""
+
+	if err := DB.QueryRow("SELECT COUNT(*) FROM system_admins").Scan(&status.SystemAdminCount); err != nil {
+		return status, err
+	}
+
+	var fixedAdminCount int
+	if err := DB.QueryRow("SELECT COUNT(*) FROM system_admins WHERE lower(username) = lower(?)", status.FixedUsername).Scan(&fixedAdminCount); err != nil {
+		return status, err
+	}
+
+	status.FixedAdminExists = fixedAdminCount > 0
+	status.BootstrapCanInitialize = !status.FixedAdminExists && status.BootstrapPasswordConfigured
+	status.Ready = status.FixedAdminExists
+
+	switch {
+	case status.FixedAdminExists:
+		status.Status = "ready"
+		status.Message = "System admin configurato. In caso di recovery usa il comando make_system_admin."
+	case status.BootstrapCanInitialize:
+		status.Status = "bootstrap_available"
+		status.Message = "Password bootstrap presente ma system admin non ancora creato. Il bootstrap avviene al primo avvio su DB vuoto."
+	case status.SystemAdminCount == 0 && !status.BootstrapPasswordConfigured:
+		status.Status = "missing_bootstrap"
+		status.Message = "Nessun system admin configurato e nessuna password bootstrap presente. Imposta DEFAULT_SYSTEM_ADMIN_PASSWORD oppure usa make_system_admin."
+	default:
+		status.Status = "incomplete"
+		status.Message = "Lo stato del system admin non e pronto. Verifica bootstrap e recovery."
+	}
+
+	return status, nil
 }
 
 func isUniqueConstraintError(err error) bool {
@@ -607,11 +660,11 @@ func VerifyAdminPIN(employeeID int, pin string) bool {
 			return false
 		}
 		defer rows.Close()
-		
+
 		h := sha256.New()
 		h.Write([]byte(pin))
 		expected := hex.EncodeToString(h.Sum(nil))
-		
+
 		for rows.Next() {
 			if err := rows.Scan(&hash); err == nil {
 				if hash == expected {
@@ -662,16 +715,16 @@ func VerifySystemAdmin(username, password string) bool {
 	}
 
 	var hash string
-	// Per ora usiamo un hash sha256. 
+	// Per ora usiamo un hash sha256.
 	err := DB.QueryRow(`SELECT password_hash FROM system_admins WHERE lower(username) = lower(?)`, username).Scan(&hash)
 	if err != nil {
 		return false
 	}
-	
+
 	h := sha256.New()
 	h.Write([]byte(password))
 	expected := hex.EncodeToString(h.Sum(nil))
-	
+
 	return hash == expected
 }
 
@@ -686,7 +739,7 @@ func AddSystemAdmin(username, password string) error {
 	h := sha256.New()
 	h.Write([]byte(password))
 	hash := hex.EncodeToString(h.Sum(nil))
-	
+
 	query := `
 		INSERT INTO system_admins (username, password_hash, created_at) VALUES (?, ?, ?)
 		ON CONFLICT(username) DO UPDATE SET username=excluded.username, password_hash=excluded.password_hash
@@ -706,13 +759,13 @@ func UpdateSystemAdminPassword(username, newPassword string) error {
 	h := sha256.New()
 	h.Write([]byte(newPassword))
 	hash := hex.EncodeToString(h.Sum(nil))
-	
+
 	query := `UPDATE system_admins SET password_hash = ? WHERE lower(username) = lower(?)`
 	res, err := DB.Exec(query, hash, username)
 	if err != nil {
 		return err
 	}
-	
+
 	rows, err := res.RowsAffected()
 	if err != nil {
 		return err
@@ -1183,7 +1236,7 @@ func UpdateManualRecord(id int, timestamp time.Time, action string, statusCode i
 	if err != nil {
 		return err
 	}
-	
+
 	rows, err := res.RowsAffected()
 	if err != nil {
 		return err
@@ -1344,4 +1397,3 @@ func DeleteCustomHoliday(id int) error {
 	_, err := DB.Exec(query, id)
 	return err
 }
-

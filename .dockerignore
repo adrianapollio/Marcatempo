@@ -1,4 +1,10 @@
 .git
+.env
+.env.*
+!.env.example
+data/
+certs/
+runtime/
 marcatempo.exe
 fix_swap.exe
 tmp_build/
@@ -7,3 +13,6 @@ attendance.db
 attendance.db-shm
 attendance.db-wal
 .vscode/
+*.db
+*.db-shm
+*.db-wal
