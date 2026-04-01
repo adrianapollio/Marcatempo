@@ -791,8 +791,9 @@
                 const res = await fetch('/api/employees');
                 if (res.status === 401) { logout(); return; }
                 const data = await res.json();
+                const employees = Array.isArray(data) ? data : [];
                 
-                allEmployeesData = data.filter(e => {
+                allEmployeesData = employees.filter(e => {
                     let empName = e.name ? e.name.trim() : "";
                     if (["33", "56"].includes(String(e.id))) return true;
                     if (empName.toUpperCase().startsWith("EX")) return false;
@@ -1491,7 +1492,8 @@
                 if (empRes.status === 401) { logout(); return; }
                 if (!empRes.ok) throw new Error(`Errore dipendenti: ${empRes.status}`);
                 
-                const empList = await empRes.json();
+                const empListRaw = await empRes.json();
+                const empList = Array.isArray(empListRaw) ? empListRaw : [];
                 const currentNamesMap = {};
 
                 empList.forEach(e => {
