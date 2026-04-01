@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -606,8 +607,28 @@ func parseFlexibleTimestamp(datePart string, timePart string, loc *time.Location
 }
 
 func excelDateToTime(value float64, loc *time.Location) time.Time {
-	base := time.Date(1899, 12, 30, 0, 0, 0, 0, loc)
-	return base.Add(time.Duration(value * float64(24*time.Hour)))
+	if loc == nil {
+		loc = time.Local
+	}
+
+	wholeDays, fractionalDay := math.Modf(value)
+	baseDateUTC := time.Date(1899, 12, 30, 0, 0, 0, 0, time.UTC).AddDate(0, 0, int(wholeDays))
+
+	totalNanos := int64(math.Round(fractionalDay * float64(24*time.Hour)))
+	dayNanos := int64(24 * time.Hour)
+	if totalNanos >= dayNanos {
+		baseDateUTC = baseDateUTC.AddDate(0, 0, 1)
+		totalNanos -= dayNanos
+	}
+
+	hour := int(totalNanos / int64(time.Hour))
+	totalNanos %= int64(time.Hour)
+	minute := int(totalNanos / int64(time.Minute))
+	totalNanos %= int64(time.Minute)
+	second := int(totalNanos / int64(time.Second))
+	nanosecond := int(totalNanos % int64(time.Second))
+
+	return time.Date(baseDateUTC.Year(), baseDateUTC.Month(), baseDateUTC.Day(), hour, minute, second, nanosecond, loc)
 }
 
 func mapAction(raw string) (string, int, error) {

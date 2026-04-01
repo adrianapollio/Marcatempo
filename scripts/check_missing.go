@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -43,8 +44,25 @@ func excelDateToTime(excelDateStr string, loc *time.Location) (time.Time, error)
 	if err != nil {
 		return time.Time{}, err
 	}
-	t := time.Date(1899, 12, 30, 0, 0, 0, 0, loc).Add(time.Duration(f * float64(24*time.Hour)))
-	return t, nil
+
+	wholeDays, fractionalDay := math.Modf(f)
+	baseDateUTC := time.Date(1899, 12, 30, 0, 0, 0, 0, time.UTC).AddDate(0, 0, int(wholeDays))
+
+	totalNanos := int64(math.Round(fractionalDay * float64(24*time.Hour)))
+	dayNanos := int64(24 * time.Hour)
+	if totalNanos >= dayNanos {
+		baseDateUTC = baseDateUTC.AddDate(0, 0, 1)
+		totalNanos -= dayNanos
+	}
+
+	hour := int(totalNanos / int64(time.Hour))
+	totalNanos %= int64(time.Hour)
+	minute := int(totalNanos / int64(time.Minute))
+	totalNanos %= int64(time.Minute)
+	second := int(totalNanos / int64(time.Second))
+	nanosecond := int(totalNanos % int64(time.Second))
+
+	return time.Date(baseDateUTC.Year(), baseDateUTC.Month(), baseDateUTC.Day(), hour, minute, second, nanosecond, loc), nil
 }
 
 func main() {

@@ -77,6 +77,7 @@ type AnvizDevice struct {
 var devices = []AnvizDevice{
 	{"192.168.1.245", 1},
 	{"192.168.1.246", 2},
+	{"192.168.2.245", 3},
 }
 
 func activeAnvizDevices() []AnvizDevice {

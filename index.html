@@ -632,8 +632,35 @@
             renderAttendanceTable();
         }
 
+        function getRomeDateParts(date) {
+            if (!date || isNaN(date.getTime())) return null;
+            const parts = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Europe/Rome',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            }).formatToParts(date);
+            const map = {};
+            parts.forEach(part => {
+                if (part.type !== 'literal') map[part.type] = part.value;
+            });
+            return map.year && map.month && map.day ? map : null;
+        }
+
         function toLocalDateKey(d) {
-            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+            const parts = getRomeDateParts(d);
+            if (!parts) return "";
+            return `${parts.year}-${parts.month}-${parts.day}`;
+        }
+
+        function formatTimeLocal(date) {
+            if (!date || isNaN(date.getTime())) return "";
+            return new Intl.DateTimeFormat('it-IT', {
+                timeZone: 'Europe/Rome',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            }).format(date);
         }
 
         function pushEmployeeExtraMark(dayData, record) {
@@ -759,7 +786,7 @@
                 dailyMap[dateKey].rawRecords.push({
                     tsMs: dateObj.getTime(),
                     mappedAction: mappedAction,
-                    timeStr: dateObj.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+                    timeStr: formatTimeLocal(dateObj)
                 });
             });
 

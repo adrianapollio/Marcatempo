@@ -1371,12 +1371,44 @@
         }
 
         // --- Utilities for Dates ---
+        function getRomeDateParts(date) {
+            if (!date || isNaN(date.getTime())) return null;
+            const parts = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Europe/Rome',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            }).formatToParts(date);
+            const map = {};
+            parts.forEach(part => {
+                if (part.type !== 'literal') map[part.type] = part.value;
+            });
+            return map.year && map.month && map.day ? map : null;
+        }
+
         function formatDateLocal(date) {
+            const parts = getRomeDateParts(date);
+            if (!parts) return "";
+            return `${parts.year}-${parts.month}-${parts.day}`;
+        }
+
+        function formatTimeLocal(date) {
             if (!date || isNaN(date.getTime())) return "";
-            const y = date.getFullYear();
-            const m = String(date.getMonth() + 1).padStart(2, '0');
-            const d = String(date.getDate()).padStart(2, '0');
-            return `${y}-${m}-${d}`;
+            return new Intl.DateTimeFormat('it-IT', {
+                timeZone: 'Europe/Rome',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            }).format(date);
+        }
+
+        function getRomeWeekday(dateKey) {
+            const date = new Date(`${dateKey}T12:00:00Z`);
+            const weekday = new Intl.DateTimeFormat('en-US', {
+                timeZone: 'Europe/Rome',
+                weekday: 'short'
+            }).format(date);
+            return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(weekday);
         }
 
         function getDatesInRange(startDate, endDate) {
@@ -1727,8 +1759,8 @@
                             hiddenMarks: [], // Collect markings hidden by frontend heuristics
                             rawRecords: [], // Collect all raw records for two-pass dedup
                             isEmpty: false,
-                            isWeekend: dateObj.getDay() === 0 || dateObj.getDay() === 6,
-                            isSaturday: dateObj.getDay() === 6,
+                            isWeekend: [0, 6].includes(getRomeWeekday(dateKey)),
+                            isSaturday: getRomeWeekday(dateKey) === 6,
                             isHoliday: isHolidayToday
                         };
                     }
@@ -1742,7 +1774,7 @@
                         tsMs: dateObj.getTime(),
                         rawAction: rawAction,
                         mappedAction: mappedAction,
-                        timeStr: dateObj.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+                        timeStr: formatTimeLocal(dateObj),
                         lat: r.latitude,
                         lon: r.longitude
                     });

@@ -22,10 +22,10 @@ services:
       - ANVIZ_READ_TIMEOUT_SECONDS=20
       - ANVIZ_WRITE_TIMEOUT_SECONDS=10
       - ANVIZ_CONNECT_TIMEOUT_SECONDS=5
-      - ANVIZ_AUTO_SYNC_STAFF=false
+      - ANVIZ_AUTO_SYNC_STAFF=true
       - ANVIZ_MANUAL_SYNC_STAFF=true
       # Bootstrap opzionale del system admin (senza hardcode nel repo)
-       #- DEFAULT_SYSTEM_ADMIN_PASSWORD=${DEFAULT_SYSTEM_ADMIN_PASSWORD}
+      - DEFAULT_SYSTEM_ADMIN_PASSWORD=${DEFAULT_SYSTEM_ADMIN_PASSWORD}
     # Usiamo host mode per evitare problemi di routing interno
     network_mode: "host"
 
