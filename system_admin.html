@@ -66,7 +66,6 @@
                         </div>
                     </div>
                     <button class="btn-system" onclick="handleLogin()">Accedi</button>
-                    <div id="bootstrapStatusLogin" class="form-error login-status" style="display:none;"></div>
                     <div class="login-link-wrap">
                         <a href="/" class="login-system-link">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -232,10 +231,6 @@
                     <div id="panel-security" class="panel-hidden" hidden>
                         <h3 class="section-title">Accesso e Sicurezza</h3>
                         <div class="stat-card security-card">
-                            <h4 class="security-card-title">Stato Bootstrap System Admin</h4>
-                            <div id="bootstrapStatusSecurity" class="form-error" style="display:none;"></div>
-                        </div>
-                        <div class="stat-card security-card">
                             <h4 class="security-card-title">Cambia Password Super Admin</h4>
                             <div class="form-group">
                                 <label>Nuova Password</label>
@@ -280,45 +275,6 @@
         let currentPage = 1;
         let pageSize = 20;
         let pendingAction = null;
-
-        function renderBootstrapStatus(data) {
-            const loginBox = document.getElementById('bootstrapStatusLogin');
-            const securityBox = document.getElementById('bootstrapStatusSecurity');
-            const message = data?.message || 'Stato bootstrap non disponibile';
-            const recovery = data?.recovery_command ? ` Recovery: ${data.recovery_command}` : '';
-            const isReady = data?.status === 'ready';
-            const color = isReady ? '#10b981' : '#f59e0b';
-
-            if (loginBox) {
-                loginBox.style.display = 'block';
-                loginBox.style.color = color;
-                loginBox.textContent = message + recovery;
-            }
-
-            if (securityBox) {
-                securityBox.style.display = 'block';
-                securityBox.style.color = color;
-                securityBox.textContent = message + recovery;
-            }
-        }
-
-        async function loadSystemBootstrapStatus() {
-            try {
-                const res = await fetch('/api/system/bootstrap-status');
-                if (!res.ok) {
-                    throw new Error('bootstrap status fetch failed');
-                }
-
-                const data = await res.json();
-                renderBootstrapStatus(data);
-            } catch (err) {
-                console.error('Errore caricamento stato bootstrap system admin', err);
-                renderBootstrapStatus({
-                    message: 'Impossibile leggere lo stato bootstrap del system admin.',
-                    recovery_command: './make_system_admin admin <nuova_password>'
-                });
-            }
-        }
 
         async function restoreSystemSession() {
             try {
@@ -649,7 +605,6 @@
             document.getElementById('smallLogs').innerHTML = '';
             addSystemLog('System Administration Shell initialized.', 'auth');
             
-            loadSystemBootstrapStatus();
             loadBackups();
             loadEmployees();
             loadDeviceDiagnostics();
@@ -674,7 +629,6 @@
         }
 
         window.addEventListener('DOMContentLoaded', async () => {
-            loadSystemBootstrapStatus();
             const hasSession = await restoreSystemSession();
             if (hasSession) {
                 initDashboard();

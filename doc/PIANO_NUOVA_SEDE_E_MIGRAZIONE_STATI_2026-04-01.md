@@ -697,7 +697,7 @@ Questa sezione traduce il piano in una checklist concreta e spuntabile.
 - [x] Verificare che `DEFAULT_SYSTEM_ADMIN_PASSWORD` venga davvero passata al container
 - [x] Documentare chiaramente quando il bootstrap crea l'utente e quando no
 - [x] Documentare la procedura di recovery con `make_system_admin`
-- [x] Rendere visibile nei log o nella UI se non esiste alcun system admin bootstrapato
+- [x] Rendere visibile nei log o tramite diagnostica tecnica se non esiste alcun system admin bootstrapato
 - [ ] Verificare login iniziale su DB vuoto
 - [ ] Verificare cambio password da `system_admin.html`
 

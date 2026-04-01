@@ -75,15 +75,14 @@ docker compose up -d --build
 ```
 
 7. Verifica che il database venga creato pulito nella directory runtime.
-8. Verifica lo stato bootstrap del system admin dalla UI system admin.
-9. Verifica l'accesso system admin.
-10. Se il bootstrap non e sufficiente o serve recovery password, usa:
+8. Verifica l'accesso system admin.
+9. Se il bootstrap non e sufficiente o serve recovery password, usa:
 
 ```bash
 docker exec -it marcatempo_app ./make_system_admin admin '<nuova_password>'
 ```
 
-11. Solo dopo le verifiche, abilita la sync dei device della sede corretta.
+10. Solo dopo le verifiche, abilita la sync dei device della sede corretta.
 
 ## 4. Aggiornamento di una sede esistente
 
@@ -144,11 +143,11 @@ Il comportamento raccomandato e:
 - se `admin` esiste gia, il bootstrap non sovrascrive automaticamente la password
 - in caso di recovery si usa il tool `make_system_admin`
 
-La dashboard system admin espone anche uno stato bootstrap per chiarire se:
+Per la diagnostica bootstrap fai riferimento a:
 
-- il system admin e pronto
-- manca la password bootstrap
-- serve recovery esplicita
+- log applicativi
+- comportamento del login
+- recovery esplicita tramite `make_system_admin`
 
 ## 8. Nota operativa per Napoli e Ferrara
 
