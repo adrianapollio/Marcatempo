@@ -7,6 +7,7 @@
 data/*
 !data/README.md
 runtime/
+runtime.*/
 
 # SSL certificates and keys are deploy artifacts, not source files
 certs/*
@@ -16,9 +17,14 @@ certs/*
 marcatempo
 *.exe
 *.exe~
+*_linux_amd64
+*_linux_arm64
 *.dll
 *.so
 *.dylib
+debug_156_output.txt
+tmp_audit_out.txt
+scripts/docker-out/
 
 # Environment variables
 .env

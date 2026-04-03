@@ -19,8 +19,8 @@ type Record struct {
 	EmployeeID   int       `json:"employee_id"`
 	EmployeeName string    `json:"employee_name"`
 	Timestamp    time.Time `json:"timestamp"`
-	Action       string    `json:"action"`      // "In", "Out", "I_pausa", "F_pausa", "U_trasf", "R_trasf", "I_break", "F_break"
-	StatusCode   int       `json:"status_code"` // Raw Anviz attendance state 0-7
+	Action       string    `json:"action"`      // Final action: device simplified flow uses "In", "Out", "I_pausa", "F_pausa"; legacy history and manual/web may still contain "U_trasf", "R_trasf"
+	StatusCode   int       `json:"status_code"` // Canonical status code used by final records
 	Source       string    `json:"source"`      // "web" or "device"
 	DeviceID     *int      `json:"device_id,omitempty"`
 	RawDeviceTS  *int64    `json:"raw_device_timestamp,omitempty"`
@@ -93,6 +93,27 @@ type DeviceRawDiagnostic struct {
 var DB *sql.DB
 
 var ErrDuplicateRecord = errors.New("record duplicato")
+
+type sqlQueryer interface {
+	Query(query string, args ...interface{}) (*sql.Rows, error)
+}
+
+type deviceTimelineRecord struct {
+	Timestamp  time.Time
+	Action     string
+	StatusCode int
+	Source     string
+}
+
+type deviceActionResolution struct {
+	RawAction        string
+	RawStatusCode    int
+	FinalAction      string
+	FinalStatusCode  int
+	ResolutionKind   string
+	ResolutionNote   string
+	UsedLegacyAction bool
+}
 
 func resolveDBPath() string {
 	if envPath := os.Getenv("DB_PATH"); envPath != "" {
@@ -214,6 +235,9 @@ func InitDB() {
 	_, _ = DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_device_raw_unique ON device_raw_records(device_id, employee_id, raw_device_timestamp, status_code)")
 
 	migrateLegacyDeviceTimestamps()
+	if err := normalizeDeviceFinalActionsUsing(DB); err != nil {
+		log.Printf("Migrazione azioni finali device fallita: %v", err)
+	}
 	backfillDeviceRawRecords()
 
 	log.Println("Database SQLite inizializzato con successo, tabelle verificata.")
@@ -307,6 +331,10 @@ type sqlExecer interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
 }
 
+type deviceRawInsertOptions struct {
+	logIndividual bool
+}
+
 func anvizEpochLocation() *time.Location {
 	localTZ, err := time.LoadLocation("Europe/Rome")
 	if err != nil {
@@ -340,6 +368,219 @@ func rawDeviceTimestampFromTime(timestamp time.Time) (uint32, error) {
 		return 0, fmt.Errorf("timestamp fuori range per protocollo Anviz")
 	}
 	return uint32(seconds), nil
+}
+
+func canonicalStatusCodeForAction(action string) int {
+	switch action {
+	case "In":
+		return 0
+	case "Out":
+		return 1
+	case "I_pausa":
+		return 2
+	case "F_pausa":
+		return 3
+	case "U_trasf":
+		return 4
+	case "R_trasf":
+		return 5
+	case "I_break":
+		return 6
+	case "F_break":
+		return 7
+	default:
+		return -1
+	}
+}
+
+func legacyDeviceActionByStatusCode(statusCode int) string {
+	switch statusCode {
+	case 0:
+		return "In"
+	case 1:
+		return "Out"
+	case 2:
+		return "I_pausa"
+	case 3:
+		return "F_pausa"
+	case 4:
+		return "U_trasf"
+	case 5:
+		return "R_trasf"
+	case 6:
+		return "I_break"
+	case 7:
+		return "F_break"
+	default:
+		return ""
+	}
+}
+
+func normalizeDeviceRawAction(action string, statusCode int) string {
+	normalized := strings.ToLower(strings.TrimSpace(action))
+	switch normalized {
+	case "in", "entrata":
+		return "In"
+	case "out", "uscita":
+		return "Out"
+	case "i_pausa", "inizio_pausa":
+		return "I_pausa"
+	case "f_pausa", "fine_pausa":
+		return "F_pausa"
+	case "u_trasf", "inizio_trasferta":
+		return "U_trasf"
+	case "r_trasf", "ritorno_trasferta":
+		return "R_trasf"
+	case "i_break", "inizio_break":
+		return "I_break"
+	case "f_break", "fine_break":
+		return "F_break"
+	case "in_out":
+		return "in_out"
+	case "pausa":
+		return "pausa"
+	default:
+		if fallback := legacyDeviceActionByStatusCode(statusCode); fallback != "" {
+			return fallback
+		}
+		return strings.TrimSpace(action)
+	}
+}
+
+func loadDeviceTimelineBeforeUsing(queryer sqlQueryer, employeeID int, timestamp time.Time) ([]deviceTimelineRecord, error) {
+	loc := anvizEpochLocation()
+	localTS := timestamp.In(loc)
+	dayStart := time.Date(localTS.Year(), localTS.Month(), localTS.Day(), 0, 0, 0, 0, loc)
+	dayEnd := dayStart.Add(24 * time.Hour)
+
+	rows, err := queryer.Query(`
+		SELECT timestamp, action, status_code, source
+		FROM records
+		WHERE employee_id = ?
+		  AND timestamp >= ?
+		  AND timestamp < ?
+		  AND timestamp < ?
+		ORDER BY timestamp ASC, id ASC
+	`, employeeID, dayStart.Format(time.RFC3339), dayEnd.Format(time.RFC3339), timestamp.Format(time.RFC3339))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var timeline []deviceTimelineRecord
+	for rows.Next() {
+		var item deviceTimelineRecord
+		var timestampStr string
+		if err := rows.Scan(&timestampStr, &item.Action, &item.StatusCode, &item.Source); err != nil {
+			return nil, err
+		}
+
+		parsed, err := time.Parse(time.RFC3339, timestampStr)
+		if err != nil {
+			continue
+		}
+		item.Timestamp = parsed
+		timeline = append(timeline, item)
+	}
+
+	return timeline, rows.Err()
+}
+
+func resolveGroupedDeviceAction(rawAction string, timeline []deviceTimelineRecord) (string, int, string) {
+	workOpen := false
+	pauseOpen := false
+	sawPauseMarker := false
+
+	for _, item := range timeline {
+		switch item.Action {
+		case "In":
+			workOpen = true
+		case "Out":
+			workOpen = false
+			pauseOpen = false
+		case "I_pausa":
+			sawPauseMarker = true
+			if workOpen {
+				pauseOpen = true
+			}
+		case "F_pausa":
+			sawPauseMarker = true
+			if workOpen {
+				pauseOpen = false
+			}
+		}
+	}
+
+	switch rawAction {
+	case "in_out":
+		if pauseOpen {
+			return "Out", canonicalStatusCodeForAction("Out"), "group_in_out_close_with_open_pause"
+		}
+		if workOpen {
+			return "Out", canonicalStatusCodeForAction("Out"), "group_in_out_close"
+		}
+		if sawPauseMarker {
+			return "Out", canonicalStatusCodeForAction("Out"), "group_in_out_close_after_pause_without_open_session"
+		}
+		return "In", canonicalStatusCodeForAction("In"), "group_in_out_open"
+	case "pausa":
+		if pauseOpen {
+			return "F_pausa", canonicalStatusCodeForAction("F_pausa"), "group_pausa_close"
+		}
+		if workOpen {
+			return "I_pausa", canonicalStatusCodeForAction("I_pausa"), "group_pausa_open"
+		}
+		return "I_pausa", canonicalStatusCodeForAction("I_pausa"), "group_pausa_fallback_no_open_session"
+	default:
+		return rawAction, canonicalStatusCodeForAction(rawAction), "group_unknown_passthrough"
+	}
+}
+
+func resolveDeviceActionUsing(queryer sqlQueryer, employeeID int, timestamp time.Time, rawAction string, rawStatusCode int) (deviceActionResolution, error) {
+	normalizedRawAction := normalizeDeviceRawAction(rawAction, rawStatusCode)
+	resolution := deviceActionResolution{
+		RawAction:     normalizedRawAction,
+		RawStatusCode: rawStatusCode,
+	}
+
+	switch normalizedRawAction {
+	case "in_out", "pausa":
+		timeline, err := loadDeviceTimelineBeforeUsing(queryer, employeeID, timestamp)
+		if err != nil {
+			return resolution, err
+		}
+		finalAction, finalStatusCode, note := resolveGroupedDeviceAction(normalizedRawAction, timeline)
+		resolution.FinalAction = finalAction
+		resolution.FinalStatusCode = finalStatusCode
+		resolution.ResolutionKind = "grouped"
+		resolution.ResolutionNote = note
+		return resolution, nil
+	case "I_break":
+		resolution.FinalAction = "I_pausa"
+		resolution.FinalStatusCode = canonicalStatusCodeForAction("I_pausa")
+		resolution.ResolutionKind = "legacy_break_to_pause"
+		resolution.ResolutionNote = "legacy_i_break_mapped_to_i_pausa"
+		return resolution, nil
+	case "F_break":
+		resolution.FinalAction = "F_pausa"
+		resolution.FinalStatusCode = canonicalStatusCodeForAction("F_pausa")
+		resolution.ResolutionKind = "legacy_break_to_pause"
+		resolution.ResolutionNote = "legacy_f_break_mapped_to_f_pausa"
+		return resolution, nil
+	case "In", "Out", "I_pausa", "F_pausa", "U_trasf", "R_trasf":
+		resolution.FinalAction = normalizedRawAction
+		resolution.FinalStatusCode = canonicalStatusCodeForAction(normalizedRawAction)
+		resolution.ResolutionKind = "legacy_passthrough"
+		resolution.ResolutionNote = "legacy_device_action_preserved"
+		resolution.UsedLegacyAction = true
+		return resolution, nil
+	default:
+		resolution.FinalAction = normalizedRawAction
+		resolution.FinalStatusCode = rawStatusCode
+		resolution.ResolutionKind = "unknown_passthrough"
+		resolution.ResolutionNote = "unknown_device_action_preserved"
+		return resolution, nil
+	}
 }
 
 func migrateLegacyDeviceTimestamps() {
@@ -392,14 +633,14 @@ func migrateLegacyDeviceTimestamps() {
 	log.Printf("Migrazione device legacy: raw timestamp aggiornati=%d, saltati=%d", updated, skipped)
 }
 
-func adoptLegacyDeviceRecord(deviceID uint32, employeeID int, timestamp time.Time, rawDeviceTimestamp uint32, statusCode int) (bool, error) {
-	return adoptLegacyDeviceRecordUsing(DB, deviceID, employeeID, timestamp, rawDeviceTimestamp, statusCode)
+func adoptLegacyDeviceRecord(deviceID uint32, employeeID int, timestamp time.Time, rawDeviceTimestamp uint32, action string, statusCode int) (bool, error) {
+	return adoptLegacyDeviceRecordUsing(DB, deviceID, employeeID, timestamp, rawDeviceTimestamp, action, statusCode)
 }
 
-func adoptLegacyDeviceRecordUsing(execer sqlExecer, deviceID uint32, employeeID int, timestamp time.Time, rawDeviceTimestamp uint32, statusCode int) (bool, error) {
+func adoptLegacyDeviceRecordUsing(execer sqlExecer, deviceID uint32, employeeID int, timestamp time.Time, rawDeviceTimestamp uint32, action string, statusCode int) (bool, error) {
 	res, err := execer.Exec(`
 		UPDATE records
-		SET device_id = ?, raw_device_timestamp = ?
+		SET device_id = ?, raw_device_timestamp = ?, action = ?, status_code = ?
 		WHERE id = (
 			SELECT id
 			FROM records
@@ -411,7 +652,7 @@ func adoptLegacyDeviceRecordUsing(execer sqlExecer, deviceID uint32, employeeID 
 			ORDER BY id ASC
 			LIMIT 1
 		)
-	`, int64(deviceID), int64(rawDeviceTimestamp), employeeID, timestamp.Format(time.RFC3339), statusCode)
+	`, int64(deviceID), int64(rawDeviceTimestamp), action, statusCode, employeeID, timestamp.Format(time.RFC3339), statusCode)
 	if err != nil {
 		return false, err
 	}
@@ -424,7 +665,62 @@ func adoptLegacyDeviceRecordUsing(execer sqlExecer, deviceID uint32, employeeID 
 	return rowsAffected > 0, nil
 }
 
+func normalizeDeviceFinalActionsUsing(db *sql.DB) error {
+	res, err := db.Exec(`
+		UPDATE records
+		SET action = CASE status_code
+			WHEN 0 THEN 'In'
+			WHEN 1 THEN 'Out'
+			WHEN 2 THEN 'I_pausa'
+			WHEN 3 THEN 'F_pausa'
+			WHEN 4 THEN 'U_trasf'
+			WHEN 5 THEN 'R_trasf'
+			WHEN 6 THEN 'I_break'
+			WHEN 7 THEN 'F_break'
+			ELSE action
+		END
+		WHERE source = 'device'
+		  AND status_code IN (0, 1, 2, 3, 4, 5, 6, 7)
+		  AND action <> CASE status_code
+			WHEN 0 THEN 'In'
+			WHEN 1 THEN 'Out'
+			WHEN 2 THEN 'I_pausa'
+			WHEN 3 THEN 'F_pausa'
+			WHEN 4 THEN 'U_trasf'
+			WHEN 5 THEN 'R_trasf'
+			WHEN 6 THEN 'I_break'
+			WHEN 7 THEN 'F_break'
+			ELSE action
+		  END
+	`)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	log.Printf("Migrazione azioni finali device: normalizzati=%d", rowsAffected)
+	return nil
+}
+
 func insertDeviceRawRecordUsing(execer sqlExecer, deviceID uint32, employeeID int, employeeName string, timestamp time.Time, rawDeviceTimestamp uint32, action string, statusCode int) (bool, error) {
+	return insertDeviceRawRecordUsingWithOptions(
+		execer,
+		deviceID,
+		employeeID,
+		employeeName,
+		timestamp,
+		rawDeviceTimestamp,
+		action,
+		statusCode,
+		deviceRawInsertOptions{logIndividual: true},
+	)
+}
+
+func insertDeviceRawRecordUsingWithOptions(execer sqlExecer, deviceID uint32, employeeID int, employeeName string, timestamp time.Time, rawDeviceTimestamp uint32, action string, statusCode int, opts deviceRawInsertOptions) (bool, error) {
 	res, err := execer.Exec(
 		`INSERT INTO device_raw_records (device_id, employee_id, employee_name, raw_device_timestamp, parsed_timestamp, action, status_code, imported_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		int64(deviceID),
@@ -438,7 +734,9 @@ func insertDeviceRawRecordUsing(execer sqlExecer, deviceID uint32, employeeID in
 	)
 	if err != nil {
 		if isUniqueConstraintError(err) {
-			log.Printf("DEDUPE device_raw duplicate device=%d employee=%d raw_ts=%d action=%s status=%d timestamp=%s", deviceID, employeeID, rawDeviceTimestamp, action, statusCode, timestamp.Format(time.RFC3339))
+			if opts.logIndividual {
+				log.Printf("DEDUPE device_raw duplicate device=%d employee=%d raw_ts=%d action=%s status=%d timestamp=%s", deviceID, employeeID, rawDeviceTimestamp, action, statusCode, timestamp.Format(time.RFC3339))
+			}
 			return false, ErrDuplicateRecord
 		}
 		log.Printf("DEDUPE device_raw insert error device=%d employee=%d raw_ts=%d action=%s status=%d timestamp=%s err=%v", deviceID, employeeID, rawDeviceTimestamp, action, statusCode, timestamp.Format(time.RFC3339), err)
@@ -451,11 +749,15 @@ func insertDeviceRawRecordUsing(execer sqlExecer, deviceID uint32, employeeID in
 	}
 
 	if rowsAffected == 0 {
-		log.Printf("DEDUPE device_raw duplicate(no rows) device=%d employee=%d raw_ts=%d action=%s status=%d timestamp=%s", deviceID, employeeID, rawDeviceTimestamp, action, statusCode, timestamp.Format(time.RFC3339))
+		if opts.logIndividual {
+			log.Printf("DEDUPE device_raw duplicate(no rows) device=%d employee=%d raw_ts=%d action=%s status=%d timestamp=%s", deviceID, employeeID, rawDeviceTimestamp, action, statusCode, timestamp.Format(time.RFC3339))
+		}
 		return false, ErrDuplicateRecord
 	}
 
-	log.Printf("DEDUPE device_raw inserted device=%d employee=%d raw_ts=%d action=%s status=%d timestamp=%s", deviceID, employeeID, rawDeviceTimestamp, action, statusCode, timestamp.Format(time.RFC3339))
+	if opts.logIndividual {
+		log.Printf("DEDUPE device_raw inserted device=%d employee=%d raw_ts=%d action=%s status=%d timestamp=%s", deviceID, employeeID, rawDeviceTimestamp, action, statusCode, timestamp.Format(time.RFC3339))
+	}
 
 	return true, nil
 }
@@ -496,7 +798,17 @@ func backfillDeviceRawRecords() {
 			continue
 		}
 
-		ok, err := insertDeviceRawRecordUsing(DB, uint32(deviceID), employeeID, employeeName, timestamp, uint32(rawDeviceTimestamp), action, statusCode)
+		ok, err := insertDeviceRawRecordUsingWithOptions(
+			DB,
+			uint32(deviceID),
+			employeeID,
+			employeeName,
+			timestamp,
+			uint32(rawDeviceTimestamp),
+			action,
+			statusCode,
+			deviceRawInsertOptions{logIndividual: false},
+		)
 		if err == ErrDuplicateRecord {
 			duplicates++
 			continue
@@ -565,10 +877,10 @@ func InsertRecord(employeeID int, employeeName string, timestamp time.Time, acti
 	return insertRecordWithDeviceMeta(employeeID, employeeName, timestamp, action, statusCode, source, nil, nil, lat, lon)
 }
 
-// InsertDeviceRecord salva una timbratura hardware includendo identificativo terminale
-// e timestamp raw del protocollo Anviz per la deduplica lato device.
+// InsertDeviceRecord salva una timbratura hardware includendo identificativo terminale,
+// timestamp raw del protocollo Anviz e una risoluzione esplicita raw -> final.
 func InsertDeviceRecord(deviceID uint32, employeeID int, employeeName string, timestamp time.Time, rawDeviceTimestamp uint32, action string, statusCode int) (bool, error) {
-	log.Printf("DEDUPE pipeline start device=%d employee=%d timestamp=%s raw_ts=%d action=%s status=%d", deviceID, employeeID, timestamp.Format(time.RFC3339), rawDeviceTimestamp, action, statusCode)
+	log.Printf("DEDUPE pipeline start device=%d employee=%d timestamp=%s raw_ts=%d raw_action=%s raw_status=%d", deviceID, employeeID, timestamp.Format(time.RFC3339), rawDeviceTimestamp, action, statusCode)
 
 	tx, err := DB.Begin()
 	if err != nil {
@@ -579,39 +891,58 @@ func InsertDeviceRecord(deviceID uint32, employeeID int, employeeName string, ti
 		_ = tx.Rollback()
 	}()
 
-	rawInserted, err := insertDeviceRawRecordUsing(tx, deviceID, employeeID, employeeName, timestamp, rawDeviceTimestamp, action, statusCode)
+	resolution, err := resolveDeviceActionUsing(tx, employeeID, timestamp, action, statusCode)
 	if err != nil {
-		log.Printf("DEDUPE pipeline raw step failed device=%d employee=%d raw_ts=%d action=%s status=%d err=%v", deviceID, employeeID, rawDeviceTimestamp, action, statusCode, err)
+		log.Printf("DEDUPE pipeline resolve step failed device=%d employee=%d raw_ts=%d raw_action=%s raw_status=%d err=%v", deviceID, employeeID, rawDeviceTimestamp, action, statusCode, err)
 		return false, err
 	}
 
-	adopted, err := adoptLegacyDeviceRecordUsing(tx, deviceID, employeeID, timestamp, rawDeviceTimestamp, statusCode)
+	log.Printf(
+		"DEDUPE pipeline resolved device=%d employee=%d raw_ts=%d raw_action=%s raw_status=%d final_action=%s final_status=%d kind=%s note=%s",
+		deviceID,
+		employeeID,
+		rawDeviceTimestamp,
+		resolution.RawAction,
+		resolution.RawStatusCode,
+		resolution.FinalAction,
+		resolution.FinalStatusCode,
+		resolution.ResolutionKind,
+		resolution.ResolutionNote,
+	)
+
+	rawInserted, err := insertDeviceRawRecordUsing(tx, deviceID, employeeID, employeeName, timestamp, rawDeviceTimestamp, resolution.RawAction, resolution.RawStatusCode)
 	if err != nil {
-		log.Printf("DEDUPE pipeline legacy adopt error device=%d employee=%d raw_ts=%d status=%d err=%v", deviceID, employeeID, rawDeviceTimestamp, statusCode, err)
+		log.Printf("DEDUPE pipeline raw step failed device=%d employee=%d raw_ts=%d action=%s status=%d err=%v", deviceID, employeeID, rawDeviceTimestamp, resolution.RawAction, resolution.RawStatusCode, err)
+		return false, err
+	}
+
+	adopted, err := adoptLegacyDeviceRecordUsing(tx, deviceID, employeeID, timestamp, rawDeviceTimestamp, resolution.FinalAction, resolution.FinalStatusCode)
+	if err != nil {
+		log.Printf("DEDUPE pipeline legacy adopt error device=%d employee=%d raw_ts=%d status=%d err=%v", deviceID, employeeID, rawDeviceTimestamp, resolution.FinalStatusCode, err)
 		return false, err
 	}
 	if adopted {
-		log.Printf("DEDUPE pipeline legacy adopted device=%d employee=%d raw_ts=%d status=%d timestamp=%s", deviceID, employeeID, rawDeviceTimestamp, statusCode, timestamp.Format(time.RFC3339))
+		log.Printf("DEDUPE pipeline legacy adopted device=%d employee=%d raw_ts=%d status=%d timestamp=%s", deviceID, employeeID, rawDeviceTimestamp, resolution.FinalStatusCode, timestamp.Format(time.RFC3339))
 	}
 	if !adopted {
-		insertedFinal, err := insertRecordWithDeviceMetaUsing(tx, employeeID, employeeName, timestamp, action, statusCode, "device", &deviceID, &rawDeviceTimestamp, nil, nil)
+		insertedFinal, err := insertRecordWithDeviceMetaUsing(tx, employeeID, employeeName, timestamp, resolution.FinalAction, resolution.FinalStatusCode, "device", &deviceID, &rawDeviceTimestamp, nil, nil)
 		if err != nil && err != ErrDuplicateRecord {
-			log.Printf("DEDUPE pipeline final insert error device=%d employee=%d raw_ts=%d action=%s status=%d err=%v", deviceID, employeeID, rawDeviceTimestamp, action, statusCode, err)
+			log.Printf("DEDUPE pipeline final insert error device=%d employee=%d raw_ts=%d action=%s status=%d err=%v", deviceID, employeeID, rawDeviceTimestamp, resolution.FinalAction, resolution.FinalStatusCode, err)
 			return false, err
 		}
 		if err == ErrDuplicateRecord || !insertedFinal {
-			log.Printf("DEDUPE pipeline final duplicate device=%d employee=%d raw_ts=%d action=%s status=%d timestamp=%s", deviceID, employeeID, rawDeviceTimestamp, action, statusCode, timestamp.Format(time.RFC3339))
+			log.Printf("DEDUPE pipeline final duplicate device=%d employee=%d raw_ts=%d action=%s status=%d timestamp=%s", deviceID, employeeID, rawDeviceTimestamp, resolution.FinalAction, resolution.FinalStatusCode, timestamp.Format(time.RFC3339))
 		} else {
-			log.Printf("DEDUPE pipeline final inserted device=%d employee=%d raw_ts=%d action=%s status=%d timestamp=%s", deviceID, employeeID, rawDeviceTimestamp, action, statusCode, timestamp.Format(time.RFC3339))
+			log.Printf("DEDUPE pipeline final inserted device=%d employee=%d raw_ts=%d action=%s status=%d timestamp=%s", deviceID, employeeID, rawDeviceTimestamp, resolution.FinalAction, resolution.FinalStatusCode, timestamp.Format(time.RFC3339))
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		log.Printf("DEDUPE pipeline commit error device=%d employee=%d raw_ts=%d action=%s status=%d err=%v", deviceID, employeeID, rawDeviceTimestamp, action, statusCode, err)
+		log.Printf("DEDUPE pipeline commit error device=%d employee=%d raw_ts=%d action=%s status=%d err=%v", deviceID, employeeID, rawDeviceTimestamp, resolution.FinalAction, resolution.FinalStatusCode, err)
 		return false, err
 	}
 
-	log.Printf("DEDUPE pipeline commit ok device=%d employee=%d raw_ts=%d action=%s status=%d raw_inserted=%v adopted=%v", deviceID, employeeID, rawDeviceTimestamp, action, statusCode, rawInserted, adopted)
+	log.Printf("DEDUPE pipeline commit ok device=%d employee=%d raw_ts=%d raw_action=%s raw_status=%d final_action=%s final_status=%d raw_inserted=%v adopted=%v", deviceID, employeeID, rawDeviceTimestamp, resolution.RawAction, resolution.RawStatusCode, resolution.FinalAction, resolution.FinalStatusCode, rawInserted, adopted)
 
 	return rawInserted, nil
 }

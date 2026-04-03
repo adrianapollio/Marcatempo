@@ -207,13 +207,14 @@
                                             <th>Dipendente</th>
                                             <th>Raw TS</th>
                                             <th>Timestamp Parse</th>
-                                            <th>Azione</th>
+                                            <th>Azione Device (Raw)</th>
+                                            <th>Stato Pipeline (Final)</th>
                                             <th>Import</th>
                                         </tr>
                                     </thead>
                                     <tbody id="deviceDiagnosticsBody">
                                         <tr>
-                                            <td colspan="7" class="table-placeholder">
+                                            <td colspan="8" class="table-placeholder">
                                                 <span class="loading-block">
                                                     <span class="loading-inline">
                                                         <span class="loading-spinner" aria-hidden="true"></span>
@@ -511,16 +512,65 @@
                 meta.textContent = `Configurati: ${data.configured_devices_count || 0} | Attivi: ${data.active_devices_count || 0} | Ultimi raw mostrati: ${recentRaw.length}`;
 
                 if (recentRaw.length === 0) {
-                    body.innerHTML = '<tr><td colspan="7" class="table-placeholder">Nessun raw record disponibile</td></tr>';
+                    body.innerHTML = '<tr><td colspan="8" class="table-placeholder">Nessun raw record disponibile</td></tr>';
                 } else {
-                    body.innerHTML = recentRaw.map(row => `
+                    // Raggruppamento per evento fisico (key: device + employee + timestamp_raw)
+                    const grouped = {};
+                    recentRaw.forEach(row => {
+                        const key = `${row.device_id}_${row.employee_id}_${row.raw_device_timestamp}`;
+                        if (!grouped[key]) {
+                            grouped[key] = {
+                                device_id: row.device_id,
+                                employee_name: row.employee_name || 'Sconosciuto',
+                                employee_id: row.employee_id,
+                                raw_device_timestamp: row.raw_device_timestamp,
+                                parsed_timestamp: row.parsed_timestamp,
+                                imported_at: row.imported_at,
+                                raw_action: '—',
+                                final_action: '—',
+                                raw_status: null,
+                                final_status: null,
+                                origin: row.origin || 'raw'
+                            };
+                        }
+
+                        // Distinguiamo tra azione grezza e risolta
+                        const rawActions = ['in_out', 'pausa', 'i_break', 'f_break', 'u_trasf', 'r_trasf'];
+                        const finalActions = ['In', 'Out', 'I_pausa', 'F_pausa'];
+
+                        if (finalActions.includes(row.action)) {
+                            grouped[key].final_action = row.action;
+                            grouped[key].final_status = row.status_code;
+                        } else {
+                            grouped[key].raw_action = row.action;
+                            grouped[key].raw_status = row.status_code;
+                        }
+
+                        // Teniamo il timestamp di import più recente
+                        if (new Date(row.imported_at) > new Date(grouped[key].imported_at)) {
+                            grouped[key].imported_at = row.imported_at;
+                        }
+                    });
+
+                    const sortedGroups = Object.values(grouped).sort((a, b) => new Date(b.parsed_timestamp) - new Date(a.parsed_timestamp));
+
+                    body.innerHTML = sortedGroups.map(row => `
                         <tr>
-                            <td><span class="text-secondary-xs">${row.origin || 'raw'}</span></td>
+                            <td><span class="text-secondary-xs">${row.origin}</span></td>
                             <td><code>#${row.device_id}</code></td>
-                            <td>${escapeHtml(row.employee_name || '')} <span class="text-secondary">(#${row.employee_id})</span></td>
+                            <td>${escapeHtml(row.employee_name)} <span class="text-secondary">(#${row.employee_id})</span></td>
                             <td><code>${row.raw_device_timestamp}</code></td>
                             <td>${formatDiagnosticDate(row.parsed_timestamp)}</td>
-                            <td>${escapeHtml(row.action)} <span class="text-secondary">(${row.status_code})</span></td>
+                            <td>
+                                <span class="badge ${row.raw_action === '—' ? 'badge-none' : 'badge-raw'}">
+                                    ${escapeHtml(row.raw_action)} ${row.raw_status !== null ? `<span class="text-secondary-xs">(${row.raw_status})</span>` : ''}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge ${row.final_action === '—' ? 'badge-none' : 'badge-final'}">
+                                    ${escapeHtml(row.final_action)} ${row.final_status !== null ? `<span class="text-secondary-xs">(${row.final_status})</span>` : ''}
+                                </span>
+                            </td>
                             <td>${formatDiagnosticDate(row.imported_at)}</td>
                         </tr>
                     `).join('');

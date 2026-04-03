@@ -35,7 +35,7 @@ La direzione raccomandata e la seguente:
 4. introdurre una convenzione chiara per le configurazioni di sede, nel caso attuale `Napoli` e `Ferrara`
 5. rendere il bootstrap del system admin affidabile e verificabile
 6. introdurre un minimo di gestione ordinata delle migrazioni schema
-7. solo dopo questi passaggi, implementare la semplificazione degli stati device a 3 gruppi raw mantenendo `records` a 6 stati canonici
+7. solo dopo questi passaggi, implementare la semplificazione degli stati device a 2 gruppi raw mantenendo `records` compatibile con lo storico legacy ma convergendo operativamente a 4 stati attivi
 
 ## 3. Contesto del problema
 
@@ -210,7 +210,7 @@ Il sistema deve poter supportare questa situazione target:
 - una directory dati separata dalla repository
 - un bootstrap chiaro del system admin
 - una nuova sede che possa partire vuota senza ereditare dati della sede originale
-- un percorso evolutivo sicuro verso la semplificazione dei device a 3 stati raw
+- un percorso evolutivo sicuro verso la semplificazione dei device a 2 gruppi raw
 
 In altre parole, il deploy di una nuova sede deve diventare:
 
@@ -324,7 +324,7 @@ In aggiunta, e utile poter capire in modo chiaro se il bootstrap e avvenuto o no
 
 Il documento `doc/ANALISI_SEMPLIFICAZIONE_STATI_2026-03-31.md` indica una direzione molto sensata:
 
-- 3 stati raw solo per i device
+- 2 gruppi raw solo per i device
 - `device_raw_records` come livello raw
 - resolver backend verso 6 stati canonici
 - `records` come tabella finale canonica
@@ -473,25 +473,33 @@ Obiettivo: applicare quanto deciso in `doc/ANALISI_SEMPLIFICAZIONE_STATI_2026-03
 
 Decisione di fondo da mantenere:
 
-- 3 stati raw solo per i device
-- `web` e `manual_web` restano a 6 stati espliciti
-- `records` resta la tabella finale a 6 stati canonici
+- 2 gruppi raw solo per i device
+- trasferte eliminate dal flusso device semplificato
+- `records` resta la tabella finale compatibile con lo storico legacy
+- lo storico legacy con `U_trasf` e `R_trasf` resta leggibile e invariato
 
 Attivita:
 
 1. Adeguare la pipeline device per accettare i nuovi gruppi raw:
    - `in_out`
    - `pausa`
-   - `trasferta`
-2. Salvare sempre il raw in `device_raw_records`.
-3. Introdurre una funzione resolver backend dedicata che converta raw -> final.
-4. Mantenere `records.action` e `records.status_code` nel formato canonico attuale.
-5. Valutare un collegamento esplicito tra record finale e record raw di origine.
+2. Eliminare dalla semplificazione device gli stati:
+   - `I_break`
+   - `F_break`
+   - `U_trasf`
+   - `R_trasf`
+3. Salvare sempre il raw in `device_raw_records`.
+4. Introdurre una funzione resolver backend dedicata che converta raw -> final.
+5. Mantenere `records.action` e `records.status_code` compatibili con lo storico legacy esistente.
+6. Garantire che i nuovi raw device non generino piu nuove trasferte.
+7. Mantenere temporaneamente le trasferte nei nuovi inserimenti web/manuali, senza toccare lo storico.
+8. Valutare un collegamento esplicito tra record finale e record raw di origine.
 
 Risultato atteso:
 
-- il conteggio ore, i warning e il rendering continuano a lavorare sul modello consolidato a 6 stati
+- il conteggio ore, i warning e il rendering continuano a leggere il modello storico esistente
 - la semplificazione UX agisce solo dove serve davvero
+- lo storico con trasferte resta intatto ma il flusso device futuro si limita a `In/Out` e `I_pausa/F_pausa`
 
 ### Fase 8 - Compatibilita con il periodo di transizione
 
@@ -501,7 +509,7 @@ Attivita:
 
 1. Consentire al backend di convivere con:
    - raw legacy a 6 stati
-   - raw nuovi a 3 gruppi
+   - raw nuovi a 2 gruppi
 2. Evitare migrazioni massive dello storico.
 3. Garantire che lo storico gia esistente continui a essere leggibile e coerente.
 
@@ -641,7 +649,7 @@ La priorita non e solo correggere il branch o far entrare il system admin, ma po
 - configurazione separata dal codice
 - deploy prudente
 - bootstrap amministrativo chiaro
-- base affidabile per la futura semplificazione a 3 stati raw lato device
+- base affidabile per la futura semplificazione a 2 gruppi raw lato device
 
 Questo ordine di lavoro consente di:
 
@@ -654,7 +662,7 @@ Questo ordine di lavoro consente di:
 Il prossimo passo pratico consigliato e aprire un intervento tecnico in due blocchi consecutivi:
 
 1. "messa in sicurezza multi-sede"
-2. "preparazione pipeline device a 3 stati"
+2. "preparazione pipeline device a 2 gruppi"
 
 Il primo blocco deve essere completato prima di iniziare il secondo.
 
@@ -719,19 +727,24 @@ Questa sezione traduce il piano in una checklist concreta e spuntabile.
 
 ### 14.6 Blocco F - Semplificazione stati device
 
-- [ ] Confermare ufficialmente che la semplificazione riguarda solo i device
-- [ ] Confermare che `web` e `manual_web` restano a 6 stati
-- [ ] Introdurre i 3 gruppi raw:
+- [x] Confermare ufficialmente che la semplificazione riguarda solo i device
+- [x] Correggere la decisione funzionale: trasferte eliminate dal flusso device semplificato e mantenute nello storico legacy
+- [x] Aggiornare la decisione funzionale: niente `I_break`, `F_break`, `U_trasf`, `R_trasf` nel nuovo flusso device semplificato
+- [x] Introdurre i 2 gruppi raw:
   - `in_out`
   - `pausa`
-  - `trasferta`
-- [ ] Salvare i raw device in `device_raw_records`
-- [ ] Implementare il resolver backend raw -> 6 stati canonici
-- [ ] Mantenere `records` come tabella finale a 6 stati
-- [ ] Garantire compatibilita con lo storico legacy
-- [ ] Introdurre logging utile per capire come un raw e stato risolto
-- [ ] Coprire il resolver con test unitari
-- [ ] Validare il comportamento su copia DB reale
+- [x] Rendere il rollout esplicito e reversibile con uno switch env (`ANVIZ_SIMPLIFIED_DEVICE_RAW_ACTIONS`)
+- [x] Salvare i raw device in `device_raw_records`
+- [x] Implementare il resolver backend raw -> 6 stati canonici
+- [x] Mantenere `records` come tabella finale a 6 stati
+- [x] Garantire compatibilita con lo storico legacy
+- [x] Garantire che lo storico legacy con `U_trasf` e `R_trasf` resti leggibile ma non venga alterato
+- [x] Introdurre logging utile per capire come un raw e stato risolto
+- [x] Confermare che `manual_web` e `web` restano invariati nel transitorio
+- [x] Documentare il criterio del resolver e la coerenza con la logica di conteggio ore
+- [ ] Valutare in una fase successiva l'eventuale rimozione di `U_trasf` e `R_trasf` dalle nuove azioni web/manuali
+- [x] Coprire il resolver con test unitari
+- [x] Validare il comportamento su copia DB reale
 
 ### 14.7 Blocco G - Rollout nuova sede
 

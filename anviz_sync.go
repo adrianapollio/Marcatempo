@@ -26,6 +26,14 @@ type SyncStats struct {
 	Latest     time.Time
 }
 
+type attendanceChunkRecord struct {
+	UserID        uint32
+	TimestampSecs uint32
+	RecordTime    time.Time
+	StatusCode    int
+	Action        string
+}
+
 var deviceSyncGuards sync.Map
 
 type syncRunConfig struct {
@@ -100,16 +108,16 @@ func decodeAttendanceAction(recordBytes []byte) (int, string) {
 	}
 
 	statusCandidates := []int{}
-	if len(recordBytes) > 8 {
-		statusCandidates = append(statusCandidates, int(recordBytes[8]))
-	}
 	if len(recordBytes) > 9 {
 		statusCandidates = append(statusCandidates, int(recordBytes[9]))
+	}
+	if len(recordBytes) > 8 {
+		statusCandidates = append(statusCandidates, int(recordBytes[8]))
 	}
 
 	for _, candidate := range statusCandidates {
 		if action, ok := statusMap[candidate]; ok {
-			return candidate, action
+			return candidate, normalizeAnvizDeviceRawAction(candidate, action)
 		}
 	}
 
@@ -118,6 +126,37 @@ func decodeAttendanceAction(recordBytes []byte) (int, string) {
 	}
 
 	return -1, "unknown"
+}
+
+func useSimplifiedDeviceRawActions() bool {
+	return envBool("ANVIZ_SIMPLIFIED_DEVICE_RAW_ACTIONS", false)
+}
+
+func normalizeAnvizDeviceRawAction(statusCode int, legacyAction string) string {
+	if !useSimplifiedDeviceRawActions() {
+		return legacyAction
+	}
+
+	switch statusCode {
+	case 0, 4, 5:
+		return "in_out"
+	case 1, 2, 3, 6, 7:
+		return "pausa"
+	default:
+		return legacyAction
+	}
+}
+
+func sortAttendanceChunkRecordsChronologically(records []attendanceChunkRecord) {
+	sort.SliceStable(records, func(i, j int) bool {
+		if records[i].RecordTime.Equal(records[j].RecordTime) {
+			if records[i].TimestampSecs == records[j].TimestampSecs {
+				return records[i].UserID < records[j].UserID
+			}
+			return records[i].TimestampSecs < records[j].TimestampSecs
+		}
+		return records[i].RecordTime.Before(records[j].RecordTime)
+	})
 }
 
 func summarizeAttendanceRecordBytes(recordBytes []byte) string {
@@ -245,7 +284,7 @@ func anvizAttendanceChunkLimit() byte {
 
 func shouldSyncStaff(manual bool) bool {
 	if manual {
-		return envBool("ANVIZ_MANUAL_SYNC_STAFF", true)
+		return envBool("ANVIZ_MANUAL_SYNC_STAFF", false)
 	}
 	return envBool("ANVIZ_AUTO_SYNC_STAFF", false)
 }
@@ -318,7 +357,7 @@ func formatActionHistogram(actionCounts map[string]int) string {
 }
 
 const (
-	AnvizSTX     = 0xA5
+	AnvizSTX          = 0xA5
 	AnvizCommand      = 0x40 // Comando TC_B (Download All Attendance Records) oppure 0x4C (Download New Attendance Records)
 	AnvizCommandClear = 0x4E // Comando TC_C (Clear New Attendance Records)
 )
@@ -492,10 +531,11 @@ func parseAnvizResponse(res []byte, ip string, deviceID uint32) SyncStats {
 		log.Printf("TCP Worker: Parsing %d timbrature dall'hardware Anviz %s.", recordCount, ip)
 		stats.Received += recordCount
 		actionCounts := map[string]int{}
-		
+		chunkRecords := make([]attendanceChunkRecord, 0, recordCount)
+
 		validRecordCount := int(data[0]) // Il primo byte è il "count"
-		idx := 2 // Nei pacchetti 0x40 il payload inizia da byte indice 2 (dopo i due header count)
-		
+		idx := 2                         // Nei pacchetti 0x40 il payload inizia da byte indice 2 (dopo i due header count)
+
 		for i := 0; i < validRecordCount; i++ {
 			remaining := len(data) - idx
 			if remaining <= 0 {
@@ -532,25 +572,37 @@ func parseAnvizResponse(res []byte, ip string, deviceID uint32) SyncStats {
 			actionCounts[action]++
 			log.Printf("TCP Worker: Attendance record scaricato device=%d ip=%s employee=%d raw_ts=%d parsed_ts=%s action=%s status=%d %s", deviceID, ip, userID, timestampSecs, recordTime.Format(time.RFC3339), action, statusCode, summarizeAttendanceRecordBytes(recordBytes))
 
-			employeeName := GetEmployeeName(int(userID))
+			chunkRecords = append(chunkRecords, attendanceChunkRecord{
+				UserID:        userID,
+				TimestampSecs: timestampSecs,
+				RecordTime:    recordTime,
+				StatusCode:    statusCode,
+				Action:        action,
+			})
+		}
+
+		sortAttendanceChunkRecordsChronologically(chunkRecords)
+
+		for _, chunkRecord := range chunkRecords {
+			employeeName := GetEmployeeName(int(chunkRecord.UserID))
 			if employeeName == "" {
-				employeeName = fmt.Sprintf("Utente %d", userID)
+				employeeName = fmt.Sprintf("Utente %d", chunkRecord.UserID)
 			}
 
-			inserted, err := InsertDeviceRecord(deviceID, int(userID), employeeName, recordTime, timestampSecs, action, statusCode)
+			inserted, err := InsertDeviceRecord(deviceID, int(chunkRecord.UserID), employeeName, chunkRecord.RecordTime, chunkRecord.TimestampSecs, chunkRecord.Action, chunkRecord.StatusCode)
 			if err == ErrDuplicateRecord {
 				stats.Duplicates++
-				log.Printf("TCP Worker: Timbratura device gia presente, salto device=%d employee=%d raw_ts=%d status=%d", deviceID, userID, timestampSecs, statusCode)
+				log.Printf("TCP Worker: Timbratura device gia presente, salto device=%d employee=%d raw_ts=%d status=%d", deviceID, chunkRecord.UserID, chunkRecord.TimestampSecs, chunkRecord.StatusCode)
 				continue
 			}
 			if err != nil {
 				stats.Errors++
-				log.Printf("TCP Worker: Errore insert SQLite timbratura device id %d: %v", userID, err)
+				log.Printf("TCP Worker: Errore insert SQLite timbratura device id %d: %v", chunkRecord.UserID, err)
 				continue
 			}
 			if !inserted {
 				stats.Duplicates++
-				log.Printf("TCP Worker: Timbratura device gia presente, salto device=%d employee=%d raw_ts=%d status=%d", deviceID, userID, timestampSecs, statusCode)
+				log.Printf("TCP Worker: Timbratura device gia presente, salto device=%d employee=%d raw_ts=%d status=%d", deviceID, chunkRecord.UserID, chunkRecord.TimestampSecs, chunkRecord.StatusCode)
 				continue
 			}
 
@@ -694,7 +746,7 @@ func syncFromDeviceLegacy(ip string, deviceID uint32, manual bool) (SyncStats, e
 			log.Printf("TCP Worker: Errore durante tcp write (staff): %v", err)
 			break
 		}
-		
+
 		staffRes := readFullAnvizPacket(conn, anvizReadTimeout())
 		if staffRes != nil && staffRes[6] == 0x00 { // 0x00 Success
 			count := int(staffRes[9])

@@ -2269,6 +2269,9 @@
             const officeExit = (u !== null) ? u : inferredExitFromReturn;
             const hasCompletePause = iP !== null && fP !== null && fP > iP;
             const hasAnyPauseMarker = iP !== null || fP !== null;
+            const hasTravelMarkers = iT !== null || rT !== null;
+            const presentCoreMarks = [e !== null, iP !== null, fP !== null, officeExit !== null].filter(Boolean).length;
+            const hasSingleMissingOfficePunch = !hasTravelMarkers && presentCoreMarks === 3;
 
             const today = new Date();
             const todayStr = formatDateLocal(today);
@@ -2332,7 +2335,7 @@
                 if (hasCompletePause) {
                     pauseDeducted = 0; // Gia esclusa spezzando gli intervalli tra inizio e fine pausa
                 } else {
-                pauseDeducted = 60; // Partial pause marker
+                    pauseDeducted = 60; // Partial pause marker
                 }
             } else if (workedMins >= 480) {
                 // Automatic 1h deduction on standard full-day shift when no pause is marked
@@ -2343,6 +2346,11 @@
             if (workedMins < 0) workedMins = 0;
 
             const hasUnclosedDay = (e !== null && officeExit === null) || (iT !== null && rT === null);
+            if (!isToday && hasSingleMissingOfficePunch) {
+                // With 3 out of 4 office punches, keep the real worked time when it is already
+                // computable from coherent intervals; otherwise guarantee a standard 8:00 day.
+                return Math.max(workedMins, 480);
+            }
             if (!isToday && hasUnclosedDay) {
                 return 480;
             }

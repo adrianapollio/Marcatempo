@@ -5,10 +5,16 @@
 data/
 certs/
 runtime/
+runtime.*/
 marcatempo.exe
 fix_swap.exe
 tmp_build/
 tmp_build.exe
+scripts/docker-out/
+*_linux_amd64
+*_linux_arm64
+debug_156_output.txt
+tmp_audit_out.txt
 attendance.db
 attendance.db-shm
 attendance.db-wal
