@@ -81,6 +81,10 @@ type AnvizDevice struct {
 var (
 	configuredDevices []AnvizDevice
 	activeDevices     []AnvizDevice
+	manualSyncStateMu sync.Mutex
+	manualSyncRunning bool
+	manualSyncScope   string
+	manualSyncStarted time.Time
 )
 
 func anvizSyncEnabled() bool {
@@ -238,7 +242,28 @@ func handleSyncNow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Println("Manuale: Richiesta sincronizzazione Anviz avviata dall'admin...")
+	scopeRaw := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("scope")))
+	scopeLabel := "full"
+	syncStaff := shouldSyncStaff(true)
+	syncAttendance := true
+
+	switch scopeRaw {
+	case "", "full", "all":
+		// defaults already set
+	case "staff", "staff-only":
+		scopeLabel = "staff"
+		syncStaff = true
+		syncAttendance = false
+	case "attendance", "attendance-only":
+		scopeLabel = "attendance"
+		syncStaff = false
+		syncAttendance = true
+	default:
+		http.Error(w, "Parametro scope non valido. Usa: full, staff, attendance", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("Manuale: Richiesta sincronizzazione Anviz avviata dall'admin scope=%s", scopeLabel)
 
 	devices := activeAnvizDevices()
 	if len(devices) == 0 {
@@ -252,43 +277,108 @@ func handleSyncNow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	results := make(map[string]string)
-
-	for _, d := range devices {
-		wg.Add(1)
-		go func(ip string, id uint32) {
-			defer wg.Done()
-			stats, err := syncFromDevice(ip, id, true)
-			mu.Lock()
-			defer mu.Unlock()
-			if err != nil {
-				results[ip] = "ERRORE: " + err.Error()
-			} else {
-				results[ip] = fmt.Sprintf("OK (ricevuti=%d, nuovi=%d, duplicati=%d, errori=%d)", stats.Received, stats.Inserted, stats.Duplicates, stats.Errors)
-			}
-		}(d.IP, d.ID)
+	manualSyncStateMu.Lock()
+	if manualSyncRunning {
+		manualSyncStateMu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "warning",
+			"message": "Sincronizzazione manuale gia in corso",
+			"results": map[string]string{},
+			"success": false,
+		})
+		return
 	}
-	wg.Wait()
+	manualSyncRunning = true
+	manualSyncScope = scopeLabel
+	manualSyncStarted = time.Now()
+	manualSyncStateMu.Unlock()
 
-	// Build a summary message
-	summary := "Esito sincronizzazione:\n"
-	successCount := 0
-	for ip, status := range results {
-		summary += fmt.Sprintf("- %s: %s\n", ip, status)
-		if strings.HasPrefix(status, "OK") {
-			successCount++
+	go func(devices []AnvizDevice, scope string, doStaff bool, doAttendance bool) {
+		defer func() {
+			manualSyncStateMu.Lock()
+			manualSyncRunning = false
+			manualSyncScope = ""
+			manualSyncStarted = time.Time{}
+			manualSyncStateMu.Unlock()
+		}()
+
+		var wg sync.WaitGroup
+		var mu sync.Mutex
+		results := make(map[string]string)
+
+		for _, d := range devices {
+			wg.Add(1)
+			go func(ip string, id uint32) {
+				defer wg.Done()
+				stats, err := syncFromDeviceWithOptions(ip, id, true, doStaff, doAttendance)
+				mu.Lock()
+				defer mu.Unlock()
+				if err != nil {
+					results[ip] = "ERRORE: " + err.Error()
+				} else {
+					switch scope {
+					case "staff":
+						results[ip] = "OK (staff sync completata)"
+					case "attendance":
+						results[ip] = fmt.Sprintf("OK (ricevuti=%d, nuovi=%d, duplicati=%d, errori=%d)", stats.Received, stats.Inserted, stats.Duplicates, stats.Errors)
+					default:
+						results[ip] = fmt.Sprintf("OK (ricevuti=%d, nuovi=%d, duplicati=%d, errori=%d)", stats.Received, stats.Inserted, stats.Duplicates, stats.Errors)
+					}
+				}
+			}(d.IP, d.ID)
 		}
+		wg.Wait()
+
+		summary := "Esito sincronizzazione:\n"
+		successCount := 0
+		for ip, status := range results {
+			summary += fmt.Sprintf("- %s: %s\n", ip, status)
+			if strings.HasPrefix(status, "OK") {
+				successCount++
+			}
+		}
+
+		log.Printf("Manuale: Sync completata scope=%s successi=%d/%d dettagli=%q", scope, successCount, len(devices), summary)
+	}(devices, scopeLabel, syncStaff, syncAttendance)
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "accepted",
+		"message": fmt.Sprintf("Sincronizzazione manuale (%s) avviata in background. Controlla i log per il dettaglio completo.", scopeLabel),
+		"scope":   scopeLabel,
+		"results": map[string]string{},
+		"success": true,
+	})
+}
+
+func handleSyncStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Metodo non consentito", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if _, ok := requireAdminSession(w, r); !ok {
+		return
+	}
+
+	manualSyncStateMu.Lock()
+	running := manualSyncRunning
+	scope := manualSyncScope
+	started := manualSyncStarted
+	manualSyncStateMu.Unlock()
+
+	response := map[string]interface{}{
+		"success": true,
+		"running": running,
+		"scope":   scope,
+	}
+	if !started.IsZero() {
+		response["startedAt"] = started.Format(time.RFC3339)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":  "success",
-		"message": summary,
-		"results": results,
-		"success": successCount == len(devices),
-	})
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // handleClock gestire le TIMBRATURE via Web (Frontend)
@@ -1240,6 +1330,7 @@ func main() {
 	http.HandleFunc("/api/admin/pending-validations", handlePendingValidations)
 	http.HandleFunc("/api/admin/approve-validation", handleApproveValidation)
 	http.HandleFunc("/api/admin/reject-validation", handleRejectValidation)
+	http.HandleFunc("/api/admin/sync-status", handleSyncStatus)
 	http.HandleFunc("/api/admin/manual-clock", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			handleAdminManualClock(w, r)

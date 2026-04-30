@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -115,6 +117,11 @@ type deviceActionResolution struct {
 	UsedLegacyAction bool
 }
 
+type employeeCanonicalContext struct {
+	DirectAliasToCanonical map[int]int
+	EmployeeNames          map[int]string
+}
+
 func resolveDBPath() string {
 	if envPath := os.Getenv("DB_PATH"); envPath != "" {
 		return envPath
@@ -165,6 +172,14 @@ func InitDB() {
 		pin TEXT,
 		name TEXT,
 		is_admin INTEGER NOT NULL DEFAULT 0
+	);
+	CREATE TABLE IF NOT EXISTS employee_aliases (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		alias_employee_id INTEGER NOT NULL,
+		canonical_employee_id INTEGER NOT NULL,
+		enabled INTEGER NOT NULL DEFAULT 1,
+		created_at DATETIME NOT NULL,
+		UNIQUE(alias_employee_id)
 	);
 	CREATE TABLE IF NOT EXISTS pending_validations (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -233,6 +248,7 @@ func InitDB() {
 	_, _ = DB.Exec("CREATE INDEX IF NOT EXISTS idx_records_device_legacy_lookup ON records(employee_id, timestamp, status_code) WHERE source = 'device' AND device_id IS NULL")
 	_, _ = DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_records_web_unique ON records(employee_id, timestamp, action) WHERE source IN ('web', 'manual_web')")
 	_, _ = DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_device_raw_unique ON device_raw_records(device_id, employee_id, raw_device_timestamp, status_code)")
+	_, _ = DB.Exec("CREATE INDEX IF NOT EXISTS idx_employee_aliases_canonical ON employee_aliases(canonical_employee_id) WHERE enabled = 1")
 
 	migrateLegacyDeviceTimestamps()
 	if err := normalizeDeviceFinalActionsUsing(DB); err != nil {
@@ -243,6 +259,247 @@ func InitDB() {
 	log.Println("Database SQLite inizializzato con successo, tabelle verificata.")
 
 	ensureDefaultSystemAdmin()
+	if err := bootstrapEmployeeAliasesFromEnv(); err != nil {
+		log.Printf("[WARN] Bootstrap alias dipendenti da env fallito: %v", err)
+	}
+}
+
+type employeeAliasMapping struct {
+	AliasID     int
+	CanonicalID int
+}
+
+func parseEmployeeAliasMappings(raw string) ([]employeeAliasMapping, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil, nil
+	}
+
+	tokens := strings.FieldsFunc(trimmed, func(r rune) bool {
+		return r == ',' || r == ';'
+	})
+
+	mappings := make([]employeeAliasMapping, 0, len(tokens))
+	for _, token := range tokens {
+		entry := strings.TrimSpace(token)
+		if entry == "" {
+			continue
+		}
+
+		separator := ""
+		for _, candidate := range []string{">", ":", "="} {
+			if strings.Contains(entry, candidate) {
+				separator = candidate
+				break
+			}
+		}
+		if separator == "" {
+			return nil, fmt.Errorf("mapping non valido %q (usa ALIAS_ID>CANONICAL_ID)", entry)
+		}
+
+		parts := strings.SplitN(entry, separator, 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("mapping non valido %q", entry)
+		}
+
+		aliasID, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+		if err != nil || aliasID <= 0 {
+			return nil, fmt.Errorf("alias id non valido in %q", entry)
+		}
+
+		canonicalID, err := strconv.Atoi(strings.TrimSpace(parts[1]))
+		if err != nil || canonicalID <= 0 {
+			return nil, fmt.Errorf("canonical id non valido in %q", entry)
+		}
+
+		if aliasID == canonicalID {
+			return nil, fmt.Errorf("mapping non valido %q (alias e canonical uguali)", entry)
+		}
+
+		mappings = append(mappings, employeeAliasMapping{
+			AliasID:     aliasID,
+			CanonicalID: canonicalID,
+		})
+	}
+
+	return mappings, nil
+}
+
+func bootstrapEmployeeAliasesFromEnv() error {
+	raw := strings.TrimSpace(os.Getenv("EMPLOYEE_ALIAS_MAPPINGS"))
+	if raw == "" {
+		return nil
+	}
+
+	mappings, err := parseEmployeeAliasMappings(raw)
+	if err != nil {
+		return err
+	}
+	if len(mappings) == 0 {
+		return nil
+	}
+
+	if envBool("EMPLOYEE_ALIAS_REPLACE", false) {
+		if _, err := DB.Exec("UPDATE employee_aliases SET enabled = 0"); err != nil {
+			return fmt.Errorf("errore reset alias precedenti: %w", err)
+		}
+	}
+
+	for _, mapping := range mappings {
+		_, err := DB.Exec(`
+			INSERT INTO employee_aliases (alias_employee_id, canonical_employee_id, enabled, created_at)
+			VALUES (?, ?, 1, ?)
+			ON CONFLICT(alias_employee_id) DO UPDATE SET
+				canonical_employee_id = excluded.canonical_employee_id,
+				enabled = 1
+		`, mapping.AliasID, mapping.CanonicalID, time.Now())
+		if err != nil {
+			return fmt.Errorf("errore salvataggio alias %d>%d: %w", mapping.AliasID, mapping.CanonicalID, err)
+		}
+	}
+
+	log.Printf("[INFO] Alias dipendenti da env applicati: %d mapping (replace=%t)", len(mappings), envBool("EMPLOYEE_ALIAS_REPLACE", false))
+	return nil
+}
+
+func loadEmployeeCanonicalContext() (employeeCanonicalContext, error) {
+	ctx := employeeCanonicalContext{
+		DirectAliasToCanonical: make(map[int]int),
+		EmployeeNames:          make(map[int]string),
+	}
+
+	rows, err := DB.Query(`SELECT id, COALESCE(name, '') FROM employees`)
+	if err != nil {
+		return ctx, err
+	}
+	for rows.Next() {
+		var id int
+		var name string
+		if err := rows.Scan(&id, &name); err != nil {
+			rows.Close()
+			return ctx, err
+		}
+		ctx.EmployeeNames[id] = strings.TrimSpace(name)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return ctx, err
+	}
+	rows.Close()
+
+	aliasRows, err := DB.Query(`
+		SELECT alias_employee_id, canonical_employee_id
+		FROM employee_aliases
+		WHERE enabled = 1
+	`)
+	if err != nil {
+		return ctx, err
+	}
+	for aliasRows.Next() {
+		var aliasID int
+		var canonicalID int
+		if err := aliasRows.Scan(&aliasID, &canonicalID); err != nil {
+			aliasRows.Close()
+			return ctx, err
+		}
+		ctx.DirectAliasToCanonical[aliasID] = canonicalID
+	}
+	if err := aliasRows.Err(); err != nil {
+		aliasRows.Close()
+		return ctx, err
+	}
+	aliasRows.Close()
+
+	return ctx, nil
+}
+
+func resolveCanonicalEmployeeID(originID int, directAlias map[int]int) int {
+	current := originID
+	visited := make(map[int]struct{})
+
+	for {
+		next, ok := directAlias[current]
+		if !ok || next == 0 || next == current {
+			return current
+		}
+		if _, seen := visited[current]; seen {
+			return originID
+		}
+		visited[current] = struct{}{}
+		current = next
+	}
+}
+
+func buildResolvedCanonicalMap(ctx employeeCanonicalContext) map[int]int {
+	allIDs := make(map[int]struct{})
+	for id := range ctx.EmployeeNames {
+		allIDs[id] = struct{}{}
+	}
+	for aliasID, canonicalID := range ctx.DirectAliasToCanonical {
+		allIDs[aliasID] = struct{}{}
+		allIDs[canonicalID] = struct{}{}
+	}
+
+	resolved := make(map[int]int, len(allIDs))
+	for id := range allIDs {
+		resolved[id] = resolveCanonicalEmployeeID(id, ctx.DirectAliasToCanonical)
+	}
+	return resolved
+}
+
+func buildCanonicalNameMap(ctx employeeCanonicalContext, resolved map[int]int) map[int]string {
+	canonicalNames := make(map[int]string)
+
+	for id := range resolved {
+		canonicalID := resolved[id]
+		if canonicalID == 0 {
+			continue
+		}
+		if existing, ok := canonicalNames[canonicalID]; ok && strings.TrimSpace(existing) != "" {
+			continue
+		}
+		if name, ok := ctx.EmployeeNames[canonicalID]; ok && strings.TrimSpace(name) != "" {
+			canonicalNames[canonicalID] = strings.TrimSpace(name)
+		}
+	}
+
+	return canonicalNames
+}
+
+func expandSourceIDsForCanonicalTargets(canonicalTargets map[int]struct{}, resolved map[int]int) []int {
+	sourceSet := make(map[int]struct{})
+	for targetID := range canonicalTargets {
+		sourceSet[targetID] = struct{}{}
+	}
+
+	for sourceID, canonicalID := range resolved {
+		if _, ok := canonicalTargets[canonicalID]; ok {
+			sourceSet[sourceID] = struct{}{}
+		}
+	}
+
+	result := make([]int, 0, len(sourceSet))
+	for id := range sourceSet {
+		result = append(result, id)
+	}
+	sort.Ints(result)
+	return result
+}
+
+func applyCanonicalEmployeeMapping(records []Record, resolved map[int]int, canonicalNames map[int]string) {
+	for i := range records {
+		canonicalID, ok := resolved[records[i].EmployeeID]
+		if !ok || canonicalID == 0 {
+			canonicalID = records[i].EmployeeID
+		}
+		records[i].EmployeeID = canonicalID
+
+		if canonicalName, ok := canonicalNames[canonicalID]; ok && strings.TrimSpace(canonicalName) != "" {
+			records[i].EmployeeName = canonicalName
+			continue
+		}
+		records[i].EmployeeName = strings.TrimSpace(records[i].EmployeeName)
+	}
 }
 
 func ensureDefaultSystemAdmin() {
@@ -1116,7 +1373,14 @@ func GetAllEmployees() ([]Employee, error) {
 	}
 	defer rows.Close()
 
-	var employees []Employee
+	ctx, err := loadEmployeeCanonicalContext()
+	if err != nil {
+		return nil, err
+	}
+	resolved := buildResolvedCanonicalMap(ctx)
+	canonicalNames := buildCanonicalNameMap(ctx, resolved)
+	canonicalByID := make(map[int]Employee)
+
 	for rows.Next() {
 		var e Employee
 		var isAdminInt int
@@ -1125,8 +1389,39 @@ func GetAllEmployees() ([]Employee, error) {
 			return nil, err
 		}
 		e.IsAdmin = isAdminInt == 1
-		employees = append(employees, e)
+
+		canonicalID, ok := resolved[e.ID]
+		if !ok || canonicalID == 0 {
+			canonicalID = e.ID
+		}
+
+		aggregated := canonicalByID[canonicalID]
+		if aggregated.ID == 0 {
+			aggregated.ID = canonicalID
+			if canonicalName, ok := canonicalNames[canonicalID]; ok && strings.TrimSpace(canonicalName) != "" {
+				aggregated.Name = canonicalName
+			} else {
+				aggregated.Name = strings.TrimSpace(e.Name)
+			}
+		}
+		aggregated.IsAdmin = aggregated.IsAdmin || e.IsAdmin
+		canonicalByID[canonicalID] = aggregated
 	}
+
+	employees := make([]Employee, 0, len(canonicalByID))
+	for _, employee := range canonicalByID {
+		employees = append(employees, employee)
+	}
+
+	sort.Slice(employees, func(i, j int) bool {
+		left := strings.ToLower(strings.TrimSpace(employees[i].Name))
+		right := strings.ToLower(strings.TrimSpace(employees[j].Name))
+		if left == right {
+			return employees[i].ID < employees[j].ID
+		}
+		return left < right
+	})
+
 	return employees, nil
 }
 
@@ -1390,8 +1685,16 @@ func scanRecords(rows *sql.Rows) ([]Record, error) {
 
 // GetRecords legge i record SQLite con supporto a range filtri (query API) e filter opzionale per employee
 func GetRecords(startDate, endDate, employeeID string) ([]Record, error) {
+	ctx, err := loadEmployeeCanonicalContext()
+	if err != nil {
+		return nil, err
+	}
+	resolved := buildResolvedCanonicalMap(ctx)
+	canonicalNames := buildCanonicalNameMap(ctx, resolved)
+
 	query := `SELECT id, employee_id, employee_name, timestamp, action, status_code, source, latitude, longitude FROM records WHERE 1=1`
 	var args []interface{}
+	requestedCanonicalIDs := make(map[int]struct{})
 
 	if startDate != "" {
 		// startDate expected as YYYY-MM-DD
@@ -1404,20 +1707,32 @@ func GetRecords(startDate, endDate, employeeID string) ([]Record, error) {
 	}
 	if employeeID != "" && employeeID != "null" {
 		rawIDs := strings.Split(employeeID, ",")
-		validIDs := make([]string, 0, len(rawIDs))
+		validIDs := make([]int, 0, len(rawIDs))
 		for _, rawID := range rawIDs {
 			trimmedID := strings.TrimSpace(rawID)
-			if trimmedID != "" {
-				validIDs = append(validIDs, trimmedID)
+			if trimmedID == "" {
+				continue
 			}
+			parsedID, parseErr := strconv.Atoi(trimmedID)
+			if parseErr != nil {
+				continue
+			}
+			validIDs = append(validIDs, parsedID)
+
+			canonicalID, ok := resolved[parsedID]
+			if !ok || canonicalID == 0 {
+				canonicalID = parsedID
+			}
+			requestedCanonicalIDs[canonicalID] = struct{}{}
 		}
 
-		if len(validIDs) == 1 {
+		sourceIDs := expandSourceIDsForCanonicalTargets(requestedCanonicalIDs, resolved)
+		if len(sourceIDs) == 1 {
 			query += " AND employee_id = ?"
-			args = append(args, validIDs[0])
-		} else if len(validIDs) > 1 {
-			placeholders := make([]string, 0, len(validIDs))
-			for _, id := range validIDs {
+			args = append(args, sourceIDs[0])
+		} else if len(sourceIDs) > 1 {
+			placeholders := make([]string, 0, len(sourceIDs))
+			for _, id := range sourceIDs {
 				placeholders = append(placeholders, "?")
 				args = append(args, id)
 			}
@@ -1432,20 +1747,68 @@ func GetRecords(startDate, endDate, employeeID string) ([]Record, error) {
 	}
 	defer rows.Close()
 
-	return scanRecords(rows)
+	records, err := scanRecords(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	applyCanonicalEmployeeMapping(records, resolved, canonicalNames)
+
+	if len(requestedCanonicalIDs) > 0 {
+		filtered := make([]Record, 0, len(records))
+		for _, record := range records {
+			if _, ok := requestedCanonicalIDs[record.EmployeeID]; ok {
+				filtered = append(filtered, record)
+			}
+		}
+		records = filtered
+	}
+
+	return records, nil
 }
 
 // GetEmployeeRecords legge solo gli ultimi record di uno specifico dipendente
 func GetEmployeeRecords(employeeID int, limit int) ([]Record, error) {
-	query := `SELECT id, employee_id, employee_name, timestamp, action, status_code, source, latitude, longitude FROM records WHERE employee_id = ? ORDER BY timestamp DESC LIMIT ?`
+	ctx, err := loadEmployeeCanonicalContext()
+	if err != nil {
+		return nil, err
+	}
+	resolved := buildResolvedCanonicalMap(ctx)
+	canonicalNames := buildCanonicalNameMap(ctx, resolved)
 
-	rows, err := DB.Query(query, employeeID, limit)
+	targetCanonicalID, ok := resolved[employeeID]
+	if !ok || targetCanonicalID == 0 {
+		targetCanonicalID = employeeID
+	}
+	targets := map[int]struct{}{targetCanonicalID: {}}
+	sourceIDs := expandSourceIDsForCanonicalTargets(targets, resolved)
+
+	query := `SELECT id, employee_id, employee_name, timestamp, action, status_code, source, latitude, longitude FROM records WHERE employee_id IN (` + strings.TrimRight(strings.Repeat("?,", len(sourceIDs)), ",") + `) ORDER BY timestamp DESC LIMIT ?`
+	args := make([]interface{}, 0, len(sourceIDs)+1)
+	for _, id := range sourceIDs {
+		args = append(args, id)
+	}
+	args = append(args, limit)
+
+	rows, err := DB.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	return scanRecords(rows)
+	records, err := scanRecords(rows)
+	if err != nil {
+		return nil, err
+	}
+	applyCanonicalEmployeeMapping(records, resolved, canonicalNames)
+	filtered := make([]Record, 0, len(records))
+	for _, record := range records {
+		if record.EmployeeID == targetCanonicalID {
+			filtered = append(filtered, record)
+		}
+	}
+
+	return filtered, nil
 }
 
 // GetEmployeeMonthlyRecords restituisce tutti i record di un dipendente per un dato mese
@@ -1453,34 +1816,100 @@ func GetEmployeeMonthlyRecords(employeeID int, year int, month int) ([]Record, e
 	startDate := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.Local).Format("2006-01-02")
 	endDate := time.Date(year, time.Month(month)+1, 0, 23, 59, 59, 0, time.Local).Format("2006-01-02")
 
+	ctx, err := loadEmployeeCanonicalContext()
+	if err != nil {
+		return nil, err
+	}
+	resolved := buildResolvedCanonicalMap(ctx)
+	canonicalNames := buildCanonicalNameMap(ctx, resolved)
+
+	targetCanonicalID, ok := resolved[employeeID]
+	if !ok || targetCanonicalID == 0 {
+		targetCanonicalID = employeeID
+	}
+	targets := map[int]struct{}{targetCanonicalID: {}}
+	sourceIDs := expandSourceIDsForCanonicalTargets(targets, resolved)
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(sourceIDs)), ",")
+
 	query := `SELECT id, employee_id, employee_name, timestamp, action, status_code, source, latitude, longitude
 		FROM records
-		WHERE employee_id = ? AND date(timestamp) >= date(?) AND date(timestamp) <= date(?)
+		WHERE employee_id IN (` + placeholders + `) AND date(timestamp) >= date(?) AND date(timestamp) <= date(?)
 		ORDER BY timestamp ASC`
 
-	rows, err := DB.Query(query, employeeID, startDate, endDate)
+	args := make([]interface{}, 0, len(sourceIDs)+2)
+	for _, id := range sourceIDs {
+		args = append(args, id)
+	}
+	args = append(args, startDate, endDate)
+
+	rows, err := DB.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	return scanRecords(rows)
+	records, err := scanRecords(rows)
+	if err != nil {
+		return nil, err
+	}
+	applyCanonicalEmployeeMapping(records, resolved, canonicalNames)
+	filtered := make([]Record, 0, len(records))
+	for _, record := range records {
+		if record.EmployeeID == targetCanonicalID {
+			filtered = append(filtered, record)
+		}
+	}
+
+	return filtered, nil
 }
 
 // GetEmployeeRangeRecords restituisce tutti i record di un dipendente in un range di date
 func GetEmployeeRangeRecords(employeeID int, startDate string, endDate string) ([]Record, error) {
+	ctx, err := loadEmployeeCanonicalContext()
+	if err != nil {
+		return nil, err
+	}
+	resolved := buildResolvedCanonicalMap(ctx)
+	canonicalNames := buildCanonicalNameMap(ctx, resolved)
+
+	targetCanonicalID, ok := resolved[employeeID]
+	if !ok || targetCanonicalID == 0 {
+		targetCanonicalID = employeeID
+	}
+	targets := map[int]struct{}{targetCanonicalID: {}}
+	sourceIDs := expandSourceIDsForCanonicalTargets(targets, resolved)
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(sourceIDs)), ",")
+
 	query := `SELECT id, employee_id, employee_name, timestamp, action, status_code, source, latitude, longitude
 		FROM records
-		WHERE employee_id = ? AND date(timestamp) >= date(?) AND date(timestamp) <= date(?)
+		WHERE employee_id IN (` + placeholders + `) AND date(timestamp) >= date(?) AND date(timestamp) <= date(?)
 		ORDER BY timestamp ASC`
 
-	rows, err := DB.Query(query, employeeID, startDate, endDate)
+	args := make([]interface{}, 0, len(sourceIDs)+2)
+	for _, id := range sourceIDs {
+		args = append(args, id)
+	}
+	args = append(args, startDate, endDate)
+
+	rows, err := DB.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	return scanRecords(rows)
+	records, err := scanRecords(rows)
+	if err != nil {
+		return nil, err
+	}
+	applyCanonicalEmployeeMapping(records, resolved, canonicalNames)
+	filtered := make([]Record, 0, len(records))
+	for _, record := range records {
+		if record.EmployeeID == targetCanonicalID {
+			filtered = append(filtered, record)
+		}
+	}
+
+	return filtered, nil
 }
 
 // InsertPendingValidation crea una nuova richiesta di validazione per marcatura web

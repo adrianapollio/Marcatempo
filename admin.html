@@ -6,7 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pannello di Amministrazione</title>
     <!-- Modern Tech Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
     <!-- Flatpickr CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link rel="stylesheet" type="text/css" href="https://npmcdn.com/flatpickr/dist/themes/airbnb.css">
@@ -151,6 +153,20 @@
         </div>
     </div>
 
+    <div class="modal-overlay" id="dailyDetailModal" onclick="closeDailyDetailModal()">
+        <div class="modal-content daily-detail-modal" onclick="event.stopPropagation()">
+            <button class="daily-detail-close" onclick="closeDailyDetailModal()" aria-label="Chiudi dettaglio">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <div class="modal-title" id="dailyDetailTitle">Dettaglio Giornata</div>
+            <div class="daily-detail-subtitle" id="dailyDetailSubtitle"></div>
+            <div class="modal-body daily-detail-body" id="dailyDetailBody"></div>
+        </div>
+    </div>
+
     <div class="container">
         <div class="header">
             <div class="header-title" style="text-align: left;">
@@ -158,7 +174,8 @@
                 <p>Pannello di Amministrazione</p>
             </div>
 
-            <button class="hamburger-btn" onclick="toggleMobileMenu()" aria-label="Menu">
+            <button id="hamburgerBtn" class="hamburger-btn" onclick="toggleMobileMenu()" aria-label="Menu"
+                aria-expanded="false" aria-controls="topActions">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
                     <line x1="3" y1="12" x2="21" y2="12"></line>
@@ -177,6 +194,18 @@
                         <polyline points="12 6 12 12 16 14"></polyline>
                     </svg>
                     Aggiungi Marcatura
+                </button>
+                <button id="manualStaffSyncBtn" class="btn-icon-only" onclick="triggerManualSync()"
+                    title="Avvia sincronizzazione manuale solo staff"
+                    style="font-size:14px; padding: 8px 12px; font-weight:500; display:flex; gap:6px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <polyline points="1 20 1 14 7 14"></polyline>
+                        <path d="M3.51 9a9 9 0 0 1 14.13-3.36L23 10"></path>
+                        <path d="M20.49 15a9 9 0 0 1-14.13 3.36L1 14"></path>
+                    </svg>
+                    Sync Staff
                 </button>
                 <button class="btn-icon-only" onclick="openCustomHolidaysModal()" title="Gestisci Chiusure Aziendali"
                     style="font-size:14px; padding: 8px 12px; font-weight:500; display:flex; gap:6px;">
@@ -226,9 +255,21 @@
                     </svg>
                     Portale Dipendenti
                 </button>
-                <button id="logoutBtn" class="btn-logout" onclick="logout()">Esci</button>
+                <div id="topActionsFooter" class="drawer-footer">
+                    <div id="drawerFooterDivider" class="drawer-footer-divider"></div>
+                    <button id="logoutBtn" class="btn-logout" onclick="logout()">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                            <polyline points="16 17 21 12 16 7"></polyline>
+                            <line x1="21" y1="12" x2="9" y2="12"></line>
+                        </svg>
+                        <span>Esci</span>
+                    </button>
+                </div>
             </div>
         </div>
+        <div id="adminMenuBackdrop" class="admin-menu-backdrop" onclick="closeMobileMenu()"></div>
 
         <div class="content">
 
@@ -239,16 +280,22 @@
                     <div class="filters-primary-row">
                         <div class="filter-item filter-item-period">
                             <label>Periodo di Riferimento</label>
-                            <div style="display: flex; gap: 10px; align-items: center;">
-                                <div class="month-nav" style="flex: 1 1 auto; min-width: 0;">
+                            <div class="period-nav-row">
+                                <div class="month-nav month-nav-wrap">
                                     <button onclick="prevMonth()" title="Mese Precedente">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
                                             stroke-linecap="round" stroke-linejoin="round">
                                             <polyline points="15 18 9 12 15 6"></polyline>
                                         </svg>
                                     </button>
-                                    <div class="month-nav-text" id="currentMonthDisplay" style="min-width: 140px;">
-                                        Caricamento...</div>
+                                    <div class="month-nav-center">
+                                        <div class="month-nav-text" id="monthRangeChip">
+                                            <span id="currentMonthDisplay">Caricamento...</span>
+                                            <button class="month-nav-clear-inline" id="clearRangeBtn"
+                                                onclick="clearCustomDateRange()" title="Ripristina mese corrente"
+                                                aria-label="Ripristina mese corrente">×</button>
+                                        </div>
+                                    </div>
                                     <button onclick="nextMonth()" title="Mese Successivo">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
                                             stroke-linecap="round" stroke-linejoin="round">
@@ -256,14 +303,12 @@
                                         </svg>
                                     </button>
                                 </div>
-                                <div style="position: relative; display: flex;">
-                                <button class="btn-icon-only calendar-btn" id="calendarPickerBtn" title="Scegli Range Date"
-                                    style="border-radius: 4px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text-dark); height: 48px; width: 48px; margin: 0; padding: 0; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease;">
-                                    <style>
-                                        .calendar-btn:hover { border-color: var(--primary) !important; background: var(--primary-light) !important; box-shadow: 0 0 0 4px rgba(0, 86, 179, 0.08); }
-                                    </style>
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <div class="calendar-picker-wrap">
+                                    <button class="btn-icon-only calendar-btn" id="calendarPickerBtn"
+                                        title="Scegli Range Date">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                            stroke-linejoin="round">
                                             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
                                             <line x1="16" y1="2" x2="16" y2="6"></line>
                                             <line x1="8" y1="2" x2="8" y2="6"></line>
@@ -280,18 +325,24 @@
                             <div class="multi-select-container" id="empMultiSelectContainer">
                                 <div class="multi-select-trigger" onclick="toggleMultiSelect(event)">
                                     <span class="trigger-text" id="multiSelectText">Tutti i dipendenti</span>
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
                                 </div>
-                                <div class="multi-select-dropdown" id="empMultiSelectDropdown" onclick="event.stopPropagation()">
+                                <div class="multi-select-dropdown" id="empMultiSelectDropdown"
+                                    onclick="event.stopPropagation()">
                                     <div class="multi-select-search">
-                                        <input type="text" id="empSearchInput" placeholder="Cerca dipendente..." oninput="filterMultiSelectOptions()">
+                                        <input type="text" id="empSearchInput" placeholder="Cerca dipendente..."
+                                            oninput="filterMultiSelectOptions()">
                                     </div>
                                     <div class="multi-select-options" id="empMultiSelectOptions">
                                         <!-- Popolato da JS -->
                                     </div>
                                     <div class="multi-select-actions">
                                         <button class="btn-all-ms" onclick="selectAllEmployees(true)">Tutti</button>
-                                        <button class="btn-clear-ms" onclick="selectAllEmployees(false)">Deseleziona</button>
+                                        <button class="btn-clear-ms"
+                                            onclick="selectAllEmployees(false)">Deseleziona</button>
                                     </div>
                                 </div>
                             </div>
@@ -300,23 +351,28 @@
                         <div class="filter-item filter-item-search">
                             <label>Cerca</label>
                             <input type="text" id="filterSearch" placeholder="Cerca nome o ID..."
-                                oninput="filterLocalRecords()">
+                                onfocus="closeMultiSelect()" oninput="closeMultiSelect(); filterLocalRecords()">
                         </div>
                     </div>
 
                     <div class="filters-secondary-row">
-                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 0; font-size: 14px; font-weight: 600; color: var(--text-dark);">
-                            <input type="checkbox" id="filterAnomaly" onchange="filterLocalRecords()" style="width: 18px; height: 18px; cursor: pointer;">
+                        <label
+                            style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 0; font-size: 14px; font-weight: 600; color: var(--text-dark);">
+                            <input type="checkbox" id="filterAnomaly" onchange="filterLocalRecords()"
+                                style="width: 18px; height: 18px; cursor: pointer;">
                             Solo Anomalie
                         </label>
-                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 0; font-size: 14px; font-weight: 600; color: var(--text-dark);">
-                            <input type="checkbox" id="filterAbsence" onchange="filterLocalRecords()" style="width: 18px; height: 18px; cursor: pointer;">
+                        <label
+                            style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 0; font-size: 14px; font-weight: 600; color: var(--text-dark);">
+                            <input type="checkbox" id="filterAbsence" onchange="filterLocalRecords()"
+                                style="width: 18px; height: 18px; cursor: pointer;">
                             Solo Assenze
                         </label>
-                        
+
                         <div style="flex-grow: 1;"></div>
-                        
-                        <button class="btn-secondary" onclick="resetFilters()" style="white-space: nowrap;">Reset Filtri</button>
+
+                        <button class="btn-secondary" onclick="resetFilters()" style="white-space: nowrap;">Reset
+                            Filtri</button>
                     </div>
                 </div>
 
@@ -379,6 +435,7 @@
                                 <th>Rit. Trasf</th>
                                 <th style="min-width: 80px;">Ore Lav.</th>
                                 <th style="min-width: 80px;">Bilancio</th>
+                                <th class="mobile-only-col" style="text-align: center;">Dett.</th>
                             </tr>
                         </thead>
                         <tbody id="attendanceBody">
@@ -421,10 +478,12 @@
 
                 <!-- Period Summary Table -->
                 <div class="table-container" id="periodSummaryContainer" style="display: none;">
-                    <div style="padding: 12px 16px; font-size: 0.875rem; color: var(--text-secondary); border-bottom: 1px solid var(--border); background: var(--card-bg);">
-                        Bilancio calcolato su tutti i record del periodo selezionato (non influenzato dai filtri "Solo anomalie" e "Solo assenze").
+                    <div
+                        style="padding: 12px 16px; font-size: 0.875rem; color: var(--text-secondary); border-bottom: 1px solid var(--border); background: var(--card-bg);">
+                        Bilancio calcolato su tutti i record del periodo selezionato (non influenzato dai filtri "Solo
+                        anomalie" e "Solo assenze").
                     </div>
-                    <table class="attendance-table">
+                    <table class="attendance-table" id="periodSummaryTable">
                         <thead>
                             <tr>
                                 <th>ID Dip.</th>
@@ -434,11 +493,12 @@
                                 <th>Bilancio Ore</th>
                                 <th>Giorni Effettivi</th>
                                 <th>Giorni Teorici</th>
+                                <th class="mobile-only-col">Dett.</th>
                             </tr>
                         </thead>
                         <tbody id="periodSummaryBody">
                             <tr>
-                                <td colspan="7" style="text-align:center; color:#999; padding:20px;">Nessun dato
+                                <td colspan="8" style="text-align:center; color:#999; padding:20px;">Nessun dato
                                 </td>
                             </tr>
                         </tbody>
@@ -479,11 +539,18 @@
         let currentFilterDate = new Date(); // Track current month for navigation
         let customRangeStart = null; // Set when user picks a specific date range
         let customRangeEnd = null;
+        let suppressDateRangeOnChange = false;
+        let adminAttendancesLoadSeq = 0;
+        let adminAttendancesActiveSeq = 0;
+        let adminAttendancesAbortController = null;
         let currentTheme = localStorage.getItem('theme') || 'light';
         let currentTab = 'daily'; // 'daily', 'weekly', 'period'
+        let mobileDailyDetailRows = [];
+        let mobilePeriodDetailRows = [];
 
         function switchSummaryTab(tab) {
             currentTab = tab;
+            closeDailyDetailModal();
 
             // Update buttons
             document.getElementById('tabDaily').classList.toggle('active', tab === 'daily');
@@ -582,16 +649,25 @@
             if (!isSystemAdminSession) return;
 
             const topActions = document.getElementById('topActions');
-            if (!topActions || document.getElementById('systemAdminBackButton')) return;
+            const topActionsFooter = document.getElementById('topActionsFooter');
+            const logoutBtn = document.getElementById('logoutBtn');
+            if (!topActions || !topActionsFooter || !logoutBtn || document.getElementById('systemAdminBackButton')) return;
 
             const sysLink = document.createElement('button');
             sysLink.id = 'systemAdminBackButton';
-            sysLink.className = 'btn-icon-only';
-            sysLink.style.background = 'var(--warning)';
-            sysLink.style.fontWeight = 'bold';
-            sysLink.textContent = 'Pannello Tecnico';
+            sysLink.className = 'btn-icon-only drawer-footer-item';
+            sysLink.innerHTML = `
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="4" width="18" height="6" rx="2"></rect>
+                    <rect x="3" y="14" width="18" height="6" rx="2"></rect>
+                    <line x1="7" y1="7" x2="7.01" y2="7"></line>
+                    <line x1="7" y1="17" x2="7.01" y2="17"></line>
+                </svg>
+                <span>Pannello Tecnico</span>
+            `;
             sysLink.onclick = () => window.location.href = '/system-admin';
-            topActions.prepend(sysLink);
+            topActionsFooter.insertBefore(sysLink, logoutBtn);
         }
 
         // --- Init defaults & Flatpickr ---
@@ -607,6 +683,9 @@
                 positionElement: calendarBtn,
                 position: "below right",
                 onChange: function (selectedDates, dateStr, instance) {
+                    if (suppressDateRangeOnChange) {
+                        return;
+                    }
                     if (selectedDates.length === 2) {
                         customRangeStart = selectedDates[0];
                         customRangeEnd = selectedDates[1];
@@ -678,13 +757,46 @@
                 let formattedStr = monthFormatter.format(currentFilterDate);
                 displayEl.textContent = formattedStr.charAt(0).toUpperCase() + formattedStr.slice(1);
             }
+
+            updateRangeClearButtonVisibility();
+        }
+
+        function updateRangeClearButtonVisibility() {
+            const clearBtn = document.getElementById('clearRangeBtn');
+            const chipEl = document.getElementById('monthRangeChip');
+            if (!clearBtn) return;
+
+            const hasCustomRange = !!(customRangeStart && customRangeEnd);
+            clearBtn.style.display = hasCustomRange ? 'inline-flex' : 'none';
+            if (chipEl) {
+                chipEl.classList.toggle('range-active', hasCustomRange);
+            }
+        }
+
+        function clearCustomDateRange() {
+            const hadCustomRange = !!(customRangeStart || customRangeEnd);
+            customRangeStart = null;
+            customRangeEnd = null;
+            if (flatpickrInstance) {
+                suppressDateRangeOnChange = true;
+                flatpickrInstance.clear();
+                suppressDateRangeOnChange = false;
+            }
+            updateMonthDisplay();
+            if (hadCustomRange) {
+                loadAdminAttendances();
+            }
         }
 
         function prevMonth() {
             customRangeStart = null;
             customRangeEnd = null;
             currentFilterDate.setMonth(currentFilterDate.getMonth() - 1);
-            if (flatpickrInstance) flatpickrInstance.clear();
+            if (flatpickrInstance) {
+                suppressDateRangeOnChange = true;
+                flatpickrInstance.clear();
+                suppressDateRangeOnChange = false;
+            }
             updateMonthDisplay();
             loadAdminAttendances();
         }
@@ -693,7 +805,11 @@
             customRangeStart = null;
             customRangeEnd = null;
             currentFilterDate.setMonth(currentFilterDate.getMonth() + 1);
-            if (flatpickrInstance) flatpickrInstance.clear();
+            if (flatpickrInstance) {
+                suppressDateRangeOnChange = true;
+                flatpickrInstance.clear();
+                suppressDateRangeOnChange = false;
+            }
             updateMonthDisplay();
             loadAdminAttendances();
         }
@@ -724,21 +840,64 @@
 
         function toggleMultiSelect(event) {
             event.stopPropagation();
-            document.getElementById('empMultiSelectContainer').classList.toggle('open');
+            const container = document.getElementById('empMultiSelectContainer');
+            if (!container) return;
+
+            const isOpen = container.classList.contains('open');
+            if (isOpen) {
+                closeMultiSelect();
+                return;
+            }
+
+            container.classList.add('open');
+
+            const optionsContainer = document.getElementById('empMultiSelectOptions');
+            if (optionsContainer) {
+                optionsContainer.scrollTop = 0;
+            }
+
+            const searchInput = document.getElementById('empSearchInput');
+            if (searchInput) {
+                searchInput.value = '';
+                filterMultiSelectOptions();
+                setTimeout(() => searchInput.focus(), 0);
+            }
+        }
+
+        function closeMultiSelect() {
+            const container = document.getElementById('empMultiSelectContainer');
+            if (!container) return;
+            container.classList.remove('open');
+
+            const searchInput = document.getElementById('empSearchInput');
+            if (searchInput && searchInput.value) {
+                searchInput.value = '';
+                filterMultiSelectOptions();
+            }
+
+            const optionsContainer = document.getElementById('empMultiSelectOptions');
+            if (optionsContainer) {
+                optionsContainer.scrollTop = 0;
+            }
         }
 
         // Close dropdown when clicking outside
-        document.addEventListener('click', function(e) {
+        document.addEventListener('click', function (e) {
             const container = document.getElementById('empMultiSelectContainer');
             if (container && !container.contains(e.target)) {
-                container.classList.remove('open');
+                closeMultiSelect();
             }
         });
 
         function filterMultiSelectOptions() {
             const q = document.getElementById('empSearchInput').value.toLowerCase().trim();
             const options = document.querySelectorAll('.multi-select-option');
-            
+            const optionsContainer = document.getElementById('empMultiSelectOptions');
+
+            if (optionsContainer) {
+                optionsContainer.scrollTop = 0;
+            }
+
             options.forEach(opt => {
                 if (!q) {
                     opt.style.display = 'flex';
@@ -788,7 +947,7 @@
         function updateMultiSelectDisplay() {
             const textEl = document.getElementById('multiSelectText');
             const hiddenInput = document.getElementById('filterEmp');
-            
+
             if (selectedEmployees.size === 0) {
                 textEl.textContent = "Tutti i dipendenti";
                 hiddenInput.value = "";
@@ -812,14 +971,14 @@
                 if (res.status === 401) { logout(); return; }
                 const data = await res.json();
                 const employees = Array.isArray(data) ? data : [];
-                
+
                 allEmployeesData = employees.filter(e => {
                     return !isPlaceholderEmployeeName(e?.name, e?.id);
                 });
 
                 const optionsContainer = document.getElementById('empMultiSelectOptions');
                 optionsContainer.innerHTML = '';
-                
+
                 allEmployeesData.forEach(e => {
                     const displayName = normalizeEmployeeName(e.name);
                     const option = document.createElement('div');
@@ -991,6 +1150,14 @@
         function openManualClockModal() {
             const mcEmployee = document.getElementById('mcEmployee');
             mcEmployee.innerHTML = '';
+
+            const placeholderOpt = document.createElement('option');
+            placeholderOpt.value = '';
+            placeholderOpt.text = 'Seleziona dipendente...';
+            placeholderOpt.disabled = true;
+            placeholderOpt.selected = true;
+            mcEmployee.appendChild(placeholderOpt);
+
             allEmployeesData.forEach(e => {
                 const opt = document.createElement('option');
                 opt.value = e.id;
@@ -1008,6 +1175,154 @@
 
         function closeManualClockModal() {
             document.getElementById('manualClockModal').classList.remove('active');
+        }
+
+        let isManualSyncRunning = false;
+        let manualSyncPollTimer = null;
+
+        function setManualStaffSyncButtonState(isRunning) {
+            const staffBtn = document.getElementById('manualStaffSyncBtn');
+            if (!staffBtn) return;
+
+            staffBtn.disabled = isRunning;
+            staffBtn.style.opacity = isRunning ? "0.7" : "1";
+            staffBtn.style.cursor = isRunning ? "not-allowed" : "pointer";
+
+            staffBtn.innerHTML = isRunning
+                ? `
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <g>
+                            <animateTransform attributeName="transform" attributeType="XML" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"></animateTransform>
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <polyline points="1 20 1 14 7 14"></polyline>
+                            <path d="M3.51 9a9 9 0 0 1 14.13-3.36L23 10"></path>
+                            <path d="M20.49 15a9 9 0 0 1-14.13 3.36L1 14"></path>
+                        </g>
+                    </svg>
+                    Sync in corso...
+                `
+                : `
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <polyline points="1 20 1 14 7 14"></polyline>
+                        <path d="M3.51 9a9 9 0 0 1 14.13-3.36L23 10"></path>
+                        <path d="M20.49 15a9 9 0 0 1-14.13 3.36L1 14"></path>
+                    </svg>
+                    Sync Staff
+                `;
+        }
+
+        function stopManualSyncPolling() {
+            if (manualSyncPollTimer) {
+                clearInterval(manualSyncPollTimer);
+                manualSyncPollTimer = null;
+            }
+        }
+
+        async function pollManualSyncStatus(showCompletionToast = false) {
+            try {
+                const res = await fetch('/api/admin/sync-status');
+                if (res.status === 401) {
+                    stopManualSyncPolling();
+                    logout();
+                    return;
+                }
+                if (!res.ok) {
+                    return;
+                }
+
+                const data = await res.json();
+                const running = !!(data && data.running);
+                const isStaffScope = !data || !data.scope || data.scope === 'staff';
+                if (!isStaffScope && running) {
+                    return;
+                }
+
+                if (running) {
+                    if (!isManualSyncRunning) {
+                        isManualSyncRunning = true;
+                        setManualStaffSyncButtonState(true);
+                    }
+                    return;
+                }
+
+                if (isManualSyncRunning) {
+                    isManualSyncRunning = false;
+                    setManualStaffSyncButtonState(false);
+                    stopManualSyncPolling();
+                    if (showCompletionToast) {
+                        showToast("Sync staff completata", "success");
+                    }
+                    await populateEmployees();
+                    loadAdminAttendances();
+                }
+            } catch (err) {
+                console.error("Manual Sync Status Error:", err);
+            }
+        }
+
+        function startManualSyncPolling() {
+            stopManualSyncPolling();
+            manualSyncPollTimer = setInterval(() => {
+                pollManualSyncStatus(true);
+            }, 3000);
+        }
+
+        function triggerManualSync() {
+            if (isManualSyncRunning) {
+                return;
+            }
+
+            showCustomConfirm(
+                "Vuoi avviare ora la sincronizzazione manuale solo dello staff su tutti i device attivi?",
+                "Sincronizzazione Staff",
+                "Avvia Sync Staff",
+                "var(--primary)",
+                async () => {
+                    isManualSyncRunning = true;
+                    setManualStaffSyncButtonState(true);
+
+                    try {
+                        const res = await fetch('/api/admin/sync-now?scope=staff', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+
+                        if (res.status === 401) { logout(); return; }
+
+                        let data = null;
+                        try {
+                            data = await res.json();
+                        } catch (parseErr) {
+                            data = null;
+                        }
+
+                        if (!res.ok) {
+                            const errMessage = data && data.message ? data.message : "Errore durante la sincronizzazione manuale";
+                            showToast(errMessage, "error");
+                            isManualSyncRunning = false;
+                            setManualStaffSyncButtonState(false);
+                            return;
+                        }
+
+                        if (data && data.message) {
+                            showToast(data.message, data.success ? "success" : "info");
+                        } else {
+                            showToast("Sincronizzazione staff avviata", "info");
+                        }
+                        startManualSyncPolling();
+                        await pollManualSyncStatus(true);
+                    } catch (err) {
+                        console.error("Manual Sync Error:", err);
+                        showToast("Errore di connessione durante la sincronizzazione", "error");
+                        isManualSyncRunning = false;
+                        setManualStaffSyncButtonState(false);
+                        stopManualSyncPolling();
+                    }
+                }
+            );
         }
 
         async function submitManualClock() {
@@ -1223,15 +1538,15 @@
                     }
                     const workedMins = calculateWorkedMinutes(day);
                     const isFinished = day.uscita || (day.inizio_trasferta && day.ritorno_trasferta && !day.entrata) || (!day.inizio_trasferta && day.entrata && day.ritorno_trasferta);
-                    if (workedMins > 0) { 
+                    if (workedMins > 0) {
                         const isToday = (day.dateKey === formatDateLocal(new Date()));
                         if (isToday && !day.isWeekend && !day.isHoliday && isFinished) {
                             empSummary[day.empId].theoreticalMins += 480;
                             empSummary[day.empId].theoreticalDays++;
                         }
                         if (!isToday || (isToday && isFinished)) {
-                            empSummary[day.empId].workedMins += workedMins; 
-                            empSummary[day.empId].workedDays++; 
+                            empSummary[day.empId].workedMins += workedMins;
+                            empSummary[day.empId].workedDays++;
                         }
                     }
                 });
@@ -1352,15 +1667,15 @@
                     }
                     const workedMins = calculateWorkedMinutes(day);
                     const isFinished = day.uscita || (day.inizio_trasferta && day.ritorno_trasferta && !day.entrata) || (!day.inizio_trasferta && day.entrata && day.ritorno_trasferta);
-                    if (workedMins > 0) { 
+                    if (workedMins > 0) {
                         const isToday = (day.dateKey === formatDateLocal(new Date()));
                         if (isToday && !day.isWeekend && !day.isHoliday && isFinished) {
                             empSummary[day.empId].theoreticalMins += 480;
                             empSummary[day.empId].theoreticalDays++;
                         }
                         if (!isToday || (isToday && isFinished)) {
-                            empSummary[day.empId].workedMins += workedMins; 
-                            empSummary[day.empId].workedDays++; 
+                            empSummary[day.empId].workedMins += workedMins;
+                            empSummary[day.empId].workedDays++;
                         }
                     }
                 });
@@ -1435,12 +1750,13 @@
             const stopDate = new Date(endDate);
             while (currentDate <= stopDate) {
                 const dayOfWeek = currentDate.getDay();
+                const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
                 dateArray.push({
                     dateKey: formatDateLocal(currentDate),
                     isSunday: dayOfWeek === 0,
                     isSaturday: dayOfWeek === 6,
-                    isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
-                    isHoliday: isHoliday(currentDate)
+                    isWeekend: isWeekend,
+                    isHoliday: !isWeekend && isHoliday(currentDate)
                 });
                 currentDate.setDate(currentDate.getDate() + 1);
             }
@@ -1476,6 +1792,14 @@
 
         // --- Load & render table ---
         async function loadAdminAttendances() {
+            const loadSeq = ++adminAttendancesLoadSeq;
+            adminAttendancesActiveSeq = loadSeq;
+            if (adminAttendancesAbortController) {
+                adminAttendancesAbortController.abort();
+            }
+            adminAttendancesAbortController = new AbortController();
+            const { signal } = adminAttendancesAbortController;
+
             const tbody = document.getElementById('attendanceBody');
             tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; color:var(--text-light); padding:20px;">Caricamento...</td></tr>';
 
@@ -1504,12 +1828,14 @@
 
             try {
                 // Fetch valid employees to build a names map
-                const empRes = await fetch('/api/employees');
+                const empRes = await fetch('/api/employees', { signal });
 
                 if (empRes.status === 401) { logout(); return; }
                 if (!empRes.ok) throw new Error(`Errore dipendenti: ${empRes.status}`);
-                
+                if (loadSeq !== adminAttendancesActiveSeq) return;
+
                 const empListRaw = await empRes.json();
+                if (loadSeq !== adminAttendancesActiveSeq) return;
                 const empList = Array.isArray(empListRaw) ? empListRaw : [];
                 const currentNamesMap = {};
 
@@ -1519,22 +1845,34 @@
 
                 const url = '/api/attendances?' + params.toString();
                 console.log("[DEBUG] Fetching attendances:", url);
-                const res = await fetch(url);
+                const res = await fetch(url, { signal });
 
                 if (res.status === 401) { logout(); return; }
                 if (!res.ok) {
-                   const errText = await res.text();
-                   throw new Error(`Server Error (${res.status}): ${errText.substring(0, 100)}`);
+                    const errText = await res.text();
+                    throw new Error(`Server Error (${res.status}): ${errText.substring(0, 100)}`);
                 }
+                if (loadSeq !== adminAttendancesActiveSeq) return;
 
                 const records = await res.json();
+                if (loadSeq !== adminAttendancesActiveSeq) return;
                 renderAdminTable(records, currentNamesMap);
             } catch (e) {
+                if (e && e.name === 'AbortError') {
+                    return;
+                }
+                if (loadSeq !== adminAttendancesActiveSeq) {
+                    return;
+                }
                 console.error("Load Error:", e);
                 tbody.innerHTML = `<tr><td colspan="10" style="color:var(--danger); text-align:center; padding:20px;">
                     <strong>Errore caricamento dati</strong><br>
                     <small style="opacity:0.8">${e.message}</small>
                 </td></tr>`;
+            } finally {
+                if (loadSeq === adminAttendancesActiveSeq) {
+                    adminAttendancesAbortController = null;
+                }
             }
         }
 
@@ -1753,6 +2091,8 @@
                     // Usiamo formatDateLocal per avere YYYY-MM-DD locale (senza shift UTC)
                     const dateObj = new Date(r.timestamp);
                     const dateKey = formatDateLocal(dateObj);
+                    const romeWeekday = getRomeWeekday(dateKey);
+                    const isWeekendDay = [0, 6].includes(romeWeekday);
                     const isHolidayToday = isHoliday(dateObj);
                     const dailyKey = empId + '_' + dateKey;
 
@@ -1773,9 +2113,9 @@
                             hiddenMarks: [], // Collect markings hidden by frontend heuristics
                             rawRecords: [], // Collect all raw records for two-pass dedup
                             isEmpty: false,
-                            isWeekend: [0, 6].includes(getRomeWeekday(dateKey)),
-                            isSaturday: getRomeWeekday(dateKey) === 6,
-                            isHoliday: isHolidayToday
+                            isWeekend: isWeekendDay,
+                            isSaturday: romeWeekday === 6,
+                            isHoliday: !isWeekendDay && isHolidayToday
                         };
                     }
 
@@ -1783,7 +2123,7 @@
                     const rawAction = (r.action || "").trim().toLowerCase();
                     const mappedAction = normalizeAttendanceAction(r.action);
                     groupedMap[dailyKey].rawRecords.push({
-                        id: r.id, 
+                        id: r.id,
                         source: r.source,
                         tsMs: dateObj.getTime(),
                         rawAction: rawAction,
@@ -1828,7 +2168,7 @@
             empsToCheck.forEach(empId => {
                 let nameToUse = currentNamesMap[empId] || "";
                 const skipSyntheticEmptyRows = historicalOnlyEmployeeIds.has(String(empId));
-                
+
                 // Fallback attempt: if we don't have it in currentNamesMap, look inside records
                 if (!nameToUse && records) {
                     const matchedRecord = records.find(r => {
@@ -1851,8 +2191,8 @@
                     const dailyKey = empId + '_' + day.dateKey;
                     if (skipSyntheticEmptyRows && !groupedMap[dailyKey]) return;
 
-                    // I festivi e i sabati feriali vengono inclusi se hanno marcature
-                    // O se vogliamo mostrarli come "Festivo" non lavorato (i festivi)
+                    // I festivi vengono mostrati come non lavorati solo nei giorni feriali.
+                    // Nel weekend mostriamo la riga solo se esistono marcature reali.
                     if (day.isHoliday) {
                         if (!groupedMap[dailyKey]) {
                             groupedMap[dailyKey] = {
@@ -1955,7 +2295,7 @@
                 tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; color:var(--text-light); padding:20px;">Nessun record trovato per i filtri selezionati</td></tr>';
                 document.getElementById('paginationControls').style.display = 'none';
                 document.getElementById('tabNavigationControls').style.display = 'none';
-                document.getElementById('periodSummaryBody').innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-light); padding:20px;">Nessun record trovato</td></tr>';
+                document.getElementById('periodSummaryBody').innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-light); padding:20px;">Nessun record trovato</td></tr>';
             } else {
                 document.getElementById('tabNavigationControls').style.display = 'flex';
                 currentPage = 1;
@@ -1966,11 +2306,12 @@
         function renderPeriodSummary() {
             const tbody = document.getElementById('periodSummaryBody');
             const empSummary = {};
+            mobilePeriodDetailRows = [];
 
             const periodTheo = getPeriodTheoretical();
 
             if (globalSummaryData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-light); padding:20px;">Nessun record trovato</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-light); padding:20px;">Nessun record trovato</td></tr>';
                 return;
             }
 
@@ -2025,6 +2366,20 @@
                     balanceClass = 'neutral';
                 }
 
+                const detailIndex = mobilePeriodDetailRows.push({
+                    title: escapeHtml(emp.name),
+                    subtitle: `ID Dipendente: #${emp.id}`,
+                    body: `
+                        <div class="daily-detail-grid">
+                            <div class="daily-detail-item"><span class="daily-detail-label">Ore Effettive</span><span class="daily-detail-value">${minutesToHHMM(emp.workedMins)}</span></div>
+                            <div class="daily-detail-item"><span class="daily-detail-label">Ore Teoriche</span><span class="daily-detail-value">${minutesToHHMM(emp.theoreticalMins)}</span></div>
+                            <div class="daily-detail-item"><span class="daily-detail-label">Bilancio Ore</span><span class="daily-detail-value balance-${balanceClass}">${balanceDisplay}</span></div>
+                            <div class="daily-detail-item"><span class="daily-detail-label">Giorni Effettivi</span><span class="daily-detail-value">${emp.workedDays}</span></div>
+                            <div class="daily-detail-item"><span class="daily-detail-label">Giorni Teorici</span><span class="daily-detail-value">${emp.theoreticalDays}</span></div>
+                        </div>
+                    `
+                }) - 1;
+
                 html += `<tr>
                     <td>${emp.id}</td>
                     <td class="emp-cell" style="font-weight: 500; color: var(--text-dark);">${emp.name}</td>
@@ -2033,6 +2388,11 @@
                     <td class="balance-cell ${balanceClass}" style="font-weight: 600;">${balanceDisplay}</td>
                     <td style="font-weight: 500;">${emp.workedDays}</td>
                     <td style="color: var(--text-secondary);">${emp.theoreticalDays}</td>
+                    <td class="mobile-only-col">
+                        <span class="mobile-detail-hint-col" onclick="openPeriodSummaryDetailModalByIndex(${detailIndex})" style="cursor: pointer;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </span>
+                    </td>
                 </tr>`;
             });
 
@@ -2106,6 +2466,7 @@
         function displayCurrentPage() {
             const tbody = document.getElementById('attendanceBody');
             const paginationControls = document.getElementById('paginationControls');
+            mobileDailyDetailRows = [];
 
             if (globalFilteredData.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; color:var(--text-light); padding:20px;">Nessun record trovato per i filtri selezionati</td></tr>';
@@ -2127,6 +2488,10 @@
             if (sortArrow) sortArrow.textContent = currentSortOrder === 'asc' ? '↓' : '↑';
 
             pageData.forEach(dayData => {
+                function buildDetailField(label, valueHtml, extraClass = '') {
+                    return `<div class="daily-detail-item"><span class="daily-detail-label">${label}</span><span class="daily-detail-value ${extraClass}">${valueHtml}</span></div>`;
+                }
+
                 // Formatta la data
                 const ds = dayData.dateKey.split('-');
                 let displayDate = `${ds[2]}/${ds[1]}/${ds[0]}`;
@@ -2139,7 +2504,7 @@
                 let hoursDisplay = '—';
                 let balanceDisplay = '—';
                 let balanceClass = 'neutral';
-                
+
                 const anomalyInfo = checkAnomaly(dayData);
                 const isAnomaly = anomalyInfo.isAnomaly;
                 const tooltipText = anomalyInfo.tooltip;
@@ -2157,12 +2522,34 @@
                     const emptyBalanceDisplay = dayData.isHoliday ? '+0:00' : (isTodayLocalEmpty ? '—' : '-8:00');
                     const emptyHoursDisplay = isTodayLocalEmpty && !dayData.isHoliday ? '—' : '0:00';
                     const emptyBalanceClass = dayData.isHoliday ? 'neutral' : (isTodayLocalEmpty ? 'neutral' : 'negative');
-                    html += `<tr class="${trClass.trim()}">
+                    const detailIndex = mobileDailyDetailRows.push({
+                        title: displayDate,
+                        subtitle: dayData.empDisplay,
+                        body: `
+                            <div class="daily-detail-grid">
+                                ${buildDetailField('Entrata', '&mdash;')}
+                                ${buildDetailField('Inizio Pausa', '&mdash;')}
+                                ${buildDetailField('Fine Pausa', '&mdash;')}
+                                ${buildDetailField('Uscita', '&mdash;')}
+                                ${buildDetailField('Inizio Trasferta', '&mdash;')}
+                                ${buildDetailField('Ritorno Trasferta', '&mdash;')}
+                                ${buildDetailField('Ore Lavorate', emptyHoursDisplay)}
+                                ${buildDetailField('Bilancio', emptyBalanceDisplay, `balance-${emptyBalanceClass}`)}
+                            </div>
+                            <div class="daily-detail-note">${dayData.isHoliday ? 'Giornata festiva o chiusura aziendale.' : emptyTooltip}</div>
+                        `
+                    }) - 1;
+                    html += `<tr class="${trClass.trim()} mobile-detail-row">
                         <td class="date-cell">${displayDate}</td>
                         <td class="emp-cell">${dayData.empDisplay}</td>
                         <td colspan="6">Nessuna timbratura</td>
                         <td class="hours-cell">${emptyHoursDisplay} ${dayData.isHoliday || isTodayLocalEmpty ? '' : makeWarningSvg(emptyTooltip)}</td>
                         <td class="balance-cell ${emptyBalanceClass}">${emptyBalanceDisplay}</td>
+                        <td class="mobile-only-col">
+                            <span class="mobile-detail-hint-col" onclick="openDailyDetailModalByIndex(${detailIndex})" style="cursor: pointer;">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                            </span>
+                        </td>
                     </tr>`;
                     return; // Passa al prossimo ciclo
                 }
@@ -2171,13 +2558,13 @@
                 if (workedMins > 0) {
                     hoursDisplay = minutesToHHMM(workedMins);
                     let theoreticalMins = dayData.isHoliday ? 0 : 480;
-                    
+
                     const isTodayLocal = (dayData.dateKey === formatDateLocal(new Date()));
                     const isFinished = dayData.uscita || (dayData.inizio_trasferta && dayData.ritorno_trasferta && !dayData.entrata) || (!dayData.inizio_trasferta && dayData.entrata && dayData.ritorno_trasferta);
                     if (isTodayLocal && !isFinished) {
                         theoreticalMins = workedMins; // Nasconde la negatività teorica fittizia per il giorno in corso!
                     }
-                    
+
                     const diffMins = workedMins - theoreticalMins;
 
                     if (diffMins > 0) {
@@ -2208,7 +2595,28 @@
                     return timeStr + extras;
                 }
 
-                html += `<tr class="${isAnomaly ? 'row-anomaly' : ''} ${dayData.isHoliday ? 'row-holiday' : ''}">
+                const detailReasonList = anomalyInfo.reasons.length > 0
+                    ? `<div class="daily-detail-note"><strong>Anomalie</strong><ul class="daily-detail-list">${anomalyInfo.reasons.map(reason => `<li>${escapeHtml(reason)}</li>`).join('')}</ul></div>`
+                    : '';
+                const detailIndex = mobileDailyDetailRows.push({
+                    title: displayDate,
+                    subtitle: dayData.empDisplay,
+                    body: `
+                        <div class="daily-detail-grid">
+                            ${buildDetailField('Entrata', renderTime(dayData.entrata, dayData.entrata_lat, dayData.entrata_lon, dayData.entrata_id, dayData.entrata_source, 'entrata', dayData.dateKey))}
+                            ${buildDetailField('Inizio Pausa', renderTime(dayData.inizio_pausa, dayData.inizio_pausa_lat, dayData.inizio_pausa_lon, dayData.inizio_pausa_id, dayData.inizio_pausa_source, 'inizio_pausa', dayData.dateKey))}
+                            ${buildDetailField('Fine Pausa', renderTime(dayData.fine_pausa, dayData.fine_pausa_lat, dayData.fine_pausa_lon, dayData.fine_pausa_id, dayData.fine_pausa_source, 'fine_pausa', dayData.dateKey))}
+                            ${buildDetailField('Uscita', renderTime(dayData.uscita, dayData.uscita_lat, dayData.uscita_lon, dayData.uscita_id, dayData.uscita_source, 'uscita', dayData.dateKey))}
+                            ${buildDetailField('Inizio Trasferta', renderTime(dayData.inizio_trasferta, dayData.inizio_trasferta_lat, dayData.inizio_trasferta_lon, dayData.inizio_trasferta_id, dayData.inizio_trasferta_source, 'inizio_trasferta', dayData.dateKey))}
+                            ${buildDetailField('Ritorno Trasferta', renderTime(dayData.ritorno_trasferta, dayData.ritorno_trasferta_lat, dayData.ritorno_trasferta_lon, dayData.ritorno_trasferta_id, dayData.ritorno_trasferta_source, 'ritorno_trasferta', dayData.dateKey))}
+                            ${buildDetailField('Ore Lavorate', hoursDisplay)}
+                            ${buildDetailField('Bilancio', balanceDisplay, `balance-${balanceClass}`)}
+                        </div>
+                        ${detailReasonList}
+                    `
+                }) - 1;
+
+                html += `<tr class="${isAnomaly ? 'row-anomaly' : ''} ${dayData.isHoliday ? 'row-holiday' : ''} mobile-detail-row">
                     <td class="date-cell">${displayDate}</td>
                     <td class="emp-cell">${dayData.empDisplay}</td>
                     <td>${renderTime(dayData.entrata, dayData.entrata_lat, dayData.entrata_lon, dayData.entrata_id, dayData.entrata_source, 'entrata', dayData.dateKey)}</td>
@@ -2219,6 +2627,11 @@
                     <td>${renderTime(dayData.ritorno_trasferta, dayData.ritorno_trasferta_lat, dayData.ritorno_trasferta_lon, dayData.ritorno_trasferta_id, dayData.ritorno_trasferta_source, 'ritorno_trasferta', dayData.dateKey)}</td>
                     <td class="hours-cell">${hoursDisplay} ${isAnomaly ? makeWarningSvg(tooltipText) : ''}</td>
                     <td class="balance-cell ${balanceClass}">${balanceDisplay}</td>
+                    <td class="mobile-only-col">
+                        <span class="mobile-detail-hint-col" onclick="openDailyDetailModalByIndex(${detailIndex})" style="cursor: pointer;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </span>
+                    </td>
                 </tr>`;
             });
 
@@ -2241,6 +2654,7 @@
 
         function changePage(delta) {
             currentPage += delta;
+            closeDailyDetailModal();
             displayCurrentPage();
         }
 
@@ -2536,26 +2950,100 @@
                 .replace(/'/g, "&#039;");
         }
 
+        function shouldUseMobileDailyDetail() {
+            return window.innerWidth <= 768;
+        }
+
+        function openDailyDetailModalByIndex(index) {
+            if (!shouldUseMobileDailyDetail()) return;
+
+            const detail = mobileDailyDetailRows[index];
+            if (!detail) return;
+
+            document.getElementById('dailyDetailTitle').innerHTML = detail.title;
+            document.getElementById('dailyDetailSubtitle').textContent = detail.subtitle;
+            document.getElementById('dailyDetailBody').innerHTML = detail.body;
+            document.getElementById('dailyDetailModal').classList.add('active');
+        }
+
+        function openPeriodSummaryDetailModalByIndex(index) {
+            if (!shouldUseMobileDailyDetail()) return;
+
+            const detail = mobilePeriodDetailRows[index];
+            if (!detail) return;
+
+            document.getElementById('dailyDetailTitle').innerHTML = detail.title;
+            document.getElementById('dailyDetailSubtitle').textContent = detail.subtitle;
+            document.getElementById('dailyDetailBody').innerHTML = detail.body;
+            document.getElementById('dailyDetailModal').classList.add('active');
+        }
+
+        function closeDailyDetailModal() {
+            document.getElementById('dailyDetailModal').classList.remove('active');
+        }
+
         // --- Mobile Menu Toggle ---
-        function toggleMobileMenu() {
+        const MOBILE_MENU_BREAKPOINT = 1280;
+
+        function setMobileMenuExpanded(expanded) {
+            const hamburger = document.getElementById('hamburgerBtn');
+            if (hamburger) {
+                hamburger.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+            }
+        }
+
+        function setMobileMenuBackdrop(expanded) {
+            const backdrop = document.getElementById('adminMenuBackdrop');
+            if (!backdrop) return;
+            backdrop.classList.toggle('active', expanded);
+        }
+
+        function closeMobileMenu() {
             const menu = document.getElementById('topActions');
             if (menu) {
-                menu.classList.toggle('show-mobile-menu');
+                menu.classList.remove('show-mobile-menu');
             }
+            setMobileMenuExpanded(false);
+            setMobileMenuBackdrop(false);
+        }
+
+        function toggleMobileMenu() {
+            const menu = document.getElementById('topActions');
+            if (!menu) return;
+
+            const isOpen = menu.classList.toggle('show-mobile-menu');
+            setMobileMenuExpanded(isOpen);
+            setMobileMenuBackdrop(isOpen);
         }
 
         // Close mobile menu when clicking outside or clicking an action button
         document.addEventListener('click', (e) => {
             const menu = document.getElementById('topActions');
-            const hamburger = document.querySelector('.hamburger-btn');
+            const hamburger = document.getElementById('hamburgerBtn');
             if (menu && menu.classList.contains('show-mobile-menu')) {
                 // Ignore clicks on the hamburger button itself (toggleMobileMenu handles it)
                 if (hamburger && hamburger.contains(e.target)) return;
 
                 // If clicked outside the menu, or clicked a button inside the menu
                 if (!menu.contains(e.target) || e.target.closest('button')) {
-                    menu.classList.remove('show-mobile-menu');
+                    closeMobileMenu();
                 }
+            }
+        });
+
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > MOBILE_MENU_BREAKPOINT) {
+                closeMobileMenu();
+            }
+            if (!shouldUseMobileDailyDetail()) {
+                closeDailyDetailModal();
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeMobileMenu();
+                closeDailyDetailModal();
             }
         });
 
@@ -2577,27 +3065,6 @@
             initFiltersDefaults();
             ensureSystemAdminLink();
 
-            // Init flatpickr per range admin
-            flatpickrInstance = flatpickr("#hiddenMonthPicker", {
-                mode: "range",
-                dateFormat: "Y-m-d",
-                locale: "it",
-                positionElement: document.getElementById('calendarPickerBtn'),
-                position: "below right",
-                onChange: function (selectedDates, dateStr, instance) {
-                    if (selectedDates.length === 2) {
-                        customRangeStart = selectedDates[0];
-                        customRangeEnd = selectedDates[1];
-                        updateMonthDisplay();
-                        loadAdminAttendances();
-                    }
-                }
-            });
-
-            document.getElementById('calendarPickerBtn').addEventListener('click', () => {
-                flatpickrInstance.open();
-            });
-
             // Populate employees dropdown
             await populateEmployees();
 
@@ -2607,6 +3074,10 @@
             updateMonthDisplay();
             loadAdminAttendances();
             loadPendingValidations();
+            await pollManualSyncStatus(false);
+            if (isManualSyncRunning) {
+                startManualSyncPolling();
+            }
 
             // Setup polling per badge validazioni
             setInterval(loadPendingValidations, 30000);
@@ -2623,6 +3094,7 @@
         };
 
         function openEditClockModal(recordId, timeStr, mappedAction, dateKey) {
+            closeDailyDetailModal();
             document.getElementById('editClockId').value = recordId;
 
             // Convert mappedAction to raw select value
@@ -2770,4 +3242,3 @@
 </body>
 
 </html>
-

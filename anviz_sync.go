@@ -44,6 +44,7 @@ type syncRunConfig struct {
 	AttendanceMode       byte
 	AttendanceLimit      byte
 	SyncStaff            bool
+	SyncAttendance       bool
 	CommandDelay         time.Duration
 	SyncInterval         time.Duration
 	ReadTimeout          time.Duration
@@ -839,7 +840,7 @@ func syncFromDeviceLegacy(ip string, deviceID uint32, manual bool) (SyncStats, e
 	return stats, nil
 }
 
-func syncFromDevice(ip string, deviceID uint32, manual bool) (SyncStats, error) {
+func syncFromDeviceWithOptions(ip string, deviceID uint32, manual bool, syncStaff bool, syncAttendance bool) (SyncStats, error) {
 	stats := SyncStats{}
 	cfg := syncRunConfig{
 		RunID:             fmt.Sprintf("%d", time.Now().UnixNano()),
@@ -848,7 +849,8 @@ func syncFromDevice(ip string, deviceID uint32, manual bool) (SyncStats, error) 
 		Manual:            manual,
 		AttendanceMode:    initialAttendanceMode(deviceID, manual),
 		AttendanceLimit:   anvizAttendanceChunkLimit(),
-		SyncStaff:         shouldSyncStaff(manual),
+		SyncStaff:         syncStaff,
+		SyncAttendance:    syncAttendance,
 		CommandDelay:      anvizCommandDelay(),
 		SyncInterval:      anvizSyncInterval(),
 		ReadTimeout:       anvizReadTimeout(),
@@ -862,8 +864,8 @@ func syncFromDevice(ip string, deviceID uint32, manual bool) (SyncStats, error) 
 	guard.Lock()
 	defer guard.Unlock()
 
-	cfg.logf("starting sync attendance_mode=%s chunk_limit=%d sync_staff=%v command_delay=%s read_timeout=%s write_timeout=%s connect_timeout=%s interval=%s",
-		attendanceModeLabel(cfg.AttendanceMode), cfg.AttendanceLimit, cfg.SyncStaff, cfg.CommandDelay, cfg.ReadTimeout, cfg.WriteTimeout, cfg.ConnectionTimeout, cfg.SyncInterval)
+	cfg.logf("starting sync attendance_mode=%s chunk_limit=%d sync_staff=%v sync_attendance=%v command_delay=%s read_timeout=%s write_timeout=%s connect_timeout=%s interval=%s",
+		attendanceModeLabel(cfg.AttendanceMode), cfg.AttendanceLimit, cfg.SyncStaff, cfg.SyncAttendance, cfg.CommandDelay, cfg.ReadTimeout, cfg.WriteTimeout, cfg.ConnectionTimeout, cfg.SyncInterval)
 
 	defer func() {
 		duration := time.Since(cfg.StartedAt)
@@ -940,6 +942,11 @@ func syncFromDevice(ip string, deviceID uint32, manual bool) (SyncStats, error) 
 		cfg.logf("staff sync skipped for this run")
 	}
 
+	if !cfg.SyncAttendance {
+		cfg.logf("attendance sync skipped for this run")
+		return stats, nil
+	}
+
 	mode := cfg.AttendanceMode
 	limit := cfg.AttendanceLimit
 
@@ -1011,4 +1018,8 @@ func syncFromDevice(ip string, deviceID uint32, manual bool) (SyncStats, error) 
 	}
 
 	return stats, nil
+}
+
+func syncFromDevice(ip string, deviceID uint32, manual bool) (SyncStats, error) {
+	return syncFromDeviceWithOptions(ip, deviceID, manual, shouldSyncStaff(manual), true)
 }

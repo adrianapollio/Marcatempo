@@ -6,7 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>System Administrator Dashboard</title>
     <!-- Modern Tech Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="system_admin.css">
 </head>
 
@@ -14,6 +16,15 @@
 
     <div class="container">
         <div class="header">
+            <button id="sysHamburgerBtn" class="sys-hamburger-btn" onclick="toggleSystemMenu()"
+                aria-label="Apri menu navigazione" aria-controls="sysSidebar" aria-expanded="false" hidden>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </button>
             <div class="header-title">
                 <h2>Marcatempo</h2>
                 <p>System Administration Dashboard</p>
@@ -34,7 +45,8 @@
             <div id="loginScreen" class="active-screen">
                 <div class="content-inner login-card">
                     <div class="login-icon-wrap">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
                         </svg>
                     </div>
@@ -50,13 +62,14 @@
                             <input type="password" id="sysPassword" placeholder="Inserisci password">
                             <button type="button" class="password-toggle" onclick="toggleSystemPassword()"
                                 aria-label="Mostra password system admin">
-                                <svg id="sysEyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                    stroke-linecap="round" stroke-linejoin="round">
+                                <svg id="sysEyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                     <circle cx="12" cy="12" r="3"></circle>
                                 </svg>
                                 <svg id="sysEyeOffIcon" style="display:none" viewBox="0 0 24 24" fill="none"
-                                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
                                     <path
                                         d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24">
                                     </path>
@@ -68,7 +81,8 @@
                     <button class="btn-system" onclick="handleLogin()">Accedi</button>
                     <div class="login-link-wrap">
                         <a href="/" class="login-system-link">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <line x1="19" y1="12" x2="5" y2="12"></line>
                                 <polyline points="12 19 5 12 12 5"></polyline>
                             </svg>
@@ -80,32 +94,68 @@
             </div>
 
             <div id="dashboardScreen" hidden>
-                <div class="sidebar">
+                <div class="sidebar-backdrop" id="sysSidebarBackdrop" onclick="closeSystemMenu()"></div>
+                <div class="sidebar" id="sysSidebar">
                     <div class="nav-item active" id="nav-overview" onclick="showPanel('overview')">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="14" width="7" height="7"></rect>
+                            <rect x="3" y="14" width="7" height="7"></rect>
+                        </svg>
                         Overview
                     </div>
                     <div class="nav-item" id="nav-admins" onclick="showPanel('admins')">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><polyline points="16 11 18 13 22 9"></polyline></svg>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <polyline points="16 11 18 13 22 9"></polyline>
+                        </svg>
                         Gestione Admin HR
                     </div>
                     <div class="nav-item" id="nav-backups" onclick="showPanel('backups')">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
                         Data Backups
                     </div>
                     <div class="nav-item" id="nav-devices" onclick="showPanel('devices')">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                            <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                            <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                            <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                        </svg>
                         Devices Status
                     </div>
                     <div class="nav-item" id="nav-security" onclick="showPanel('security')">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                            <path d="M12 8v4"></path>
+                            <path d="M12 16h.01"></path>
+                        </svg>
                         Sicurezza
                     </div>
-                    
+
                     <div id="adminLink">
                         <div class="nav-item nav-item-bordered" onclick="window.location.href='/admin'">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
                             HR Admin Panel
+                        </div>
+                        <div class="nav-item nav-item-danger" onclick="logout()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                <polyline points="16 17 21 12 16 7"></polyline>
+                                <line x1="21" y1="12" x2="9" y2="12"></line>
+                            </svg>
+                            Esci
                         </div>
                     </div>
                 </div>
@@ -128,7 +178,7 @@
                                 <span class="value" id="serverUptime">Calculated...</span>
                             </div>
                         </div>
-                        
+
                         <div class="surface-card">
                             <h4 class="mono-heading">Recent System Logs</h4>
                             <div id="smallLogs" class="logs-default" aria-live="polite"></div>
@@ -139,7 +189,8 @@
                         <div class="section-row">
                             <h3 class="section-title-tight">Gestione Privilegi HR</h3>
                             <div class="search-wrap">
-                                <input type="text" id="adminSearch" placeholder="Cerca dipendente..." oninput="filterAdmins()">
+                                <input type="text" id="adminSearch" placeholder="Cerca dipendente..."
+                                    oninput="filterAdmins()">
                             </div>
                         </div>
                         <div class="table-container">
@@ -166,12 +217,20 @@
                                     <option value="100">100</option>
                                 </select>
                             </div>
-                            <button class="btn-page" id="prevPage" onclick="changePage(-1)" disabled title="Pagina Precedente">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                            <button class="btn-page" id="prevPage" onclick="changePage(-1)" disabled
+                                title="Pagina Precedente">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="15 18 9 12 15 6"></polyline>
+                                </svg>
                             </button>
                             <span class="pagination-info" id="pageInfo">Pagina 1 di 1</span>
-                            <button class="btn-page" id="nextPage" onclick="changePage(1)" disabled title="Pagina Successiva">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                            <button class="btn-page" id="nextPage" onclick="changePage(1)" disabled
+                                title="Pagina Successiva">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="9 18 15 12 9 6"></polyline>
+                                </svg>
                             </button>
                         </div>
                     </div>
@@ -179,7 +238,8 @@
                     <div id="panel-backups" class="panel-hidden" hidden>
                         <div class="section-row-compact">
                             <h3 class="section-title-tight">History Backups</h3>
-                            <button class="btn-system btn-system-compact" onclick="triggerBackup()">Esegui Backup Ora</button>
+                            <button class="btn-system btn-system-compact" onclick="triggerBackup()">Esegui Backup
+                                Ora</button>
                         </div>
                         <div class="panel-shell">
                             <div id="backupWait" class="table-placeholder">Recupero lista backup...</div>
@@ -196,7 +256,8 @@
                                     <div class="panel-heading">Raw Device Diagnostics</div>
                                     <div id="deviceDiagnosticsMeta" class="panel-meta">Caricamento diagnostica...</div>
                                 </div>
-                                <button class="btn-download btn-rounded" onclick="loadDeviceDiagnostics()">Aggiorna Diagnostica</button>
+                                <button class="btn-download btn-rounded" onclick="loadDeviceDiagnostics()">Aggiorna
+                                    Diagnostica</button>
                             </div>
                             <div class="table-container table-container-flat">
                                 <table id="deviceDiagnosticsTable">
@@ -206,10 +267,10 @@
                                             <th>Device</th>
                                             <th>Dipendente</th>
                                             <th>Raw TS</th>
-                                            <th>Timestamp Parse</th>
-                                            <th>Azione Device (Raw)</th>
-                                            <th>Stato Pipeline (Final)</th>
-                                            <th>Import</th>
+                                            <th>Parse Timestamp</th>
+                                            <th>Azione (Raw)</th>
+                                            <th>Status Pipeline (Final)</th>
+                                            <th style="width: 56px; text-align: center;">Dett.</th>
                                         </tr>
                                     </thead>
                                     <tbody id="deviceDiagnosticsBody">
@@ -257,7 +318,46 @@
             <div id="confirmModalBody" class="modal-body">Sei sicuro di voler procedere?</div>
             <div class="modal-actions">
                 <button class="modal-btn cancel" onclick="closeConfirmModal(false)">Annulla</button>
-                <button id="confirmModalBtn" class="modal-btn confirm" onclick="closeConfirmModal(true)">Conferma</button>
+                <button id="confirmModalBtn" class="modal-btn confirm"
+                    onclick="closeConfirmModal(true)">Conferma</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row Detail Modal -->
+    <div id="diagnosticRowModal" class="modal-overlay">
+        <div class="modal-content daily-detail-modal diagnostic-modal-content">
+            <button class="daily-detail-close diagnostic-modal-close" onclick="closeDiagnosticRowModal()">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+            <div class="modal-title" id="diagModalTitle">Dettaglio Log</div>
+            <div class="daily-detail-subtitle" id="diagModalSubtitle"></div>
+            
+            <div class="daily-detail-grid">
+                <div class="daily-detail-item">
+                    <span class="daily-detail-label">Device</span>
+                    <span class="daily-detail-value" id="diagModalDevice"></span>
+                </div>
+                <div class="daily-detail-item">
+                    <span class="daily-detail-label">Raw TS</span>
+                    <span class="daily-detail-value" id="diagModalRawTs"></span>
+                </div>
+                <div class="daily-detail-item">
+                    <span class="daily-detail-label">Timestamp Parse</span>
+                    <span class="daily-detail-value" id="diagModalParseTs"></span>
+                </div>
+                <div class="daily-detail-item">
+                    <span class="daily-detail-label">Data Import</span>
+                    <span class="daily-detail-value" id="diagModalImport"></span>
+                </div>
+                <div class="daily-detail-item">
+                    <span class="daily-detail-label">Azione (Raw)</span>
+                    <span class="daily-detail-value" id="diagModalRawAction"></span>
+                </div>
+                <div class="daily-detail-item">
+                    <span class="daily-detail-label">Pipeline (Final)</span>
+                    <span class="daily-detail-value" id="diagModalFinalAction"></span>
+                </div>
             </div>
         </div>
     </div>
@@ -270,12 +370,55 @@
         const dashboardScreen = document.getElementById('dashboardScreen');
         const headerActions = document.getElementById('sysHeaderActions');
         const sysUserNameDisplay = document.getElementById('sysUserNameDisplay');
+        const sysHamburgerBtn = document.getElementById('sysHamburgerBtn');
+        const sysSidebar = document.getElementById('sysSidebar');
+        const SYSTEM_MENU_BREAKPOINT = 1100;
         let currentSystemAdminName = '';
         let allEmployees = [];
         let filteredEmployees = [];
         let currentPage = 1;
         let pageSize = 20;
         let pendingAction = null;
+        let globalDiagnosticRecords = [];
+
+        function isSystemMenuMode() {
+            return window.innerWidth <= SYSTEM_MENU_BREAKPOINT;
+        }
+
+        function syncSystemMenuLayout() {
+            const dashboardActive = dashboardScreen && !dashboardScreen.hidden && dashboardScreen.classList.contains('active-screen');
+            const mobileMenuMode = dashboardActive && isSystemMenuMode();
+
+            if (!mobileMenuMode && dashboardScreen) {
+                dashboardScreen.classList.remove('sidebar-open');
+            }
+
+            if (sysHamburgerBtn) {
+                sysHamburgerBtn.hidden = !mobileMenuMode;
+                sysHamburgerBtn.setAttribute(
+                    'aria-expanded',
+                    mobileMenuMode && dashboardScreen && dashboardScreen.classList.contains('sidebar-open') ? 'true' : 'false'
+                );
+            }
+        }
+
+        function setSystemMenuOpen(open) {
+            if (!dashboardScreen) return;
+            const shouldOpen = Boolean(open) && isSystemMenuMode();
+            dashboardScreen.classList.toggle('sidebar-open', shouldOpen);
+            if (sysHamburgerBtn) {
+                sysHamburgerBtn.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+            }
+        }
+
+        function closeSystemMenu() {
+            setSystemMenuOpen(false);
+        }
+
+        function toggleSystemMenu() {
+            const isOpen = dashboardScreen && dashboardScreen.classList.contains('sidebar-open');
+            setSystemMenuOpen(!isOpen);
+        }
 
         async function restoreSystemSession() {
             try {
@@ -297,6 +440,8 @@
                     dashboardScreen.hidden = false;
                     dashboardScreen.classList.add('active-screen');
                 }
+                closeSystemMenu();
+                syncSystemMenuLayout();
 
                 localStorage.setItem('sysAdminName', currentSystemAdminName);
                 return true;
@@ -317,14 +462,14 @@
                 err.style.display = 'block';
                 return;
             }
-            
+
             try {
                 const res = await fetch('/api/system/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username: fixedUsername, password: p })
                 });
-                
+
                 if (res.ok) {
                     const data = await res.json();
                     currentSystemAdminName = data.name || fixedUsername;
@@ -334,6 +479,8 @@
                         dashboardScreen.hidden = false;
                         dashboardScreen.classList.add('active-screen');
                     }
+                    closeSystemMenu();
+                    syncSystemMenuLayout();
                     sysUserNameDisplay.textContent = currentSystemAdminName;
                     initDashboard();
                     showToast(`Bentornato, ${currentSystemAdminName}`, 'success');
@@ -382,7 +529,9 @@
             localStorage.removeItem('empName');
             currentSystemAdminName = '';
             if (headerActions) headerActions.hidden = true;
+            if (sysHamburgerBtn) sysHamburgerBtn.hidden = true;
             if (dashboardScreen) {
+                closeSystemMenu();
                 dashboardScreen.classList.remove('active-screen');
                 dashboardScreen.hidden = true;
             }
@@ -402,13 +551,39 @@
             if (selectedPanel) {
                 selectedPanel.hidden = false;
             }
-            
+
             document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
             document.getElementById('nav-' + id).classList.add('active');
-            
+
+            if (isSystemMenuMode()) {
+                closeSystemMenu();
+            }
+
             if (id === 'backups') loadBackups();
             if (id === 'admins') loadEmployees();
             if (id === 'devices') loadDeviceDiagnostics();
+        }
+
+        function openDiagnosticRowModal(index) {
+            const row = globalDiagnosticRecords[index];
+            if (!row) return;
+
+            document.getElementById('diagModalTitle').textContent = row.employee_name;
+            document.getElementById('diagModalSubtitle').textContent = `ID Dipendente: #${row.employee_id}`;
+
+            document.getElementById('diagModalDevice').textContent = `#${row.device_id}`;
+            document.getElementById('diagModalRawTs').textContent = row.raw_device_timestamp;
+            document.getElementById('diagModalParseTs').textContent = formatDiagnosticDate(row.parsed_timestamp);
+            document.getElementById('diagModalImport').textContent = formatDiagnosticDate(row.imported_at);
+
+            document.getElementById('diagModalRawAction').innerHTML = `<span class="badge ${row.raw_action === '—' ? 'badge-none' : 'badge-raw'}">${escapeHtml(row.raw_action)} ${row.raw_status !== null ? `(${row.raw_status})` : ''}</span>`;
+            document.getElementById('diagModalFinalAction').innerHTML = `<span class="badge ${row.final_action === '—' ? 'badge-none' : 'badge-final'}">${escapeHtml(row.final_action)} ${row.final_status !== null ? `(${row.final_status})` : ''}</span>`;
+
+            document.getElementById('diagnosticRowModal').classList.add('active');
+        }
+
+        function closeDiagnosticRowModal() {
+            document.getElementById('diagnosticRowModal').classList.remove('active');
         }
 
         function formatDiagnosticDate(value) {
@@ -421,7 +596,7 @@
         function getDiagnosticsLoadingRow() {
             return `
                 <tr>
-                    <td colspan="7" class="table-placeholder">
+                    <td colspan="8" class="table-placeholder">
                         <span class="loading-block">
                             <span class="loading-inline">
                                 <span class="loading-spinner" aria-hidden="true"></span>
@@ -553,25 +728,30 @@
                     });
 
                     const sortedGroups = Object.values(grouped).sort((a, b) => new Date(b.parsed_timestamp) - new Date(a.parsed_timestamp));
+                    globalDiagnosticRecords = sortedGroups;
 
-                    body.innerHTML = sortedGroups.map(row => `
+                    body.innerHTML = sortedGroups.map((row, index) => `
                         <tr>
-                            <td><span class="text-secondary-xs">${row.origin}</span></td>
+                            <td>${escapeHtml(row.origin || 'raw')}</td>
                             <td><code>#${row.device_id}</code></td>
                             <td>${escapeHtml(row.employee_name)} <span class="text-secondary">(#${row.employee_id})</span></td>
                             <td><code>${row.raw_device_timestamp}</code></td>
                             <td>${formatDiagnosticDate(row.parsed_timestamp)}</td>
                             <td>
                                 <span class="badge ${row.raw_action === '—' ? 'badge-none' : 'badge-raw'}">
-                                    ${escapeHtml(row.raw_action)} ${row.raw_status !== null ? `<span class="text-secondary-xs">(${row.raw_status})</span>` : ''}
+                                    ${escapeHtml(row.raw_action)}
                                 </span>
                             </td>
                             <td>
                                 <span class="badge ${row.final_action === '—' ? 'badge-none' : 'badge-final'}">
-                                    ${escapeHtml(row.final_action)} ${row.final_status !== null ? `<span class="text-secondary-xs">(${row.final_status})</span>` : ''}
+                                    ${escapeHtml(row.final_action)}
                                 </span>
                             </td>
-                            <td>${formatDiagnosticDate(row.imported_at)}</td>
+                            <td style="text-align: center;">
+                                <span class="diag-row-detail-btn" onclick="openDiagnosticRowModal(${index})">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                </span>
+                            </td>
                         </tr>
                     `).join('');
                 }
@@ -579,7 +759,7 @@
                 updateDeviceSummary({ configured_devices_count: 0, active_devices_count: 0, sync_enabled: false });
                 meta.textContent = 'Errore caricamento diagnostica device';
                 grid.innerHTML = '<div class="stat-card"><span class="label">Device Diagnostics</span><span class="value">ERR</span><span class="trend">Impossibile leggere la diagnostica</span></div>';
-                body.innerHTML = '<tr><td colspan="7" class="table-placeholder table-placeholder-error">Errore caricamento diagnostica device</td></tr>';
+                body.innerHTML = '<tr><td colspan="8" class="table-placeholder table-placeholder-error">Errore caricamento diagnostica device</td></tr>';
             }
         }
 
@@ -598,9 +778,9 @@
             const logEntry = document.createElement('div');
             logEntry.className = `log-entry log-${type}`;
             logEntry.innerHTML = `<span class="log-timestamp">[${time}]</span> <span class="log-message" style="color: ${messageColor};">${message}</span>`;
-            
+
             logsContainer.prepend(logEntry);
-            
+
             // Keep only last 20 logs
             if (logsContainer.children.length > 20) {
                 logsContainer.removeChild(logsContainer.lastChild);
@@ -654,16 +834,16 @@
         function initDashboard() {
             document.getElementById('smallLogs').innerHTML = '';
             addSystemLog('System Administration Shell initialized.', 'auth');
-            
+
             loadBackups();
             loadEmployees();
             loadDeviceDiagnostics();
             updateSystemStats();
-            
+
             // Start uptime ticker
             const startStr = localStorage.getItem('serverStartTime') || new Date().toISOString();
-            if(!localStorage.getItem('serverStartTime')) localStorage.setItem('serverStartTime', startStr);
-            
+            if (!localStorage.getItem('serverStartTime')) localStorage.setItem('serverStartTime', startStr);
+
             setInterval(() => {
                 const start = new Date(startStr);
                 const now = new Date();
@@ -684,6 +864,7 @@
                 initDashboard();
             } else if (loginScreen) {
                 if (headerActions) headerActions.hidden = true;
+                if (sysHamburgerBtn) sysHamburgerBtn.hidden = true;
                 loginScreen.hidden = false;
                 loginScreen.classList.add('active-screen');
                 if (dashboardScreen) {
@@ -691,6 +872,24 @@
                     dashboardScreen.classList.remove('active-screen');
                 }
             }
+
+            syncSystemMenuLayout();
+
+            window.addEventListener('resize', syncSystemMenuLayout);
+
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    closeSystemMenu();
+                }
+            });
+
+            document.addEventListener('click', (event) => {
+                if (!isSystemMenuMode()) return;
+                if (!dashboardScreen || !dashboardScreen.classList.contains('sidebar-open')) return;
+                if (sysHamburgerBtn && sysHamburgerBtn.contains(event.target)) return;
+                if (sysSidebar && sysSidebar.contains(event.target)) return;
+                closeSystemMenu();
+            });
         });
 
         async function loadBackups() {
@@ -698,15 +897,15 @@
                 const res = await fetch('/api/admin/backups');
                 if (!res.ok) return;
                 const backups = await res.json();
-                
+
                 const list = document.getElementById('backupList');
                 const wait = document.getElementById('backupWait');
-                
+
                 if (backups.length === 0) {
                     wait.textContent = "Nessun backup trovato.";
                     return;
                 }
-                
+
                 const formatSize = (bytes) => {
                     if (bytes < 1024) return bytes + ' B';
                     if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
@@ -715,7 +914,7 @@
 
                 const formatDate = (iso) => {
                     const d = new Date(iso);
-                    return d.toLocaleDateString('it-IT') + ' ' + d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'});
+                    return d.toLocaleDateString('it-IT') + ' ' + d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
                 };
 
                 wait.style.display = 'none';
@@ -725,13 +924,19 @@
                             <span class="backup-name">${b.filename}</span>
                             <span class="backup-meta">${formatDate(b.created_at)} • ${formatSize(b.size)}</span>
                         </div>
-                        <button class="btn-download" onclick="downloadBackup('${b.filename}')">Download</button>
+                        <button class="btn-download btn-download-icon" onclick="downloadBackup('${b.filename}')" aria-label="Scarica backup ${b.filename}" title="Scarica backup">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                        </button>
                     </li>
                 `).join('');
-                
+
                 // Update first card with total size
                 if (backups[0]) document.getElementById('dbSize').textContent = formatSize(backups[0].size);
-                
+
             } catch (e) {
                 console.error(e);
             }
@@ -753,11 +958,11 @@
                         if (res.ok) {
                             showToast("Backup completato con successo!", "success");
                             loadBackups();
-                        } else { 
-                            showToast("Errore durante la creazione del backup.", "error"); 
+                        } else {
+                            showToast("Errore durante la creazione del backup.", "error");
                         }
-                    } catch (e) { 
-                        showToast("Errore di connessione al server.", "error"); 
+                    } catch (e) {
+                        showToast("Errore di connessione al server.", "error");
                     }
                 }
             );
@@ -786,13 +991,13 @@
                     currentPage = 1;
                     renderEmployees();
                 }
-            } catch(e) { console.error(e); }
+            } catch (e) { console.error(e); }
         }
 
         function renderEmployees() {
             const body = document.getElementById('adminListBody');
             const totalPages = Math.ceil(filteredEmployees.length / pageSize) || 1;
-            
+
             if (currentPage > totalPages) currentPage = totalPages;
             if (currentPage < 1) currentPage = 1;
 
@@ -802,10 +1007,10 @@
 
             body.innerHTML = paginatedItems.map(e => `
                 <tr>
-                    <td><code>#${e.id}</code></td>
-                    <td class="admin-name-cell">${e.name}</td>
-                    <td><span class="badge ${e.isAdmin ? 'badge-admin' : 'badge-user'}">${e.isAdmin ? 'ADMIN HR' : 'Utente'}</span></td>
-                    <td>
+                    <td data-label="ID"><code>#${e.id}</code></td>
+                    <td data-label="Nome" class="admin-name-cell">${e.name}</td>
+                    <td data-label="Stato"><span class="badge ${e.isAdmin ? 'badge-admin' : 'badge-user'}">${e.isAdmin ? 'ADMIN HR' : 'Utente'}</span></td>
+                    <td data-label="Azione">
                         <button class="btn-toggle ${e.isAdmin ? 'active' : ''}" onclick="toggleAdmin(${e.id}, '${e.name.replace(/'/g, "\\'")}', ${!e.isAdmin})">
                             ${e.isAdmin ? 'Rendi Utente' : 'Rendi Admin'}
                         </button>
@@ -858,8 +1063,8 @@
                         } else {
                             showToast("Errore durante l'aggiornamento dei privilegi.", "error");
                         }
-                    } catch(e) { 
-                        showToast("Errore di connessione.", "error"); 
+                    } catch (e) {
+                        showToast("Errore di connessione.", "error");
                     }
                 }
             );
@@ -907,7 +1112,7 @@
                             err.textContent = "Errore durante l'aggiornamento";
                             err.style.display = 'block';
                         }
-                    } catch(e) {
+                    } catch (e) {
                         showToast("Errore di connessione.", "error");
                     }
                 }
@@ -920,7 +1125,7 @@
             const container = document.getElementById('toastContainer');
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
-            
+
             let iconSvg = '';
             if (type === 'success') {
                 iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
@@ -934,10 +1139,10 @@
                 <div class="toast-icon">${iconSvg}</div>
                 <div class="toast-message">${message}</div>
             `;
-            
+
             container.appendChild(toast);
             setTimeout(() => toast.classList.add('show'), 10);
-            
+
             setTimeout(() => {
                 toast.classList.remove('show');
                 setTimeout(() => toast.remove(), 400);
@@ -947,11 +1152,11 @@
         function showCustomConfirm(message, title, btnText, btnColor, onConfirm) {
             document.getElementById('confirmModalTitle').textContent = title || "Conferma";
             document.getElementById('confirmModalBody').innerHTML = message;
-            
+
             const btn = document.getElementById('confirmModalBtn');
             btn.textContent = btnText || "Conferma";
             btn.style.background = btnColor || "var(--primary)";
-            
+
             pendingAction = onConfirm;
             document.getElementById('confirmModal').classList.add('active');
         }
@@ -974,5 +1179,5 @@
         }
     </script>
 </body>
-</html>
 
+</html>
