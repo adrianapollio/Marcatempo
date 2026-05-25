@@ -186,8 +186,7 @@
 
             <div class="top-actions" id="topActions" style="display:flex; align-items:center;">
 
-                <button class="btn-icon-only" onclick="openManualClockModal()" title="Aggiungi Marcatura Manuale"
-                    style="font-size:14px; padding: 8px 12px; font-weight:500; display:flex; gap:6px;">
+                <button class="btn-icon-only" onclick="openManualClockModal()" title="Aggiungi Marcatura Manuale">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="10"></circle>
@@ -196,8 +195,7 @@
                     Aggiungi Marcatura
                 </button>
                 <button id="manualStaffSyncBtn" class="btn-icon-only" onclick="triggerManualSync()"
-                    title="Avvia sincronizzazione manuale solo staff"
-                    style="font-size:14px; padding: 8px 12px; font-weight:500; display:flex; gap:6px;">
+                    title="Avvia sincronizzazione manuale solo staff">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="23 4 23 10 17 10"></polyline>
@@ -207,8 +205,18 @@
                     </svg>
                     Sync Staff
                 </button>
-                <button class="btn-icon-only" onclick="openCustomHolidaysModal()" title="Gestisci Chiusure Aziendali"
-                    style="font-size:14px; padding: 8px 12px; font-weight:500; display:flex; gap:6px;">
+                <button id="manualAttendanceSyncBtn" class="btn-icon-only" onclick="triggerManualAttendanceSync()"
+                    title="Avvia sincronizzazione manuale delle nuove timbrature su tutti i device attivi">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <polyline points="1 20 1 14 7 14"></polyline>
+                        <path d="M3.51 9a9 9 0 0 1 14.13-3.36L23 10"></path>
+                        <path d="M20.49 15a9 9 0 0 1-14.13 3.36L1 14"></path>
+                    </svg>
+                    Sync Timbr.
+                </button>
+                <button class="btn-icon-only" onclick="openCustomHolidaysModal()" title="Gestisci Chiusure Aziendali">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round">
                         <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -224,8 +232,7 @@
                     </svg>
                     Gestisci Festività 
                 </button>
-                <button class="btn-icon-only" onclick="downloadCSVReport()" title="Scarica Report in CSV"
-                    style="font-size:14px; padding: 8px 12px; font-weight:500; display:flex; gap:6px;">
+                <button class="btn-icon-only" onclick="downloadCSVReport()" title="Scarica Report in CSV">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -236,8 +243,7 @@
                     </svg>
                     Stampa CSV
                 </button>
-                <button class="btn-icon-only" onclick="downloadPDFReport()" title="Scarica Report in PDF"
-                    style="font-size:14px; padding: 8px 12px; font-weight:500; display:flex; gap:6px;">
+                <button class="btn-icon-only" onclick="downloadPDFReport()" title="Scarica Report in PDF">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -246,8 +252,7 @@
                     </svg>
                     Stampa PDF
                 </button>
-                <button class="btn-icon-only" onclick="window.location.href='/'" title="Torna al Portale Dipendenti"
-                    style="font-size:14px; padding: 8px 12px; font-weight:500; display:flex; gap:6px;">
+                <button class="btn-icon-only" onclick="window.location.href='/'" title="Torna al Portale Dipendenti">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round">
                         <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
@@ -1178,6 +1183,7 @@
         }
 
         let isManualSyncRunning = false;
+        let manualSyncRequestedScope = 'staff';
         let manualSyncPollTimer = null;
 
         function setManualStaffSyncButtonState(isRunning) {
@@ -1214,6 +1220,40 @@
                 `;
         }
 
+        function setManualAttendanceSyncButtonState(isRunning) {
+            const attendanceBtn = document.getElementById('manualAttendanceSyncBtn');
+            if (!attendanceBtn) return;
+
+            attendanceBtn.disabled = isRunning;
+            attendanceBtn.style.opacity = isRunning ? "0.7" : "1";
+            attendanceBtn.style.cursor = isRunning ? "not-allowed" : "pointer";
+
+            attendanceBtn.innerHTML = isRunning
+                ? `
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <g>
+                            <animateTransform attributeName="transform" attributeType="XML" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"></animateTransform>
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <polyline points="1 20 1 14 7 14"></polyline>
+                            <path d="M3.51 9a9 9 0 0 1 14.13-3.36L23 10"></path>
+                            <path d="M20.49 15a9 9 0 0 1-14.13 3.36L1 14"></path>
+                        </g>
+                    </svg>
+                    Sync in corso...
+                `
+                : `
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <polyline points="1 20 1 14 7 14"></polyline>
+                        <path d="M3.51 9a9 9 0 0 1 14.13-3.36L23 10"></path>
+                        <path d="M20.49 15a9 9 0 0 1-14.13 3.36L1 14"></path>
+                    </svg>
+                    Sync Timbr.
+                `;
+        }
+
         function stopManualSyncPolling() {
             if (manualSyncPollTimer) {
                 clearInterval(manualSyncPollTimer);
@@ -1235,6 +1275,7 @@
 
                 const data = await res.json();
                 const running = !!(data && data.running);
+                const scope = (data && data.scope) ? String(data.scope) : '';
                 const isStaffScope = !data || !data.scope || data.scope === 'staff';
                 if (!isStaffScope && running) {
                     return;
@@ -1251,9 +1292,12 @@
                 if (isManualSyncRunning) {
                     isManualSyncRunning = false;
                     setManualStaffSyncButtonState(false);
+                    setManualAttendanceSyncButtonState(false);
                     stopManualSyncPolling();
                     if (showCompletionToast) {
-                        showToast("Sync staff completata", "success");
+                        const resolvedScope = scope || manualSyncRequestedScope;
+                        const doneMessage = resolvedScope === 'attendance' ? "Sync nuove timbrature completata" : "Sync staff completata";
+                        showToast(doneMessage, "success");
                     }
                     await populateEmployees();
                     loadAdminAttendances();
@@ -1281,8 +1325,11 @@
                 "Avvia Sync Staff",
                 "var(--primary)",
                 async () => {
+                    stopManualSyncPolling();
                     isManualSyncRunning = true;
+                    manualSyncRequestedScope = 'staff';
                     setManualStaffSyncButtonState(true);
+                    setManualAttendanceSyncButtonState(true);
 
                     try {
                         const res = await fetch('/api/admin/sync-now?scope=staff', {
@@ -1299,11 +1346,13 @@
                             data = null;
                         }
 
-                        if (!res.ok) {
+                        if (!res.ok || !data || data.success === false) {
                             const errMessage = data && data.message ? data.message : "Errore durante la sincronizzazione manuale";
                             showToast(errMessage, "error");
                             isManualSyncRunning = false;
                             setManualStaffSyncButtonState(false);
+                            setManualAttendanceSyncButtonState(false);
+                            stopManualSyncPolling();
                             return;
                         }
 
@@ -1319,6 +1368,68 @@
                         showToast("Errore di connessione durante la sincronizzazione", "error");
                         isManualSyncRunning = false;
                         setManualStaffSyncButtonState(false);
+                        setManualAttendanceSyncButtonState(false);
+                        stopManualSyncPolling();
+                    }
+                }
+            );
+        }
+
+        function triggerManualAttendanceSync() {
+            if (isManualSyncRunning) {
+                return;
+            }
+
+            showCustomConfirm(
+                "Vuoi avviare ora la sincronizzazione manuale delle nuove timbrature su tutti i device attivi?",
+                "Sincronizzazione Timbrature",
+                "Avvia Sync Timbrature",
+                "var(--primary)",
+                async () => {
+                    stopManualSyncPolling();
+                    isManualSyncRunning = true;
+                    manualSyncRequestedScope = 'attendance';
+                    setManualStaffSyncButtonState(true);
+                    setManualAttendanceSyncButtonState(true);
+
+                    try {
+                        const res = await fetch('/api/admin/sync-now?scope=attendance&attendance_mode=new', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+
+                        if (res.status === 401) { logout(); return; }
+
+                        let data = null;
+                        try {
+                            data = await res.json();
+                        } catch (parseErr) {
+                            data = null;
+                        }
+
+                        if (!res.ok || !data || data.success === false) {
+                            const errMessage = data && data.message ? data.message : "Errore durante la sincronizzazione manuale";
+                            showToast(errMessage, "error");
+                            isManualSyncRunning = false;
+                            setManualStaffSyncButtonState(false);
+                            setManualAttendanceSyncButtonState(false);
+                            stopManualSyncPolling();
+                            return;
+                        }
+
+                        if (data && data.message) {
+                            showToast(data.message, data.success ? "success" : "info");
+                        } else {
+                            showToast("Sincronizzazione nuove timbrature avviata", "info");
+                        }
+                        startManualSyncPolling();
+                        await pollManualSyncStatus(true);
+                    } catch (err) {
+                        console.error("Manual Sync Error:", err);
+                        showToast("Errore di connessione durante la sincronizzazione", "error");
+                        isManualSyncRunning = false;
+                        setManualStaffSyncButtonState(false);
+                        setManualAttendanceSyncButtonState(false);
                         stopManualSyncPolling();
                     }
                 }

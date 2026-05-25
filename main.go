@@ -56,20 +56,32 @@ type SystemDeviceDiagnosticsResponse struct {
 	ConfiguredDevicesCount  int                       `json:"configured_devices_count"`
 	ActiveDevicesCount      int                       `json:"active_devices_count"`
 	SyncEnabled             bool                      `json:"sync_enabled"`
+	HealthSummary           SystemDeviceHealthSummary `json:"health_summary"`
 	Devices                 []SystemDeviceDiagnostics `json:"devices"`
+	RecentHealthEvents      []SystemDeviceHealthEvent `json:"recent_health_events"`
 	RecentRaw               []DeviceRawDiagnostic     `json:"recent_raw"`
 	RecentLegacyUnassigned  []DeviceRawDiagnostic     `json:"recent_legacy_unassigned"`
 }
 
 type SystemDeviceDiagnostics struct {
-	DeviceID             int        `json:"device_id"`
-	IP                   string     `json:"ip"`
-	Configured           bool       `json:"configured"`
-	Active               bool       `json:"active"`
-	RawCount             int        `json:"raw_count"`
-	FinalCount           int        `json:"final_count"`
-	LatestRawTimestamp   *time.Time `json:"latest_raw_timestamp,omitempty"`
-	LatestFinalTimestamp *time.Time `json:"latest_final_timestamp,omitempty"`
+	DeviceID              int        `json:"device_id"`
+	IP                    string     `json:"ip"`
+	Configured            bool       `json:"configured"`
+	Active                bool       `json:"active"`
+	RawCount              int        `json:"raw_count"`
+	FinalCount            int        `json:"final_count"`
+	LatestRawTimestamp    *time.Time `json:"latest_raw_timestamp,omitempty"`
+	LatestFinalTimestamp  *time.Time `json:"latest_final_timestamp,omitempty"`
+	ReachabilityStatus    string     `json:"reachability_status"`
+	ReachabilityKnown     bool       `json:"reachability_known"`
+	Reachable             bool       `json:"reachable"`
+	LastCheckAt           *time.Time `json:"last_check_at,omitempty"`
+	LastReachableAt       *time.Time `json:"last_reachable_at,omitempty"`
+	LastUnreachableAt     *time.Time `json:"last_unreachable_at,omitempty"`
+	LastStateChangeAt     *time.Time `json:"last_state_change_at,omitempty"`
+	ConsecutiveFailures   int        `json:"consecutive_failures"`
+	LastCheckDurationMs   int64      `json:"last_check_duration_ms"`
+	LastCheckErrorMessage string     `json:"last_check_error_message,omitempty"`
 }
 
 // Device info for synchronization
@@ -231,6 +243,20 @@ func activeAnvizDevices() []AnvizDevice {
 	return result
 }
 
+func parseAttendanceModeOverride(raw string) (*byte, error) {
+	trimmed := strings.ToLower(strings.TrimSpace(raw))
+	if trimmed == "" {
+		return nil, nil
+	}
+
+	mode := parseAttendanceMode(trimmed, 0xFF)
+	if mode == 0xFF {
+		return nil, fmt.Errorf("Parametro attendance_mode non valido. Usa: all oppure new")
+	}
+
+	return &mode, nil
+}
+
 // handleSyncNow triggers a manual synchronization with all configured Anviz devices
 func handleSyncNow(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -243,6 +269,11 @@ func handleSyncNow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	scopeRaw := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("scope")))
+	attendanceModeOverride, err := parseAttendanceModeOverride(r.URL.Query().Get("attendance_mode"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	scopeLabel := "full"
 	syncStaff := shouldSyncStaff(true)
 	syncAttendance := true
@@ -263,7 +294,12 @@ func handleSyncNow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Manuale: Richiesta sincronizzazione Anviz avviata dall'admin scope=%s", scopeLabel)
+	modeLabel := "config-default"
+	if attendanceModeOverride != nil {
+		modeLabel = attendanceModeLabel(*attendanceModeOverride)
+	}
+
+	log.Printf("Manuale: Richiesta sincronizzazione Anviz avviata dall'admin scope=%s attendance_mode=%s", scopeLabel, modeLabel)
 
 	devices := activeAnvizDevices()
 	if len(devices) == 0 {
@@ -294,7 +330,7 @@ func handleSyncNow(w http.ResponseWriter, r *http.Request) {
 	manualSyncStarted = time.Now()
 	manualSyncStateMu.Unlock()
 
-	go func(devices []AnvizDevice, scope string, doStaff bool, doAttendance bool) {
+	go func(devices []AnvizDevice, scope string, doStaff bool, doAttendance bool, attendanceModeOverride *byte) {
 		defer func() {
 			manualSyncStateMu.Lock()
 			manualSyncRunning = false
@@ -311,7 +347,7 @@ func handleSyncNow(w http.ResponseWriter, r *http.Request) {
 			wg.Add(1)
 			go func(ip string, id uint32) {
 				defer wg.Done()
-				stats, err := syncFromDeviceWithOptions(ip, id, true, doStaff, doAttendance)
+				stats, err := syncFromDeviceWithOptionsAndMode(ip, id, true, doStaff, doAttendance, attendanceModeOverride)
 				mu.Lock()
 				defer mu.Unlock()
 				if err != nil {
@@ -340,12 +376,16 @@ func handleSyncNow(w http.ResponseWriter, r *http.Request) {
 		}
 
 		log.Printf("Manuale: Sync completata scope=%s successi=%d/%d dettagli=%q", scope, successCount, len(devices), summary)
-	}(devices, scopeLabel, syncStaff, syncAttendance)
+	}(devices, scopeLabel, syncStaff, syncAttendance, attendanceModeOverride)
 
 	w.Header().Set("Content-Type", "application/json")
+	modeSuffix := ""
+	if syncAttendance && attendanceModeOverride != nil {
+		modeSuffix = fmt.Sprintf(", modalita %s", attendanceModeLabel(*attendanceModeOverride))
+	}
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":  "accepted",
-		"message": fmt.Sprintf("Sincronizzazione manuale (%s) avviata in background. Controlla i log per il dettaglio completo.", scopeLabel),
+		"message": fmt.Sprintf("Sincronizzazione manuale (%s%s) avviata in background. Controlla i log per il dettaglio completo.", scopeLabel, modeSuffix),
 		"scope":   scopeLabel,
 		"results": map[string]string{},
 		"success": true,
@@ -712,6 +752,8 @@ func handleSystemDeviceDiagnostics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	healthSummary, healthByDevice, healthEvents := getDeviceHealthSummaryAndEvents()
+
 	byDevice := make(map[int]SystemDeviceDiagnostics)
 	activeDeviceSet := make(map[int]struct{})
 	for _, device := range activeAnvizDevices() {
@@ -738,8 +780,34 @@ func handleSystemDeviceDiagnostics(w http.ResponseWriter, r *http.Request) {
 		byDevice[aggregate.DeviceID] = entry
 	}
 
+	for deviceID, health := range healthByDevice {
+		entry := byDevice[int(deviceID)]
+		entry.DeviceID = int(deviceID)
+		if entry.IP == "" {
+			entry.IP = health.IP
+		}
+		if !entry.Configured {
+			entry.Configured = health.Configured
+		}
+		entry.Active = health.Active
+		entry.ReachabilityStatus = health.status()
+		entry.ReachabilityKnown = health.ReachabilityKnown
+		entry.Reachable = health.Reachable
+		entry.LastCheckAt = cloneTimePointer(health.LastCheckAt)
+		entry.LastReachableAt = cloneTimePointer(health.LastReachableAt)
+		entry.LastUnreachableAt = cloneTimePointer(health.LastUnreachableAt)
+		entry.LastStateChangeAt = cloneTimePointer(health.LastChangeAt)
+		entry.ConsecutiveFailures = health.ConsecutiveFailures
+		entry.LastCheckDurationMs = health.LastCheckDurationMs
+		entry.LastCheckErrorMessage = health.LastCheckError
+		byDevice[int(deviceID)] = entry
+	}
+
 	responseDevices := make([]SystemDeviceDiagnostics, 0, len(byDevice))
 	for _, entry := range byDevice {
+		if entry.ReachabilityStatus == "" {
+			entry.ReachabilityStatus = "unknown"
+		}
 		responseDevices = append(responseDevices, entry)
 	}
 
@@ -753,9 +821,37 @@ func handleSystemDeviceDiagnostics(w http.ResponseWriter, r *http.Request) {
 		ConfiguredDevicesCount:  len(configuredAnvizDevices()),
 		ActiveDevicesCount:      len(activeAnvizDevices()),
 		SyncEnabled:             anvizSyncEnabled(),
+		HealthSummary:           healthSummary,
 		Devices:                 responseDevices,
+		RecentHealthEvents:      healthEvents,
 		RecentRaw:               recentRaw,
 		RecentLegacyUnassigned:  recentLegacyUnassigned,
+	})
+}
+
+func handleSystemDeviceHealthCheck(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Metodo non consentito", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if _, ok := requireSystemSession(w, r); !ok {
+		return
+	}
+
+	if err := triggerDeviceHealthSweep(); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Health check device completato",
 	})
 }
 
@@ -1296,6 +1392,7 @@ func main() {
 
 	// 1b. Carica la configurazione device della sede dal runtime locale
 	initAnvizDeviceConfig()
+	initDeviceHealthMonitor(configuredAnvizDevices(), activeAnvizDevices())
 
 	// 2. Avvia il sistema di backup periodico del database
 	StartBackupScheduler()
@@ -1350,6 +1447,7 @@ func main() {
 	http.HandleFunc("/api/system/toggle-admin", handleSystemToggleAdmin)
 	http.HandleFunc("/api/system/change-password", handleSystemChangePassword)
 	http.HandleFunc("/api/system/device-diagnostics", handleSystemDeviceDiagnostics)
+	http.HandleFunc("/api/system/device-healthcheck", handleSystemDeviceHealthCheck)
 	http.HandleFunc("/api/system/bootstrap-status", handleSystemBootstrapStatus)
 
 	// Servire dashboard admin

@@ -338,6 +338,14 @@ func initialAttendanceMode(deviceID uint32, manual bool) byte {
 	return parseAttendanceMode(os.Getenv("ANVIZ_AUTO_ATTENDANCE_MODE"), 0x02)
 }
 
+func resolveAttendanceMode(deviceID uint32, manual bool, override *byte) byte {
+	if override != nil {
+		return *override
+	}
+
+	return initialAttendanceMode(deviceID, manual)
+}
+
 func formatActionHistogram(actionCounts map[string]int) string {
 	if len(actionCounts) == 0 {
 		return "none"
@@ -840,14 +848,14 @@ func syncFromDeviceLegacy(ip string, deviceID uint32, manual bool) (SyncStats, e
 	return stats, nil
 }
 
-func syncFromDeviceWithOptions(ip string, deviceID uint32, manual bool, syncStaff bool, syncAttendance bool) (SyncStats, error) {
+func syncFromDeviceWithOptionsAndMode(ip string, deviceID uint32, manual bool, syncStaff bool, syncAttendance bool, attendanceModeOverride *byte) (SyncStats, error) {
 	stats := SyncStats{}
 	cfg := syncRunConfig{
 		RunID:             fmt.Sprintf("%d", time.Now().UnixNano()),
 		IP:                ip,
 		DeviceID:          deviceID,
 		Manual:            manual,
-		AttendanceMode:    initialAttendanceMode(deviceID, manual),
+		AttendanceMode:    resolveAttendanceMode(deviceID, manual, attendanceModeOverride),
 		AttendanceLimit:   anvizAttendanceChunkLimit(),
 		SyncStaff:         syncStaff,
 		SyncAttendance:    syncAttendance,
@@ -1018,6 +1026,10 @@ func syncFromDeviceWithOptions(ip string, deviceID uint32, manual bool, syncStaf
 	}
 
 	return stats, nil
+}
+
+func syncFromDeviceWithOptions(ip string, deviceID uint32, manual bool, syncStaff bool, syncAttendance bool) (SyncStats, error) {
+	return syncFromDeviceWithOptionsAndMode(ip, deviceID, manual, syncStaff, syncAttendance, nil)
 }
 
 func syncFromDevice(ip string, deviceID uint32, manual bool) (SyncStats, error) {

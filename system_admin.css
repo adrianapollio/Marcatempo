@@ -237,22 +237,265 @@ body {
     vertical-align: middle;
 }
 
+#overviewReachabilityTable th,
+#overviewReachabilityTable td,
+#overviewEventsTable th,
+#overviewEventsTable td {
+    padding: 10px 8px;
+    font-size: 0.8rem;
+    vertical-align: middle;
+}
+
+#overviewReachabilityTable th,
+#overviewEventsTable th {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+#overviewEventsTable {
+    table-layout: fixed;
+}
+
+#panel-overview .table-container-flat {
+    padding-inline: 12px;
+}
+
+#overviewReachabilityTable {
+    table-layout: fixed;
+}
+
+#overviewReachabilityTable th,
+#overviewReachabilityTable td {
+    padding: 8px 6px;
+    font-size: 0.76rem;
+    line-height: 1.2;
+}
+
+#overviewReachabilityTable th {
+    font-size: 0.66rem;
+}
+
+#overviewReachabilityTable th:nth-child(1),
+#overviewReachabilityTable td:nth-child(1) {
+    width: 11%;
+}
+
+#overviewReachabilityTable th:nth-child(2),
+#overviewReachabilityTable td:nth-child(2) {
+    width: 18%;
+}
+
+#overviewReachabilityTable th:nth-child(3),
+#overviewReachabilityTable td:nth-child(3) {
+    width: 13%;
+}
+
+#overviewReachabilityTable th:nth-child(4),
+#overviewReachabilityTable td:nth-child(4) {
+    width: 24%;
+}
+
+#overviewReachabilityTable th:nth-child(5),
+#overviewReachabilityTable td:nth-child(5) {
+    width: 9%;
+}
+
+#overviewReachabilityTable th:nth-child(6),
+#overviewReachabilityTable td:nth-child(6) {
+    width: 11%;
+}
+
+#overviewReachabilityTable th:nth-child(7),
+#overviewReachabilityTable td:nth-child(7) {
+    width: 15%;
+}
+
+#overviewReachabilityTable th:nth-child(1),
+#overviewReachabilityTable td:nth-child(1),
+#overviewReachabilityTable th:nth-child(2),
+#overviewReachabilityTable td:nth-child(2) {
+    text-align: center;
+}
+
+#overviewReachabilityTable td:nth-child(2),
+#overviewReachabilityTable td:nth-child(7) {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#overviewReachabilityTable td:nth-child(5),
+#overviewReachabilityTable td:nth-child(6),
+#overviewReachabilityTable th:nth-child(5),
+#overviewReachabilityTable th:nth-child(6),
+#overviewEventsTable td:nth-child(5),
+#overviewEventsTable th:nth-child(5) {
+    text-align: center;
+}
+
+#overviewReachabilityTable th:nth-child(3),
+#overviewReachabilityTable td:nth-child(3) {
+    text-align: left;
+    padding-left: 10px;
+}
+
+#overviewReachabilityTable td:nth-child(3) {
+    padding-left: 8px;
+}
+
+#overviewReachabilityTable td:nth-child(3) .health-badge {
+    transform: translateX(-2px);
+}
+
+#overviewReachabilityTable th:nth-child(4),
+#overviewReachabilityTable td:nth-child(4) {
+    padding-left: 10px;
+}
+
+#overviewEventsTable th,
+#overviewEventsTable td {
+    padding: 8px 8px;
+    line-height: 1.24;
+}
+
+#overviewEventsTable th:nth-child(1),
+#overviewEventsTable td:nth-child(1) {
+    width: 21%;
+}
+
+#overviewEventsTable th:nth-child(2),
+#overviewEventsTable td:nth-child(2) {
+    width: 17%;
+}
+
+#overviewEventsTable th:nth-child(3),
+#overviewEventsTable td:nth-child(3) {
+    width: 29%;
+}
+
+#overviewEventsTable th:nth-child(4),
+#overviewEventsTable td:nth-child(4) {
+    width: 23%;
+}
+
+#overviewEventsTable th:nth-child(5),
+#overviewEventsTable td:nth-child(5) {
+    width: 10%;
+}
+
+#overviewEventsTable td:nth-child(1),
+#overviewEventsTable td:nth-child(2),
+#overviewEventsTable td:nth-child(4) {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#overviewEventsTable td:nth-child(2),
+#overviewEventsTable td:nth-child(5),
+#overviewEventsTable th:nth-child(2),
+#overviewEventsTable th:nth-child(5) {
+    text-align: center;
+}
+
+#overviewEventsTable th:nth-child(3),
+#overviewEventsTable td:nth-child(3) {
+    padding-left: 10px;
+}
+
 #deviceDiagnosticsTable th {
     font-size: 0.7rem;
 }
 
+#deviceDiagnosticsTable {
+    table-layout: fixed;
+}
+
+#deviceDiagnosticsTable th:nth-child(1),
+#deviceDiagnosticsTable td:nth-child(1) {
+    width: 8%;
+}
+
+#deviceDiagnosticsTable th:nth-child(2),
+#deviceDiagnosticsTable td:nth-child(2) {
+    width: 7%;
+}
+
+#deviceDiagnosticsTable th:nth-child(3),
+#deviceDiagnosticsTable td:nth-child(3) {
+    width: 29%;
+}
+
+#deviceDiagnosticsTable th:nth-child(4),
+#deviceDiagnosticsTable td:nth-child(4) {
+    width: 12%;
+}
+
+#deviceDiagnosticsTable th:nth-child(5),
+#deviceDiagnosticsTable td:nth-child(5) {
+    width: 19%;
+}
+
+#deviceDiagnosticsTable th:nth-child(6),
+#deviceDiagnosticsTable td:nth-child(6) {
+    width: 13%;
+}
+
+#deviceDiagnosticsTable th:nth-child(7),
+#deviceDiagnosticsTable td:nth-child(7) {
+    width: 12%;
+}
+
+#deviceDiagnosticsTable th:nth-child(8),
+#deviceDiagnosticsTable td:nth-child(8) {
+    display: none;
+    width: 0;
+    max-width: 0;
+}
+
 #deviceDiagnosticsTable th:nth-child(6),
 #deviceDiagnosticsTable td:nth-child(6),
-#deviceDiagnosticsTable th:nth-child(7),
-#deviceDiagnosticsTable td:nth-child(7),
 #deviceDiagnosticsTable th:nth-child(8),
 #deviceDiagnosticsTable td:nth-child(8) {
     text-align: center;
 }
 
-#deviceDiagnosticsTable td:nth-child(6) .badge,
-#deviceDiagnosticsTable td:nth-child(7) .badge {
+#deviceDiagnosticsTable th:nth-child(7),
+#deviceDiagnosticsTable td:nth-child(7) {
+    text-align: left;
+    padding-right: 14px;
+}
+
+#deviceDiagnosticsTable td:nth-child(3),
+#deviceDiagnosticsTable td:nth-child(7) {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#deviceDiagnosticsTable td:nth-child(6) .badge {
     margin-inline: auto;
+}
+
+#deviceDiagnosticsTable td:nth-child(7) .badge {
+    margin-inline: 0;
+}
+
+@media (min-width: 821px) {
+    #panel-devices .table-container-flat {
+        padding: 0 14px;
+    }
+
+    #panel-devices #deviceDiagnosticsTable th,
+    #panel-devices #deviceDiagnosticsTable td {
+        text-align: center;
+    }
+
+    #panel-devices #deviceDiagnosticsTable td:nth-child(6) .badge,
+    #panel-devices #deviceDiagnosticsTable td:nth-child(7) .badge {
+        margin-inline: auto;
+    }
 }
 
 .diag-row-detail-btn {
@@ -281,6 +524,11 @@ body {
     margin-bottom: 24px;
 }
 
+#panel-overview .card-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+}
+
 .stat-card {
     background: white;
     border: 1px solid var(--border);
@@ -304,6 +552,11 @@ body {
     font-size: 1.8rem;
     font-weight: 700;
     color: var(--text-dark);
+}
+
+#panel-overview .stat-card .value {
+    font-size: 1.6rem;
+    line-height: 1.15;
 }
 
 .stat-card .trend {
@@ -593,6 +846,34 @@ select:focus {
     color: #475569;
 }
 
+.health-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 72px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.health-online {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.health-offline {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.health-unknown {
+    background: #f1f5f9;
+    color: #334155;
+}
+
 /* Login Card */
 #loginScreen .content-inner {
     width: 100%;
@@ -868,6 +1149,12 @@ select:focus {
     font-size: 0.75rem;
     color: #64748b;
     line-height: 1.8;
+    max-height: 118px;
+    overflow: auto;
+}
+
+.overview-logs-card {
+    padding: 12px 20px;
 }
 
 .btn-system-compact {
@@ -1363,6 +1650,54 @@ select:focus {
     #loginScreen.active-screen {
         padding: 16px;
     }
+
+}
+
+@media (max-width: 900px) {
+    #overviewReachabilityTable th:nth-child(7),
+    #overviewReachabilityTable td:nth-child(7) {
+        display: none;
+    }
+
+    #overviewEventsTable th:nth-child(4),
+    #overviewEventsTable td:nth-child(4) {
+        width: 25%;
+    }
+
+    #overviewEventsTable th:nth-child(5),
+    #overviewEventsTable td:nth-child(5) {
+        width: 12%;
+    }
+
+    #overviewReachabilityTable th:nth-child(1),
+    #overviewReachabilityTable td:nth-child(1) {
+        width: 12%;
+    }
+
+    #overviewReachabilityTable th:nth-child(2),
+    #overviewReachabilityTable td:nth-child(2) {
+        width: 20%;
+    }
+
+    #overviewReachabilityTable th:nth-child(3),
+    #overviewReachabilityTable td:nth-child(3) {
+        width: 16%;
+    }
+
+    #overviewReachabilityTable th:nth-child(4),
+    #overviewReachabilityTable td:nth-child(4) {
+        width: 30%;
+    }
+
+    #overviewReachabilityTable th:nth-child(5),
+    #overviewReachabilityTable td:nth-child(5) {
+        width: 10%;
+    }
+
+    #overviewReachabilityTable th:nth-child(6),
+    #overviewReachabilityTable td:nth-child(6) {
+        width: 12%;
+    }
 }
 
 @media (max-width: 700px) {
@@ -1389,9 +1724,102 @@ select:focus {
     .card-grid {
         grid-template-columns: 1fr;
     }
+
+    #panel-overview .card-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    #panel-overview .stat-card {
+        padding: 12px;
+        gap: 8px;
+    }
+
+    #panel-overview .stat-card .label {
+        font-size: 0.7rem;
+    }
+
+    #panel-overview .stat-card .value {
+        font-size: 1.35rem;
+    }
+
+    #panel-overview .stat-card .trend {
+        font-size: 0.68rem;
+    }
+
+    #overviewReachabilityTable th:nth-child(6),
+    #overviewReachabilityTable td:nth-child(6) {
+        display: none;
+    }
+
+    #panel-overview .table-container-flat {
+        padding-inline: 8px;
+    }
+
+    #overviewReachabilityTable th:nth-child(1),
+    #overviewReachabilityTable td:nth-child(1) {
+        width: 14%;
+    }
+
+    #overviewReachabilityTable th:nth-child(2),
+    #overviewReachabilityTable td:nth-child(2) {
+        width: 24%;
+    }
+
+    #overviewReachabilityTable th:nth-child(3),
+    #overviewReachabilityTable td:nth-child(3) {
+        width: 18%;
+    }
+
+    #overviewReachabilityTable th:nth-child(4),
+    #overviewReachabilityTable td:nth-child(4) {
+        width: 30%;
+    }
+
+    #overviewReachabilityTable th:nth-child(5),
+    #overviewReachabilityTable td:nth-child(5) {
+        width: 14%;
+    }
+
+    #overviewEventsTable th:nth-child(4),
+    #overviewEventsTable td:nth-child(4) {
+        display: none;
+    }
+
+    #overviewEventsTable th:nth-child(1),
+    #overviewEventsTable td:nth-child(1) {
+        width: 24%;
+    }
+
+    #overviewEventsTable th:nth-child(2),
+    #overviewEventsTable td:nth-child(2) {
+        width: 22%;
+    }
+
+    #overviewEventsTable th:nth-child(3),
+    #overviewEventsTable td:nth-child(3) {
+        width: 38%;
+    }
+
+    #overviewEventsTable th:nth-child(5),
+    #overviewEventsTable td:nth-child(5) {
+        width: 16%;
+    }
+
+    .overview-logs-card {
+        padding: 10px 14px;
+    }
+
+    .logs-default {
+        max-height: 96px;
+    }
 }
 
 @media (max-width: 820px) {
+    #deviceDiagnosticsTable {
+        table-layout: fixed;
+    }
+
     #panel-admins #adminTable {
         table-layout: auto;
     }
@@ -1587,6 +2015,7 @@ select:focus {
         padding: 8px 6px;
         font-size: 0.74rem;
         line-height: 1.25;
+        width: auto;
     }
 
     #deviceDiagnosticsTable th:nth-child(1),
@@ -1600,9 +2029,56 @@ select:focus {
 
     #deviceDiagnosticsTable th:nth-child(8),
     #deviceDiagnosticsTable td:nth-child(8) {
-        width: 56px;
+        display: table-cell;
+        width: 6%;
+        min-width: 44px;
         padding-left: 4px;
         padding-right: 8px;
+    }
+
+    #deviceDiagnosticsTable th:nth-child(3),
+    #deviceDiagnosticsTable td:nth-child(3) {
+        width: 34%;
+    }
+
+    #deviceDiagnosticsTable th:nth-child(4),
+    #deviceDiagnosticsTable td:nth-child(4) {
+        width: 20%;
+    }
+
+    #deviceDiagnosticsTable th:nth-child(5),
+    #deviceDiagnosticsTable td:nth-child(5) {
+        width: 24%;
+    }
+
+    #deviceDiagnosticsTable th:nth-child(6),
+    #deviceDiagnosticsTable td:nth-child(6) {
+        width: 16%;
+    }
+
+    #deviceDiagnosticsTable th:nth-child(8),
+    #deviceDiagnosticsTable td:nth-child(8) {
+        text-align: center;
+    }
+
+    #deviceDiagnosticsTable td:nth-child(3) {
+        padding-right: 6px;
+    }
+
+    #deviceDiagnosticsTable td:nth-child(4),
+    #deviceDiagnosticsTable td:nth-child(5),
+    #deviceDiagnosticsTable td:nth-child(6) {
+        padding-left: 4px;
+        padding-right: 4px;
+    }
+
+    #deviceDiagnosticsTable td:nth-child(6) {
+        padding-right: 2px;
+    }
+
+    #deviceDiagnosticsTable td:nth-child(8) {
+        padding-left: 2px;
+        padding-right: 4px;
     }
 
     .diagnostic-modal-content {

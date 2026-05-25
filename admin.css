@@ -840,7 +840,9 @@ button:active {
 /* Top Actions */
 .top-actions {
     display: flex;
-    gap: 15px;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: nowrap;
 }
 
 .btn-icon-only {
@@ -860,6 +862,15 @@ button:active {
 
 .btn-icon-only:hover {
     background: rgba(255, 255, 255, 0.15);
+}
+
+.top-actions .btn-icon-only {
+    gap: 6px;
+    padding: 8px 10px;
+    font-size: 13px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    line-height: 1;
 }
 
 .page-size-selector {
@@ -917,6 +928,12 @@ button:active {
 .drawer-footer-item span,
 .btn-logout span {
     line-height: 1;
+}
+
+.top-actions .btn-logout {
+    font-size: 0.78rem;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 /* Responsive nav: use hamburger before labels get cramped */

@@ -177,10 +177,80 @@
                                 <span class="label">Server Uptime</span>
                                 <span class="value" id="serverUptime">Calculated...</span>
                             </div>
+                            <div class="stat-card">
+                                <span class="label">Device Reachability</span>
+                                <span class="value" id="deviceReachabilityValue">-</span>
+                                <span class="trend" id="deviceReachabilityTrend">Monitor non inizializzato</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="label">SNMP Trap</span>
+                                <span class="value" id="snmpTrapValue">-</span>
+                                <span class="trend" id="snmpTrapTrend">Nessun target configurato</span>
+                            </div>
                         </div>
 
-                        <div class="surface-card">
-                            <h4 class="mono-heading">Recent System Logs</h4>
+                        <div class="panel-shell panel-shell-spaced">
+                            <div class="panel-shell-head-row">
+                                <div>
+                                    <div class="panel-heading">Live Device Reachability</div>
+                                    <div id="overviewReachabilityMeta" class="panel-meta">Caricamento stato monitor...</div>
+                                </div>
+                                <div>
+                                    <button class="btn-download btn-rounded" onclick="triggerDeviceMonitoring()">
+                                        Esegui Monitoring Device
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="table-container table-container-flat">
+                                <table id="overviewReachabilityTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Device</th>
+                                            <th>IP</th>
+                                            <th>Stato</th>
+                                            <th>Ultimo Check</th>
+                                            <th>Latenza</th>
+                                            <th>Errori consecutivi</th>
+                                            <th>Ultimo Errore</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="overviewReachabilityBody">
+                                        <tr>
+                                            <td colspan="7" class="table-placeholder">Caricamento stato monitor...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="panel-shell panel-shell-spaced">
+                            <div class="panel-shell-head-row">
+                                <div>
+                                    <div class="panel-heading">Recent Device State Changes</div>
+                                    <div id="overviewEventsMeta" class="panel-meta">Nessun evento recente</div>
+                                </div>
+                            </div>
+                            <div class="table-container table-container-flat">
+                                <table id="overviewEventsTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Timestamp</th>
+                                            <th>Device</th>
+                                            <th>Transizione</th>
+                                            <th>Motivo</th>
+                                            <th>Trap</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="overviewEventsBody">
+                                        <tr>
+                                            <td colspan="5" class="table-placeholder">Nessun evento disponibile</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="surface-card overview-logs-card">
                             <div id="smallLogs" class="logs-default" aria-live="polite"></div>
                         </div>
                     </div>
@@ -612,10 +682,19 @@
             const configuredCount = Number.isFinite(data?.configured_devices_count) ? data.configured_devices_count : 0;
             const activeCount = Number.isFinite(data?.active_devices_count) ? data.active_devices_count : 0;
             const syncEnabled = Boolean(data?.sync_enabled);
+            const health = data?.health_summary || {};
+            const onlineCount = Number.isFinite(health?.online_count) ? health.online_count : 0;
+            const offlineCount = Number.isFinite(health?.offline_count) ? health.offline_count : 0;
+            const unknownCount = Number.isFinite(health?.unknown_count) ? health.unknown_count : 0;
+            const monitorEnabled = Boolean(health?.monitor_enabled);
 
             const configuredCountEl = document.getElementById('configuredDeviceCount');
             const configuredTrendEl = document.getElementById('configuredDevicesTrend');
             const syncStatusEl = document.getElementById('syncStatus');
+            const deviceReachabilityValueEl = document.getElementById('deviceReachabilityValue');
+            const deviceReachabilityTrendEl = document.getElementById('deviceReachabilityTrend');
+            const snmpTrapValueEl = document.getElementById('snmpTrapValue');
+            const snmpTrapTrendEl = document.getElementById('snmpTrapTrend');
 
             if (configuredCountEl) {
                 configuredCountEl.textContent = String(configuredCount);
@@ -642,18 +721,135 @@
                     syncStatusEl.textContent = `Sync attiva (${activeCount})`;
                 }
             }
+
+            if (deviceReachabilityValueEl) {
+                deviceReachabilityValueEl.textContent = `${onlineCount}/${offlineCount}/${unknownCount}`;
+            }
+
+            if (deviceReachabilityTrendEl) {
+                if (!monitorEnabled) {
+                    deviceReachabilityTrendEl.textContent = 'Monitor disabilitato';
+                } else {
+                    const sweepAt = formatDiagnosticDate(health?.last_sweep_at);
+                    deviceReachabilityTrendEl.textContent = `ON:${onlineCount} OFF:${offlineCount} UNK:${unknownCount} | ultimo sweep: ${sweepAt}`;
+                }
+            }
+
+            if (snmpTrapValueEl) {
+                snmpTrapValueEl.textContent = health?.snmp_trap_enabled ? 'Enabled' : 'Disabled';
+            }
+
+            if (snmpTrapTrendEl) {
+                snmpTrapTrendEl.textContent = health?.snmp_trap_enabled
+                    ? `Target ${health?.snmp_trap_target || '-'}`
+                    : 'Trap non attiva';
+            }
         }
 
-        async function loadDeviceDiagnostics() {
+        function normalizeReachabilityStatus(status) {
+            const normalized = String(status || '').toLowerCase();
+            if (normalized === 'online') return 'online';
+            if (normalized === 'offline') return 'offline';
+            return 'unknown';
+        }
+
+        function reachabilityBadge(status) {
+            const normalized = normalizeReachabilityStatus(status);
+            const labels = {
+                online: 'Online',
+                offline: 'Offline',
+                unknown: 'Unknown'
+            };
+            return `<span class="health-badge health-${normalized}">${labels[normalized]}</span>`;
+        }
+
+        function renderOverviewReachability(data) {
+            const meta = document.getElementById('overviewReachabilityMeta');
+            const body = document.getElementById('overviewReachabilityBody');
+            const eventsMeta = document.getElementById('overviewEventsMeta');
+            const eventsBody = document.getElementById('overviewEventsBody');
+            if (!meta || !body || !eventsMeta || !eventsBody) return;
+
+            const health = data?.health_summary || {};
+            const devices = Array.isArray(data?.devices) ? data.devices.slice() : [];
+            const events = Array.isArray(data?.recent_health_events) ? data.recent_health_events.slice(0, 12) : [];
+
+            const intervalSeconds = Number.isFinite(health?.interval_seconds) ? health.interval_seconds : 0;
+            const timeoutSeconds = Number.isFinite(health?.timeout_seconds) ? health.timeout_seconds : 0;
+            const port = Number.isFinite(health?.port) ? health.port : 5010;
+            const automaticMode = health?.automatic_mode === true;
+            const lastSweep = formatDiagnosticDate(health?.last_sweep_at);
+            const lastSweepDurationMs = Number.isFinite(health?.last_sweep_duration_ms) ? health.last_sweep_duration_ms : 0;
+
+            if (!health?.monitor_enabled) {
+                meta.textContent = 'Monitor disabilitato';
+            } else {
+                const modeLabel = automaticMode ? `automatico ogni ${intervalSeconds}s` : 'manuale (on-demand)';
+                meta.textContent = `Check TCP ${port}, ${modeLabel}, timeout ${timeoutSeconds}s | ultimo sweep ${lastSweep} (${lastSweepDurationMs} ms)`;
+            }
+
+            if (devices.length === 0) {
+                body.innerHTML = '<tr><td colspan=\"7\" class=\"table-placeholder\">Nessun device configurato</td></tr>';
+            } else {
+                devices.sort((a, b) => (a.device_id || 0) - (b.device_id || 0));
+                body.innerHTML = devices.map((device) => {
+                    const status = normalizeReachabilityStatus(device.reachability_status);
+                    const lastCheck = formatDiagnosticDate(device.last_check_at);
+                    const latency = Number.isFinite(device.last_check_duration_ms) && device.reachability_known ? `${device.last_check_duration_ms} ms` : '-';
+                    const failures = Number.isFinite(device.consecutive_failures) ? device.consecutive_failures : 0;
+                    const lastError = device.last_check_error_message ? escapeHtml(device.last_check_error_message) : '-';
+                    const activeLabel = device.active ? '' : ' <span class=\"text-secondary-xs\">(non attivo)</span>';
+                    return `
+                        <tr>
+                            <td><code>#${device.device_id || 0}</code>${activeLabel}</td>
+                            <td>${escapeHtml(device.ip || '-')}</td>
+                            <td>${reachabilityBadge(status)}</td>
+                            <td>${lastCheck}</td>
+                            <td>${latency}</td>
+                            <td>${failures}</td>
+                            <td title=\"${lastError}\">${lastError}</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            if (events.length === 0) {
+                eventsMeta.textContent = 'Nessun cambio stato rilevato';
+                eventsBody.innerHTML = '<tr><td colspan=\"5\" class=\"table-placeholder\">Nessun evento recente</td></tr>';
+            } else {
+                eventsMeta.textContent = `Eventi recenti: ${events.length}`;
+                eventsBody.innerHTML = events.map((event) => {
+                    const trapStatus = event.trap_attempted
+                        ? (event.trap_successful ? '<span class=\"health-badge health-online\">Sent</span>' : '<span class=\"health-badge health-offline\">Error</span>')
+                        : '<span class=\"health-badge health-unknown\">N/A</span>';
+                    const reason = escapeHtml(event.reason || '-');
+                    const trapNote = event.trap_error ? ` <span class=\"text-secondary-xs\">(${escapeHtml(event.trap_error)})</span>` : '';
+                    return `
+                        <tr>
+                            <td>${formatDiagnosticDate(event.timestamp)}</td>
+                            <td><code>#${event.device_id}</code> ${escapeHtml(event.ip || '-')}</td>
+                            <td>${reachabilityBadge(event.from_status)} -> ${reachabilityBadge(event.to_status)}</td>
+                            <td title=\"${reason}\">${reason}</td>
+                            <td>${trapStatus}${trapNote}</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+        }
+
+        async function loadDeviceDiagnostics(options = {}) {
             const grid = document.getElementById('deviceDiagnosticsGrid');
             const body = document.getElementById('deviceDiagnosticsBody');
             const meta = document.getElementById('deviceDiagnosticsMeta');
+            const silentRefresh = Boolean(options?.silent);
 
             if (!grid || !body || !meta) return;
 
-            grid.innerHTML = '<div class="stat-card diag-loading-card"><span class="label">Device Diagnostics</span><span class="value"><span class="loading-inline"><span class="loading-spinner" aria-hidden="true"></span>Loading<span class="loading-dots" aria-hidden="true"></span></span></span><span class="trend">Recupero dati in corso</span></div>';
-            body.innerHTML = getDiagnosticsLoadingRow();
-            meta.textContent = 'Caricamento diagnostica...';
+            if (!silentRefresh) {
+                grid.innerHTML = '<div class="stat-card diag-loading-card"><span class="label">Device Diagnostics</span><span class="value"><span class="loading-inline"><span class="loading-spinner" aria-hidden="true"></span>Loading<span class="loading-dots" aria-hidden="true"></span></span></span><span class="trend">Recupero dati in corso</span></div>';
+                body.innerHTML = getDiagnosticsLoadingRow();
+                meta.textContent = 'Caricamento diagnostica...';
+            }
 
             try {
                 const res = await fetch('/api/system/device-diagnostics');
@@ -665,6 +861,7 @@
                 const devices = Array.isArray(data.devices) ? data.devices : [];
                 const recentRaw = Array.isArray(data.recent_raw) ? data.recent_raw : [];
                 updateDeviceSummary(data);
+                renderOverviewReachability(data);
 
                 grid.innerHTML = devices.map(device => {
                     const latestRaw = formatDiagnosticDate(device.latest_raw_timestamp);
@@ -757,6 +954,7 @@
                 }
             } catch (e) {
                 updateDeviceSummary({ configured_devices_count: 0, active_devices_count: 0, sync_enabled: false });
+                renderOverviewReachability({});
                 meta.textContent = 'Errore caricamento diagnostica device';
                 grid.innerHTML = '<div class="stat-card"><span class="label">Device Diagnostics</span><span class="value">ERR</span><span class="trend">Impossibile leggere la diagnostica</span></div>';
                 body.innerHTML = '<tr><td colspan="8" class="table-placeholder table-placeholder-error">Errore caricamento diagnostica device</td></tr>';
@@ -856,6 +1054,43 @@
 
             // Periodically refresh stats
             setInterval(updateSystemStats, 60000);
+            setInterval(() => loadDeviceDiagnostics({ silent: true }), 60000);
+        }
+
+        async function triggerDeviceMonitoring() {
+            try {
+                const res = await fetch('/api/system/device-healthcheck', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (res.status === 401) {
+                    logout();
+                    return;
+                }
+
+                let data = null;
+                try {
+                    data = await res.json();
+                } catch (e) {
+                    data = null;
+                }
+
+                if (!res.ok || !data || !data.success) {
+                    const message = (data && data.message) ? data.message : 'Errore durante il monitoring device';
+                    showToast(message, 'error');
+                    addSystemLog(`Device monitoring failed: ${message}`, 'error');
+                    return;
+                }
+
+                showToast('Monitoring device completato', 'success');
+                addSystemLog('Device monitoring triggered manually by System Admin.', 'info');
+                await loadDeviceDiagnostics();
+            } catch (err) {
+                console.error('Device monitoring error', err);
+                showToast('Errore di connessione durante il monitoring device', 'error');
+                addSystemLog('Device monitoring error: connection failed.', 'error');
+            }
         }
 
         window.addEventListener('DOMContentLoaded', async () => {
