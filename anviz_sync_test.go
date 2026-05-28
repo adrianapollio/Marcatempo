@@ -32,15 +32,18 @@ func TestShouldSyncStaffHonorsExplicitTrue(t *testing.T) {
 }
 
 func TestAnvizLoginAttemptsTryZeroPasswordThenEmptyPayload(t *testing.T) {
-	attempts := anvizLoginAttempts()
-	if len(attempts) != 2 {
-		t.Fatalf("expected 2 login attempts, got %d", len(attempts))
+	attempts := anvizLoginAttempts(3)
+	if len(attempts) != 3 {
+		t.Fatalf("expected 3 login attempts, got %d", len(attempts))
 	}
-	if attempts[0].Label != "zero-password-4bytes" || len(attempts[0].Data) != 4 {
-		t.Fatalf("expected first login attempt to use zero-password-4bytes, got %+v", attempts[0])
+	if attempts[0].Label != "configured-id-zero-password-4bytes" || attempts[0].PacketDeviceID != 3 || len(attempts[0].Data) != 4 {
+		t.Fatalf("expected first login attempt to use configured ID with zero-password-4bytes, got %+v", attempts[0])
 	}
-	if attempts[1].Label != "empty-payload" || len(attempts[1].Data) != 0 {
-		t.Fatalf("expected second login attempt to use empty-payload, got %+v", attempts[1])
+	if attempts[1].Label != "configured-id-empty-payload" || attempts[1].PacketDeviceID != 3 || len(attempts[1].Data) != 0 {
+		t.Fatalf("expected second login attempt to use configured ID with empty-payload, got %+v", attempts[1])
+	}
+	if attempts[2].Label != "broadcast-id-empty-payload" || attempts[2].PacketDeviceID != 0 || len(attempts[2].Data) != 0 {
+		t.Fatalf("expected third login attempt to use broadcast ID with empty-payload, got %+v", attempts[2])
 	}
 }
 

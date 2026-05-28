@@ -453,69 +453,77 @@ func BuildAnvizPacket(deviceID uint32, command byte, data []byte) []byte {
 }
 
 type anvizLoginAttempt struct {
-	Label string
-	Data  []byte
+	Label          string
+	PacketDeviceID uint32
+	Data           []byte
 }
 
-func anvizLoginAttempts() []anvizLoginAttempt {
+func anvizLoginAttempts(deviceID uint32) []anvizLoginAttempt {
 	return []anvizLoginAttempt{
-		{Label: "zero-password-4bytes", Data: make([]byte, 4)},
-		{Label: "empty-payload", Data: nil},
+		{Label: "configured-id-zero-password-4bytes", PacketDeviceID: deviceID, Data: make([]byte, 4)},
+		{Label: "configured-id-empty-payload", PacketDeviceID: deviceID, Data: nil},
+		{Label: "broadcast-id-empty-payload", PacketDeviceID: 0, Data: nil},
 	}
 }
 
-func connectAndLoginAnviz(ip string, deviceID uint32, connectTimeout, writeTimeout, readTimeout time.Duration, logf func(string, ...interface{})) (net.Conn, error) {
+func connectAndLoginAnviz(ip string, deviceID uint32, connectTimeout, writeTimeout, readTimeout time.Duration, logf func(string, ...interface{})) (net.Conn, uint32, error) {
 	var lastErr error
 
-	for _, attempt := range anvizLoginAttempts() {
+	for _, attempt := range anvizLoginAttempts(deviceID) {
 		conn, err := net.DialTimeout("tcp", ip+":5010", connectTimeout)
 		if err != nil {
 			logf("device unreachable err=%v", err)
-			return nil, fmt.Errorf("dispositivo %s irraggiungibile", ip)
+			return nil, deviceID, fmt.Errorf("dispositivo %s irraggiungibile", ip)
 		}
 
-		loginPacket := BuildAnvizPacket(deviceID, 0x38, attempt.Data)
+		loginPacket := BuildAnvizPacket(attempt.PacketDeviceID, 0x38, attempt.Data)
 		_ = conn.SetWriteDeadline(time.Now().Add(writeTimeout))
 		if _, err := conn.Write(loginPacket); err != nil {
 			_ = conn.Close()
-			logf("login attempt=%s write error err=%v", attempt.Label, err)
+			logf("login attempt=%s protocol_device_id=%d write error err=%v", attempt.Label, attempt.PacketDeviceID, err)
 			lastErr = fmt.Errorf("errore comunicazione login %s", ip)
 			continue
 		}
 
-		loginRes := readFullAnvizPacket(conn, readTimeout)
+		loginRes, readDetail := readFullAnvizPacketDetailed(conn, readTimeout)
 		if loginRes == nil {
 			_ = conn.Close()
-			logf("login attempt=%s read timeout/corrupted packet", attempt.Label)
+			logf("login attempt=%s protocol_device_id=%d failed detail=%s", attempt.Label, attempt.PacketDeviceID, readDetail)
 			lastErr = fmt.Errorf("timeout login %s", ip)
 			continue
 		}
 		if loginRes[6] != 0x00 {
-			logf("login attempt=%s returned non-zero ret=0x%X, continuing for compatibility", attempt.Label, loginRes[6])
+			logf("login attempt=%s protocol_device_id=%d returned non-zero ret=0x%X, continuing for compatibility", attempt.Label, attempt.PacketDeviceID, loginRes[6])
 		} else {
-			logf("login attempt=%s successful", attempt.Label)
+			logf("login attempt=%s protocol_device_id=%d successful", attempt.Label, attempt.PacketDeviceID)
 		}
-		return conn, nil
+		return conn, attempt.PacketDeviceID, nil
 	}
 
 	if lastErr != nil {
-		return nil, lastErr
+		return nil, deviceID, lastErr
 	}
-	return nil, fmt.Errorf("timeout login %s", ip)
+	return nil, deviceID, fmt.Errorf("timeout login %s", ip)
 }
 
 // readFullAnvizPacket legge deterministicamente un pacchetto in arrivo risolvendo l'eventuale frammentazione TCP
 func readFullAnvizPacket(conn net.Conn, timeout time.Duration) []byte {
+	packet, _ := readFullAnvizPacketDetailed(conn, timeout)
+	return packet
+}
+
+func readFullAnvizPacketDetailed(conn net.Conn, timeout time.Duration) ([]byte, string) {
 	// Il pacchetto di base ha sempre 9 byte di Header prima dei Dati e del CRC.
 	// STX(1) + ID(4) + ACK(1) + RET(1) + LEN(2) = 9
 	header := make([]byte, 9)
 	_ = conn.SetReadDeadline(time.Now().Add(timeout))
-	if _, err := io.ReadFull(conn, header); err != nil {
-		return nil
+	n, err := io.ReadFull(conn, header)
+	if err != nil {
+		return nil, fmt.Sprintf("header read failed bytes=%d err=%v raw=%s", n, err, hex.EncodeToString(header[:n]))
 	}
 
 	if header[0] != AnvizSTX {
-		return nil
+		return nil, fmt.Sprintf("unexpected stx=0x%02X header=%s", header[0], hex.EncodeToString(header))
 	}
 
 	// La lunghezza è all'indice 7 e 8
@@ -527,17 +535,18 @@ func readFullAnvizPacket(conn net.Conn, timeout time.Duration) []byte {
 	}
 	if dataLen > 40000 {
 		// Probabile corruzione, ritorno solo l'header per debug o annullo
-		return nil
+		return nil, fmt.Sprintf("invalid data_len=%d header=%s", dataLen, hex.EncodeToString(header))
 	}
 
 	// Leggiamo la parte rimanente (Data + 2 bytes di CRC)
 	rest := make([]byte, dataLen+2)
 	_ = conn.SetReadDeadline(time.Now().Add(timeout))
-	if _, err := io.ReadFull(conn, rest); err != nil {
-		return nil
+	n, err = io.ReadFull(conn, rest)
+	if err != nil {
+		return nil, fmt.Sprintf("body read failed bytes=%d/%d err=%v header=%s raw=%s", n, len(rest), err, hex.EncodeToString(header), hex.EncodeToString(rest[:n]))
 	}
 
-	return append(header, rest...)
+	return append(header, rest...), "ok"
 }
 
 // parseAnvizResponse accetta il byte buffer di ritorno dal socket e lo smonta.
@@ -764,7 +773,7 @@ func syncFromDeviceLegacy(ip string, deviceID uint32, manual bool) (SyncStats, e
 	log.Printf("TCP Worker: Tentativo di sincronizzazione con l'Anviz IP %s...", ip)
 
 	// Usiamo DialTimeout per non bloccare la Goroutine se Anviz e spento o la rete non risponde.
-	conn, err := connectAndLoginAnviz(ip, deviceID, 5*time.Second, 10*time.Second, anvizReadTimeout(), func(format string, args ...interface{}) {
+	conn, protocolDeviceID, err := connectAndLoginAnviz(ip, deviceID, 5*time.Second, 10*time.Second, anvizReadTimeout(), func(format string, args ...interface{}) {
 		log.Printf("TCP Worker: "+format, args...)
 	})
 	if err != nil {
@@ -778,7 +787,7 @@ func syncFromDeviceLegacy(ip string, deviceID uint32, manual bool) (SyncStats, e
 	staffMode := byte(0x01) // 0x01 per iniziare, 0x00 per le pagine successive
 	for {
 		staffReqData := []byte{staffMode}
-		staffPacket := BuildAnvizPacket(deviceID, 0x72, staffReqData)
+		staffPacket := BuildAnvizPacket(protocolDeviceID, 0x72, staffReqData)
 		log.Printf("TCP Worker: Request staff chunk device=%d ip=%s mode=0x%02X payload_len=%d", deviceID, ip, staffMode, len(staffReqData))
 
 		_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
@@ -820,7 +829,7 @@ func syncFromDeviceLegacy(ip string, deviceID uint32, manual bool) (SyncStats, e
 		chunkIndex++
 		requestMode := mode
 		reqData := []byte{mode, limit}
-		packet := BuildAnvizPacket(deviceID, 0x40, reqData)
+		packet := BuildAnvizPacket(protocolDeviceID, 0x40, reqData)
 		log.Printf("TCP Worker: Request attendance chunk device=%d ip=%s chunk=%d mode=0x%02X (%s) limit=%d", deviceID, ip, chunkIndex, mode, attendanceModeLabel(mode), limit)
 
 		_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
@@ -916,7 +925,7 @@ func syncFromDeviceWithOptionsAndMode(ip string, deviceID uint32, manual bool, s
 			duration.Round(time.Millisecond), cfg.StaffChunks, cfg.AttendanceChunks, cfg.LastSuccessfulChunk, cfg.LastChunkRecordCount, attendanceModeLabel(cfg.LastChunkMode), stats.Received, stats.Inserted, stats.Duplicates, stats.Errors, windowSummary)
 	}()
 
-	conn, err := connectAndLoginAnviz(ip, deviceID, cfg.ConnectionTimeout, cfg.WriteTimeout, cfg.ReadTimeout, cfg.logf)
+	conn, protocolDeviceID, err := connectAndLoginAnviz(ip, deviceID, cfg.ConnectionTimeout, cfg.WriteTimeout, cfg.ReadTimeout, cfg.logf)
 	if err != nil {
 		return stats, err
 	}
@@ -928,7 +937,7 @@ func syncFromDeviceWithOptionsAndMode(ip string, deviceID uint32, manual bool, s
 		for {
 			cfg.StaffChunks++
 			staffReqData := []byte{staffMode}
-			staffPacket := BuildAnvizPacket(deviceID, 0x72, staffReqData)
+			staffPacket := BuildAnvizPacket(protocolDeviceID, 0x72, staffReqData)
 			cfg.logf("requesting staff chunk=%d mode=%s", cfg.StaffChunks, attendanceModeLabel(staffMode))
 
 			_ = conn.SetWriteDeadline(time.Now().Add(cfg.WriteTimeout))
@@ -974,7 +983,7 @@ func syncFromDeviceWithOptionsAndMode(ip string, deviceID uint32, manual bool, s
 		cfg.LastChunkMode = mode
 
 		reqData := []byte{mode, limit}
-		packet := BuildAnvizPacket(deviceID, 0x40, reqData)
+		packet := BuildAnvizPacket(protocolDeviceID, 0x40, reqData)
 		cfg.logf("requesting attendance chunk=%d mode=%s limit=%d", chunkIndex, attendanceModeLabel(mode), limit)
 
 		_ = conn.SetWriteDeadline(time.Now().Add(cfg.WriteTimeout))
