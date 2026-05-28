@@ -1212,7 +1212,8 @@
                 const res = await fetch('/api/system/employees');
                 if (res.ok) {
                     const rawEmployees = await res.json();
-                    allEmployees = rawEmployees.filter(e => {
+                    const employeeList = Array.isArray(rawEmployees) ? rawEmployees : [];
+                    allEmployees = employeeList.filter(e => {
                         const empName = (e.name || '').trim();
                         const empId = String(e.id || '').trim();
 

@@ -665,7 +665,7 @@ func handleSystemEmployees(w http.ResponseWriter, r *http.Request) {
 		Name    string `json:"name"`
 		IsAdmin bool   `json:"isAdmin"`
 	}
-	var employees []EmpStatus
+	employees := make([]EmpStatus, 0)
 	for rows.Next() {
 		var e EmpStatus
 		var isAdmin int
@@ -673,6 +673,10 @@ func handleSystemEmployees(w http.ResponseWriter, r *http.Request) {
 			e.IsAdmin = isAdmin == 1
 			employees = append(employees, e)
 		}
+	}
+	if err := rows.Err(); err != nil {
+		http.Error(w, "Errore database", http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")

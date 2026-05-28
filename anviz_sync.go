@@ -452,6 +452,58 @@ func BuildAnvizPacket(deviceID uint32, command byte, data []byte) []byte {
 	return buf.Bytes()
 }
 
+type anvizLoginAttempt struct {
+	Label string
+	Data  []byte
+}
+
+func anvizLoginAttempts() []anvizLoginAttempt {
+	return []anvizLoginAttempt{
+		{Label: "zero-password-4bytes", Data: make([]byte, 4)},
+		{Label: "empty-payload", Data: nil},
+	}
+}
+
+func connectAndLoginAnviz(ip string, deviceID uint32, connectTimeout, writeTimeout, readTimeout time.Duration, logf func(string, ...interface{})) (net.Conn, error) {
+	var lastErr error
+
+	for _, attempt := range anvizLoginAttempts() {
+		conn, err := net.DialTimeout("tcp", ip+":5010", connectTimeout)
+		if err != nil {
+			logf("device unreachable err=%v", err)
+			return nil, fmt.Errorf("dispositivo %s irraggiungibile", ip)
+		}
+
+		loginPacket := BuildAnvizPacket(deviceID, 0x38, attempt.Data)
+		_ = conn.SetWriteDeadline(time.Now().Add(writeTimeout))
+		if _, err := conn.Write(loginPacket); err != nil {
+			_ = conn.Close()
+			logf("login attempt=%s write error err=%v", attempt.Label, err)
+			lastErr = fmt.Errorf("errore comunicazione login %s", ip)
+			continue
+		}
+
+		loginRes := readFullAnvizPacket(conn, readTimeout)
+		if loginRes == nil {
+			_ = conn.Close()
+			logf("login attempt=%s read timeout/corrupted packet", attempt.Label)
+			lastErr = fmt.Errorf("timeout login %s", ip)
+			continue
+		}
+		if loginRes[6] != 0x00 {
+			logf("login attempt=%s returned non-zero ret=0x%X, continuing for compatibility", attempt.Label, loginRes[6])
+		} else {
+			logf("login attempt=%s successful", attempt.Label)
+		}
+		return conn, nil
+	}
+
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return nil, fmt.Errorf("timeout login %s", ip)
+}
+
 // readFullAnvizPacket legge deterministicamente un pacchetto in arrivo risolvendo l'eventuale frammentazione TCP
 func readFullAnvizPacket(conn net.Conn, timeout time.Duration) []byte {
 	// Il pacchetto di base ha sempre 9 byte di Header prima dei Dati e del CRC.
@@ -711,36 +763,15 @@ func syncFromDeviceLegacy(ip string, deviceID uint32, manual bool) (SyncStats, e
 
 	log.Printf("TCP Worker: Tentativo di sincronizzazione con l'Anviz IP %s...", ip)
 
-	// Usiamo DialTimeout per non bloccare la Goroutine per sempre se Anviz è spento\network issue.
-	conn, err := net.DialTimeout("tcp", ip+":5010", 5*time.Second)
+	// Usiamo DialTimeout per non bloccare la Goroutine se Anviz e spento o la rete non risponde.
+	conn, err := connectAndLoginAnviz(ip, deviceID, 5*time.Second, 10*time.Second, anvizReadTimeout(), func(format string, args ...interface{}) {
+		log.Printf("TCP Worker: "+format, args...)
+	})
 	if err != nil {
-		log.Printf("TCP Worker: l'Anviz (%s) sembra spento e irraggiungibile: %v", ip, err)
-		return stats, fmt.Errorf("dispositivo %s irraggiungibile", ip)
+		return stats, err
 	}
 	defer conn.Close()
 
-	// --- 1. Login Authentication (Command 0x38) ---
-	// La password fornita è vuota (0). Protocollo Anviz tipicamente usa Little Endian per i payload DATA numerici.
-	pwdZero := make([]byte, 4) // Password di default/vuota
-	loginPacket := BuildAnvizPacket(deviceID, 0x38, pwdZero)
-	_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-	if _, err := conn.Write(loginPacket); err != nil {
-		log.Printf("TCP Worker: Errore durante tcp write (login): %v", err)
-		return stats, fmt.Errorf("errore comunicazione login %s", ip)
-	}
-
-	// Leggiamo la risposta del login
-	loginRes := readFullAnvizPacket(conn, anvizReadTimeout())
-	if loginRes == nil {
-		log.Printf("TCP Worker: Timeout lettura login Anviz %s", ip)
-		return stats, fmt.Errorf("timeout login %s", ip)
-	}
-	// Se la risposta al login (indice 6 RET Code) non è 0x00, proseguiamo comunque (su alcuni FW la pwd vuota non serve login)
-	if loginRes[6] != 0x00 {
-		log.Printf("TCP Worker: Login non riuscito con password vuota su %s (RET: 0x%X). Proseguo comunque...", ip, loginRes[6])
-	} else {
-		log.Printf("TCP Worker: Login riuscito su %s!", ip)
-	}
 	pauseBetweenAnvizCommands(anvizCommandDelay())
 
 	// --- 1. Scaricamento Profili Staff (Command 0x72) ---
@@ -885,31 +916,11 @@ func syncFromDeviceWithOptionsAndMode(ip string, deviceID uint32, manual bool, s
 			duration.Round(time.Millisecond), cfg.StaffChunks, cfg.AttendanceChunks, cfg.LastSuccessfulChunk, cfg.LastChunkRecordCount, attendanceModeLabel(cfg.LastChunkMode), stats.Received, stats.Inserted, stats.Duplicates, stats.Errors, windowSummary)
 	}()
 
-	conn, err := net.DialTimeout("tcp", ip+":5010", cfg.ConnectionTimeout)
+	conn, err := connectAndLoginAnviz(ip, deviceID, cfg.ConnectionTimeout, cfg.WriteTimeout, cfg.ReadTimeout, cfg.logf)
 	if err != nil {
-		cfg.logf("device unreachable err=%v", err)
-		return stats, fmt.Errorf("dispositivo %s irraggiungibile", ip)
+		return stats, err
 	}
 	defer conn.Close()
-
-	pwdZero := make([]byte, 4)
-	loginPacket := BuildAnvizPacket(deviceID, 0x38, pwdZero)
-	_ = conn.SetWriteDeadline(time.Now().Add(cfg.WriteTimeout))
-	if _, err := conn.Write(loginPacket); err != nil {
-		cfg.logf("login write error err=%v", err)
-		return stats, fmt.Errorf("errore comunicazione login %s", ip)
-	}
-
-	loginRes := readFullAnvizPacket(conn, cfg.ReadTimeout)
-	if loginRes == nil {
-		cfg.logf("login read timeout/corrupted packet")
-		return stats, fmt.Errorf("timeout login %s", ip)
-	}
-	if loginRes[6] != 0x00 {
-		cfg.logf("login returned non-zero ret=0x%X, continuing for compatibility", loginRes[6])
-	} else {
-		cfg.logf("login successful")
-	}
 	pauseBetweenAnvizCommands(cfg.CommandDelay)
 
 	if cfg.SyncStaff {
