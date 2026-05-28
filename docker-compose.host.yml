@@ -1,0 +1,55 @@
+services:
+  marcatempo:
+    build: .
+    image: zibola/marcatempo:latest
+    container_name: marcatempo_app
+    network_mode: host
+    volumes:
+      - ${MARCATEMPO_RUNTIME_DIR:-./runtime}/data:/app/data
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-Europe/Rome}
+      - PORT=${PORT:-8080}
+      - DB_PATH=/app/data/attendance.db
+      - BACKUP_DIR=/app/data/backups
+      - BACKUP_HOUR=${BACKUP_HOUR:-23}
+      - BACKUP_MINUTE=${BACKUP_MINUTE:-59}
+      - BACKUP_ON_STARTUP=${BACKUP_ON_STARTUP:-false}
+      - ANVIZ_SYNC_ENABLED=${ANVIZ_SYNC_ENABLED:-false}
+      - ANVIZ_DEVICES=${ANVIZ_DEVICES:-}
+      - ANVIZ_ACTIVE_DEVICE_IDS=${ANVIZ_ACTIVE_DEVICE_IDS:-}
+      - ANVIZ_SYNC_INTERVAL_MINUTES=${ANVIZ_SYNC_INTERVAL_MINUTES:-30}
+      - ANVIZ_AUTO_ATTENDANCE_MODE=${ANVIZ_AUTO_ATTENDANCE_MODE:-all}
+      - ANVIZ_MANUAL_ATTENDANCE_MODE=${ANVIZ_MANUAL_ATTENDANCE_MODE:-all}
+      - ANVIZ_ATTENDANCE_CHUNK_LIMIT=${ANVIZ_ATTENDANCE_CHUNK_LIMIT:-25}
+      - ANVIZ_SIMPLIFIED_DEVICE_RAW_ACTIONS=${ANVIZ_SIMPLIFIED_DEVICE_RAW_ACTIONS:-true}
+      - ANVIZ_COMMAND_DELAY_MS=${ANVIZ_COMMAND_DELAY_MS:-5000}
+      - ANVIZ_READ_TIMEOUT_SECONDS=${ANVIZ_READ_TIMEOUT_SECONDS:-20}
+      - ANVIZ_WRITE_TIMEOUT_SECONDS=${ANVIZ_WRITE_TIMEOUT_SECONDS:-10}
+      - ANVIZ_CONNECT_TIMEOUT_SECONDS=${ANVIZ_CONNECT_TIMEOUT_SECONDS:-5}
+      - ANVIZ_AUTO_SYNC_STAFF=${ANVIZ_AUTO_SYNC_STAFF:-false}
+      - ANVIZ_MANUAL_SYNC_STAFF=${ANVIZ_MANUAL_SYNC_STAFF:-true}
+      - ANVIZ_HEALTHCHECK_ENABLED=${ANVIZ_HEALTHCHECK_ENABLED:-true}
+      - ANVIZ_HEALTHCHECK_AUTOMATIC=${ANVIZ_HEALTHCHECK_AUTOMATIC:-true}
+      - ANVIZ_HEALTHCHECK_INTERVAL_SECONDS=${ANVIZ_HEALTHCHECK_INTERVAL_SECONDS:-60}
+      - ANVIZ_HEALTHCHECK_TIMEOUT_SECONDS=${ANVIZ_HEALTHCHECK_TIMEOUT_SECONDS:-3}
+      - ANVIZ_HEALTHCHECK_PORT=${ANVIZ_HEALTHCHECK_PORT:-5010}
+      - ANVIZ_HEALTHCHECK_INCLUDE_INACTIVE=${ANVIZ_HEALTHCHECK_INCLUDE_INACTIVE:-true}
+      - ANVIZ_HEALTHCHECK_EVENT_BUFFER=${ANVIZ_HEALTHCHECK_EVENT_BUFFER:-100}
+      - EMPLOYEE_ALIAS_MAPPINGS=${EMPLOYEE_ALIAS_MAPPINGS:-}
+      - EMPLOYEE_ALIAS_REPLACE=${EMPLOYEE_ALIAS_REPLACE:-false}
+      - DEFAULT_SYSTEM_ADMIN_PASSWORD=${DEFAULT_SYSTEM_ADMIN_PASSWORD:-}
+
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    image: zibola/marcatempo-nginx:latest
+    container_name: marcatempo_proxy
+    network_mode: host
+    volumes:
+      - ./nginx.host.conf:/etc/nginx/nginx.conf:ro
+      - ${MARCATEMPO_RUNTIME_DIR:-./runtime}/certs:/etc/nginx/certs:ro
+    depends_on:
+      - marcatempo
+    restart: unless-stopped
