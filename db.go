@@ -1055,6 +1055,16 @@ func backfillDeviceRawRecords() {
 			continue
 		}
 
+		exists, err := deviceRawRecordExistsByEvent(DB, deviceID, employeeID, rawDeviceTimestamp)
+		if err != nil {
+			skipped++
+			continue
+		}
+		if exists {
+			duplicates++
+			continue
+		}
+
 		ok, err := insertDeviceRawRecordUsingWithOptions(
 			DB,
 			uint32(deviceID),
@@ -1084,6 +1094,23 @@ func backfillDeviceRawRecords() {
 	}
 
 	log.Printf("Migrazione raw device: inseriti=%d duplicati=%d saltati=%d", inserted, duplicates, skipped)
+}
+
+func deviceRawRecordExistsByEvent(queryer interface {
+	QueryRow(query string, args ...interface{}) *sql.Row
+}, deviceID int64, employeeID int, rawDeviceTimestamp int64) (bool, error) {
+	var count int
+	err := queryer.QueryRow(`
+		SELECT COUNT(*)
+		FROM device_raw_records
+		WHERE device_id = ?
+		  AND employee_id = ?
+		  AND raw_device_timestamp = ?
+	`, deviceID, employeeID, rawDeviceTimestamp).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 func insertRecordWithDeviceMeta(employeeID int, employeeName string, timestamp time.Time, action string, statusCode int, source string, deviceID *uint32, rawDeviceTimestamp *uint32, lat, lon *float64) (bool, error) {
