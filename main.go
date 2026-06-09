@@ -84,6 +84,10 @@ type SystemDeviceDiagnostics struct {
 	LastCheckErrorMessage string     `json:"last_check_error_message,omitempty"`
 }
 
+type AdminUIConfig struct {
+	SyntheticAbsenceLookbackDays int `json:"synthetic_absence_lookback_days"`
+}
+
 // Device info for synchronization
 type AnvizDevice struct {
 	IP string
@@ -106,6 +110,25 @@ func anvizSyncEnabled() bool {
 	}
 
 	return value != "0" && !strings.EqualFold(value, "false")
+}
+
+func adminSyntheticAbsenceLookbackDays() int {
+	value := strings.TrimSpace(os.Getenv("ADMIN_SYNTHETIC_ABSENCE_LOOKBACK_DAYS"))
+	if value == "" {
+		return 0
+	}
+
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		log.Printf("Configurazione ADMIN_SYNTHETIC_ABSENCE_LOOKBACK_DAYS non valida %q: %v", value, err)
+		return 0
+	}
+	if parsed < 0 {
+		log.Printf("Configurazione ADMIN_SYNTHETIC_ABSENCE_LOOKBACK_DAYS negativa %d: uso 0", parsed)
+		return 0
+	}
+
+	return parsed
 }
 
 func parseAnvizDeviceEntry(entry string) (AnvizDevice, error) {
@@ -902,6 +925,22 @@ func handleEmployees(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(employees)
 }
 
+func handleAdminUIConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Metodo non consentito", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if _, ok := requireAdminSession(w, r); !ok {
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(AdminUIConfig{
+		SyntheticAbsenceLookbackDays: adminSyntheticAbsenceLookbackDays(),
+	})
+}
+
 // handleEmployeeAttendances legge lo storico presenze per un solo dipendente (Dashboard Web)
 func handleEmployeeAttendances(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -1428,6 +1467,7 @@ func main() {
 	http.HandleFunc("/api/employee/range-attendances", handleEmployeeRangeAttendances)
 	http.HandleFunc("/api/attendances", handleAttendances)
 	http.HandleFunc("/api/employees", handleEmployees)
+	http.HandleFunc("/api/admin/ui-config", handleAdminUIConfig)
 	http.HandleFunc("/api/admin/pending-validations", handlePendingValidations)
 	http.HandleFunc("/api/admin/approve-validation", handleApproveValidation)
 	http.HandleFunc("/api/admin/reject-validation", handleRejectValidation)

@@ -552,6 +552,47 @@
         let currentTab = 'daily'; // 'daily', 'weekly', 'period'
         let mobileDailyDetailRows = [];
         let mobilePeriodDetailRows = [];
+        let adminUiConfig = {
+            syntheticAbsenceLookbackDays: 0
+        };
+
+        function getAdminSyntheticAbsenceLookbackDays() {
+            const parsed = Number(adminUiConfig.syntheticAbsenceLookbackDays);
+            if (!Number.isFinite(parsed) || parsed < 0) {
+                return 0;
+            }
+            return Math.floor(parsed);
+        }
+
+        function addDays(date, days) {
+            const next = new Date(date);
+            next.setDate(next.getDate() + days);
+            return next;
+        }
+
+        async function loadAdminUiConfig() {
+            try {
+                const res = await fetch('/api/admin/ui-config');
+                if (res.status === 401) {
+                    logout();
+                    return false;
+                }
+                if (!res.ok) {
+                    throw new Error(`Errore config admin: ${res.status}`);
+                }
+
+                const payload = await res.json();
+                adminUiConfig.syntheticAbsenceLookbackDays = Math.max(
+                    0,
+                    Number(payload?.synthetic_absence_lookback_days) || 0
+                );
+                return true;
+            } catch (error) {
+                console.warn('Config admin UI non disponibile, uso default.', error);
+                adminUiConfig.syntheticAbsenceLookbackDays = 0;
+                return true;
+            }
+        }
 
         function switchSummaryTab(tab) {
             currentTab = tab;
@@ -986,6 +1027,7 @@
 
                 allEmployeesData.forEach(e => {
                     const displayName = normalizeEmployeeName(e.name);
+                    const employeeLabel = Number(e.id) < 0 ? displayName : `${displayName} (ID: ${e.id})`;
                     const option = document.createElement('div');
                     option.className = 'multi-select-option';
                     option.onclick = (event) => {
@@ -996,7 +1038,7 @@
 
                     option.innerHTML = `
                         <input type="checkbox" value="${e.id}" onclick="event.stopPropagation(); handleOptionClick('${e.id}', this.checked)">
-                        <label>${displayName} (ID: ${e.id})</label>
+                        <label>${employeeLabel}</label>
                     `;
                     optionsContainer.appendChild(option);
                 });
@@ -1929,11 +1971,15 @@
             // Format dates for API (YYYY-MM-DD local)
             const startStr = formatDateLocal(firstDay);
             const endStr = formatDateLocal(lastDay);
+            const lookbackDays = getAdminSyntheticAbsenceLookbackDays();
+            const fetchStartStr = lookbackDays > 0
+                ? formatDateLocal(addDays(firstDay, -lookbackDays))
+                : startStr;
 
             const empId = document.getElementById('filterEmp').value;
 
             const params = new URLSearchParams();
-            params.append('start_date', startStr);
+            params.append('start_date', fetchStartStr);
             params.append('end_date', endStr);
             if (empId) params.append('employee_id', empId);
 
@@ -1967,7 +2013,11 @@
 
                 const records = await res.json();
                 if (loadSeq !== adminAttendancesActiveSeq) return;
-                renderAdminTable(records, currentNamesMap);
+                renderAdminTable(records, currentNamesMap, {
+                    visibleStartStr: startStr,
+                    visibleEndStr: endStr,
+                    syntheticAbsenceLookbackDays: lookbackDays
+                });
             } catch (e) {
                 if (e && e.name === 'AbortError') {
                     return;
@@ -2125,8 +2175,13 @@
             }
         }
 
-        function renderAdminTable(records, currentNamesMap) {
+        function renderAdminTable(records, currentNamesMap, options = {}) {
             const tbody = document.getElementById('attendanceBody');
+            const visibleStartStr = options.visibleStartStr || "";
+            const visibleEndStr = options.visibleEndStr || "";
+            const syntheticAbsenceLookbackDays = Number.isFinite(options.syntheticAbsenceLookbackDays)
+                ? Math.max(0, Math.floor(options.syntheticAbsenceLookbackDays))
+                : 0;
 
             function isInvalidName(n, employeeId = null) {
                 return isPlaceholderEmployeeName(n, employeeId);
@@ -2163,6 +2218,7 @@
             const rangeDays = getDatesInRange(firstDay, lastDay);
 
             const groupedMap = {};
+            const recentlyActiveEmployeeIds = new Set();
 
             function isInvalidName(n, employeeId = null) {
                 return isPlaceholderEmployeeName(n, employeeId);
@@ -2202,6 +2258,19 @@
                     // Usiamo formatDateLocal per avere YYYY-MM-DD locale (senza shift UTC)
                     const dateObj = new Date(r.timestamp);
                     const dateKey = formatDateLocal(dateObj);
+
+                    if (
+                        syntheticAbsenceLookbackDays > 0 &&
+                        dateKey &&
+                        (!visibleEndStr || dateKey <= visibleEndStr)
+                    ) {
+                        recentlyActiveEmployeeIds.add(empId);
+                    }
+
+                    if ((visibleStartStr && dateKey < visibleStartStr) || (visibleEndStr && dateKey > visibleEndStr)) {
+                        return;
+                    }
+
                     const romeWeekday = getRomeWeekday(dateKey);
                     const isWeekendDay = [0, 6].includes(romeWeekday);
                     const isHolidayToday = isHoliday(dateObj);
@@ -2278,7 +2347,13 @@
 
             empsToCheck.forEach(empId => {
                 let nameToUse = currentNamesMap[empId] || "";
-                const skipSyntheticEmptyRows = historicalOnlyEmployeeIds.has(String(empId));
+                const skipSyntheticEmptyRows =
+                    historicalOnlyEmployeeIds.has(String(empId)) ||
+                    (
+                        filterEmpIds.length === 0 &&
+                        syntheticAbsenceLookbackDays > 0 &&
+                        !recentlyActiveEmployeeIds.has(String(empId))
+                    );
 
                 // Fallback attempt: if we don't have it in currentNamesMap, look inside records
                 if (!nameToUse && records) {
@@ -3175,6 +3250,7 @@
             applyTheme(currentTheme);
             initFiltersDefaults();
             ensureSystemAdminLink();
+            await loadAdminUiConfig();
 
             // Populate employees dropdown
             await populateEmployees();
