@@ -274,6 +274,15 @@ func (m *deviceHealthMonitor) checkOne(deviceID uint32) {
 		return
 	}
 
+	// Avoid touching the Anviz TCP port while a real sync session is already active
+	// for the same device. Some terminals tolerate concurrent probes poorly.
+	guard := getDeviceSyncGuard(deviceID)
+	if !guard.TryLock() {
+		log.Printf("ANVIZ health probe skipped device=%d ip=%s reason=sync-in-progress", state.DeviceID, state.IP)
+		return
+	}
+	defer guard.Unlock()
+
 	address := net.JoinHostPort(state.IP, strconv.Itoa(cfg.Port))
 	checkStarted := time.Now()
 	conn, err := net.DialTimeout("tcp", address, cfg.Timeout)

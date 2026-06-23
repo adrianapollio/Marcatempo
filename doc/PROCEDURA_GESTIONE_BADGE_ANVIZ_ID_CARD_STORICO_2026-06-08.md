@@ -252,6 +252,11 @@ Procedura minima:
 
 Per evitare SQL manuale sui server, conviene usare script Go.
 
+Nota stato repository al 19 Giugno 2026:
+
+- gli script sotto sono pianificati ma non sono ancora presenti in questo repository
+- i comandi mostrati in questa sezione sono quindi il target operativo previsto, non tool gia disponibili
+
 Script consigliati:
 
 ```text
