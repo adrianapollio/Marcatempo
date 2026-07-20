@@ -1,0 +1,15 @@
+FROM golang:1.22-alpine AS builder
+
+WORKDIR /src
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY scripts/migrate_badge_history.go ./scripts/migrate_badge_history.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o /migrate_badge_history ./scripts/migrate_badge_history.go
+
+FROM scratch
+
+COPY --from=builder /migrate_badge_history /migrate_badge_history
+
+ENTRYPOINT ["/migrate_badge_history"]

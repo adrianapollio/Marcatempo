@@ -1,7 +1,7 @@
 services:
   marcatempo:
     build: .
-    image: zibola/marcatempo:latest
+    image: ${MARCATEMPO_IMAGE:-zibola/marcatempo:latest}
     container_name: marcatempo_app
     network_mode: host
     volumes:
@@ -39,6 +39,7 @@ services:
       - ADMIN_SYNTHETIC_ABSENCE_LOOKBACK_DAYS=${ADMIN_SYNTHETIC_ABSENCE_LOOKBACK_DAYS:-60}
       - EMPLOYEE_ALIAS_MAPPINGS=${EMPLOYEE_ALIAS_MAPPINGS:-}
       - EMPLOYEE_ALIAS_REPLACE=${EMPLOYEE_ALIAS_REPLACE:-false}
+      - BADGE_HISTORY_MODE=${BADGE_HISTORY_MODE:-off}
       - DEFAULT_SYSTEM_ADMIN_PASSWORD=${DEFAULT_SYSTEM_ADMIN_PASSWORD:-}
 
   nginx:

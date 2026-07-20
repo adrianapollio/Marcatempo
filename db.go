@@ -262,6 +262,9 @@ func InitDB() {
 	if err := bootstrapEmployeeAliasesFromEnv(); err != nil {
 		log.Printf("[WARN] Bootstrap alias dipendenti da env fallito: %v", err)
 	}
+	if err := runBadgeHistoryStartupShadowAudit(); err != nil {
+		log.Printf("[WARN] Verifica shadow storico badge non eseguita: %v", err)
+	}
 }
 
 type employeeAliasMapping struct {
