@@ -29,6 +29,7 @@ type ClockData struct {
 type ManualClockData struct {
 	AdminID    int    `json:"adminId"`
 	EmployeeID int    `json:"employeeId"`
+	PersonKey  string `json:"personKey,omitempty"`
 	Date       string `json:"date"` // YYYY-MM-DD
 	Time       string `json:"time"` // HH:MM
 	Action     string `json:"action"`
@@ -503,8 +504,9 @@ func handleAttendances(w http.ResponseWriter, r *http.Request) {
 	start := r.URL.Query().Get("start_date")
 	end := r.URL.Query().Get("end_date")
 	empID := r.URL.Query().Get("employee_id")
+	personKey := r.URL.Query().Get("person_key")
 
-	records, err := GetRecords(start, end, empID)
+	records, err := GetRecordsForPeople(start, end, empID, personKey)
 	if err != nil {
 		log.Printf("Errore lettura presenze da DB: %v", err)
 		http.Error(w, "Errore estrazione dati SQLite", http.StatusInternalServerError)
@@ -1151,6 +1153,22 @@ func handleAdminManualClock(w http.ResponseWriter, r *http.Request) {
 		statusCode = 1
 	}
 
+	employeeName := ""
+	if badgeHistoryActive() && strings.TrimSpace(data.PersonKey) != "" {
+		resolvedID, resolvedName, resolveErr := resolveBadgeForPersonAt(data.PersonKey, timestamp)
+		if resolveErr != nil {
+			log.Printf("MANUAL CLOCK BADGE RESOLUTION ERR: %v", resolveErr)
+			http.Error(w, resolveErr.Error(), http.StatusBadRequest)
+			return
+		}
+		data.EmployeeID = resolvedID
+		employeeName = resolvedName
+	}
+	if data.EmployeeID <= 0 {
+		http.Error(w, "Dipendente senza badge valido alla data indicata", http.StatusBadRequest)
+		return
+	}
+
 	// Controllo duplicato dal dispositivo terminale
 	if GetRecordHasDeviceEquivalent(data.EmployeeID, timestamp, data.Action) {
 		log.Printf("MANUAL CLOCK BLOCKED: Dipendente %d ha già una marcatura dispositivo equivalente a %s", data.EmployeeID, timestamp.Format(time.RFC3339))
@@ -1158,7 +1176,9 @@ func handleAdminManualClock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	employeeName := GetEmployeeName(data.EmployeeID)
+	if employeeName == "" {
+		employeeName = GetEmployeeName(data.EmployeeID)
+	}
 	if employeeName == "" {
 		employeeName = fmt.Sprintf("Utente %d", data.EmployeeID)
 	}

@@ -103,6 +103,21 @@ Risultati attesi dopo l'import approvato:
 
 Gli alias devono rimanere attivi durante tutta la fase shadow.
 
+Modalita active nell'applicazione:
+
+`BADGE_HISTORY_MODE=active` risolve ogni timbratura senza modificarla, usando
+`records.employee_id` e il suo timestamp sull'intervallo semiaperto
+`[valid_from_utc, valid_to_utc)`. Le API espongono anche `person_id`,
+`person_key` e `anviz_employee_id`: l'interfaccia raggruppa e filtra con la
+`person_key` stabile, mentre `anviz_employee_id` conserva l'ID presente nel
+record originale.
+
+Il passaggio ad active deve avvenire prima con gli alias ancora configurati,
+cosi il rollback consiste nel ripristinare `BADGE_HISTORY_MODE=shadow` e
+ricreare il solo container applicativo. In active, schema mancante o intervalli
+sovrapposti impediscono l'avvio; gli ID completamente assenti dal manifest
+restano disponibili come record legacy non gestiti.
+
 Gestione futura di sostituzioni e riuso badge:
 
 L'immagine dedicata non contiene l'applicazione web e non partecipa al normale
@@ -176,6 +191,7 @@ Ogni chiusura/creazione viene registrata in `badge_assignment_audit`; il tool
 verifica integrita, foreign key e invarianza dei conteggi di `records` e
 `device_raw_records`. La riesecuzione della stessa operazione e idempotente.
 
-Durante la fase attuale usare in produzione soltanto `-list-current` e il
-dry-run. L'apply di un riuso reale verra abilitato dopo il passaggio dal resolver
-alias globale al resolver temporale dell'applicazione.
+Finche entrambi i deploy non sono stati verificati in modalita active, usare in
+produzione soltanto `-list-current` e il dry-run. L'apply di un riuso reale va
+eseguito solo dopo tale verifica, mantenendo sempre stop applicazione, backup e
+dry-run immediatamente precedente.

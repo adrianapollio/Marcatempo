@@ -21,7 +21,9 @@ func openBadgeHistoryShadowTestDB(t *testing.T) *sql.DB {
 	_, err = db.Exec(`
 		CREATE TABLE people (
 			id INTEGER PRIMARY KEY,
-			person_key TEXT NOT NULL
+			person_key TEXT NOT NULL,
+			display_name TEXT NOT NULL,
+			is_active INTEGER NOT NULL
 		);
 		CREATE TABLE person_badge_history (
 			id INTEGER PRIMARY KEY,
@@ -42,7 +44,9 @@ func openBadgeHistoryShadowTestDB(t *testing.T) *sql.DB {
 	}
 
 	_, err = db.Exec(`
-		INSERT INTO people (id, person_key) VALUES (1, 'PERSON-A'), (2, 'PERSON-B');
+		INSERT INTO people (id, person_key, display_name, is_active) VALUES
+			(1, 'PERSON-A', 'Persona A', 1),
+			(2, 'PERSON-B', 'Persona B', 1);
 		INSERT INTO person_badge_history
 			(id, person_id, anviz_employee_id, valid_from_utc, valid_to_utc, voided_at_utc)
 		VALUES

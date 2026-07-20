@@ -864,6 +864,18 @@
         let selectedEmployees = new Set();
         let allEmployeesData = [];
 
+        function employeeIdentity(employee) {
+            return employee && employee.person_key
+                ? String(employee.person_key)
+                : String(employee?.id ?? '');
+        }
+
+        function recordIdentity(record) {
+            return record && record.person_key
+                ? String(record.person_key)
+                : String(record?.employee_id ?? '');
+        }
+
         function normalizeEmployeeName(name) {
             return typeof name === 'string' ? name.replace(/\s+/g, ' ').trim() : '';
         }
@@ -875,7 +887,8 @@
             if (!normalized) return true;
 
             const lower = normalized.toLowerCase();
-            if (lower.startsWith('ex')) return true;
+			const hasStablePersonIdentity = String(employeeId || '').startsWith('P-');
+			if (lower.startsWith('ex') && !hasStablePersonIdentity) return true;
             if (lower.startsWith('nome vuoto')) return true;
             if (lower.startsWith('senza nome')) return true;
             if (['-', '--', 'n/a', 'null', 'undefined'].includes(lower)) return true;
@@ -1002,7 +1015,7 @@
                 hiddenInput.value = Array.from(selectedEmployees).join(',');
             } else if (selectedEmployees.size === 1) {
                 const empId = Array.from(selectedEmployees)[0];
-                const emp = allEmployeesData.find(e => String(e.id) === String(empId));
+                const emp = allEmployeesData.find(e => employeeIdentity(e) === String(empId));
                 textEl.textContent = emp ? emp.name : `Selezionato (${selectedEmployees.size})`;
                 hiddenInput.value = empId;
             } else {
@@ -1019,7 +1032,7 @@
                 const employees = Array.isArray(data) ? data : [];
 
                 allEmployeesData = employees.filter(e => {
-                    return !isPlaceholderEmployeeName(e?.name, e?.id);
+					return !isPlaceholderEmployeeName(e?.name, employeeIdentity(e));
                 });
 
                 const optionsContainer = document.getElementById('empMultiSelectOptions');
@@ -1027,17 +1040,20 @@
 
                 allEmployeesData.forEach(e => {
                     const displayName = normalizeEmployeeName(e.name);
-                    const employeeLabel = Number(e.id) < 0 ? displayName : `${displayName} (ID: ${e.id})`;
+                    const identity = employeeIdentity(e);
+					const employeeLabel = Number(e.id) > 0
+						? `${displayName} (ID: ${e.id}${e.is_active === false ? ', storico' : ''})`
+                        : `${displayName} (solo storico)`;
                     const option = document.createElement('div');
                     option.className = 'multi-select-option';
                     option.onclick = (event) => {
                         const cb = option.querySelector('input');
                         cb.checked = !cb.checked;
-                        handleOptionClick(String(e.id), cb.checked);
+                        handleOptionClick(identity, cb.checked);
                     };
 
                     option.innerHTML = `
-                        <input type="checkbox" value="${e.id}" onclick="event.stopPropagation(); handleOptionClick('${e.id}', this.checked)">
+                        <input type="checkbox" value="${identity}" onclick="event.stopPropagation(); handleOptionClick('${identity}', this.checked)">
                         <label>${employeeLabel}</label>
                     `;
                     optionsContainer.appendChild(option);
@@ -1206,9 +1222,11 @@
             mcEmployee.appendChild(placeholderOpt);
 
             allEmployeesData.forEach(e => {
+                if (!e.id || e.id <= 0 || e.is_active === false) return;
                 const opt = document.createElement('option');
                 opt.value = e.id;
                 opt.text = `${e.name} (ID: ${e.id})`;
+                opt.dataset.personKey = e.person_key || '';
                 mcEmployee.appendChild(opt);
             });
 
@@ -1479,7 +1497,9 @@
         }
 
         async function submitManualClock() {
-            const employeeId = document.getElementById('mcEmployee').value;
+            const employeeSelect = document.getElementById('mcEmployee');
+            const employeeId = employeeSelect.value;
+            const personKey = employeeSelect.selectedOptions[0]?.dataset?.personKey || '';
 
             // Get values from flatpickr
             let dateStr = "";
@@ -1504,6 +1524,7 @@
             const payload = {
                 adminId: parseInt(storedAdminId) || 0,
                 employeeId: parseInt(employeeId),
+                personKey: personKey,
                 date: dateStr,
                 time: timeStr,
                 action: action
@@ -1981,7 +2002,18 @@
             const params = new URLSearchParams();
             params.append('start_date', fetchStartStr);
             params.append('end_date', endStr);
-            if (empId) params.append('employee_id', empId);
+            if (empId) {
+                const selectedValues = empId.split(',').filter(Boolean);
+                const personKeys = [];
+                const legacyEmployeeIds = [];
+                selectedValues.forEach(value => {
+                    const employee = allEmployeesData.find(e => employeeIdentity(e) === value);
+                    if (employee?.person_key) personKeys.push(employee.person_key);
+                    else if (employee?.id) legacyEmployeeIds.push(employee.id);
+                });
+                if (personKeys.length > 0) params.append('person_key', personKeys.join(','));
+                if (legacyEmployeeIds.length > 0) params.append('employee_id', legacyEmployeeIds.join(','));
+            }
 
             try {
                 // Fetch valid employees to build a names map
@@ -1997,7 +2029,7 @@
                 const currentNamesMap = {};
 
                 empList.forEach(e => {
-                    currentNamesMap[e.id] = e.name ? e.name.trim() : "";
+                    currentNamesMap[employeeIdentity(e)] = e.name ? e.name.trim() : "";
                 });
 
                 const url = '/api/attendances?' + params.toString();
@@ -2192,7 +2224,7 @@
 
             allEmployeesData.forEach(e => {
                 if (!isInvalidName(e.name, e.id)) {
-                    allEmpIds.push(String(e.id));
+                    allEmpIds.push(employeeIdentity(e));
                 }
             });
 
@@ -2230,9 +2262,9 @@
             // Popoliamo la mappa con le timbrature reali
             if (records && records.length > 0) {
                 records.forEach(r => {
-                    const empId = String(r.employee_id); // Assicurati sia stringa per uguaglianze
+                    const empId = recordIdentity(r);
 
-                    let cName = currentNamesMap[r.employee_id] || "";
+                    let cName = currentNamesMap[empId] || "";
                     let hName = r.employee_name || "";
                     const hasValidName = !isInvalidName(cName, empId) || !isInvalidName(hName, empId);
 
@@ -2332,8 +2364,8 @@
             const foundEmpIds = new Set(allEmpIds);
             if (records && records.length > 0) {
                 records.forEach(r => {
-                    const idStr = String(r.employee_id);
-                    let cName = currentNamesMap[r.employee_id] || "";
+                    const idStr = recordIdentity(r);
+                    let cName = currentNamesMap[idStr] || "";
                     if (!isInvalidName(cName, idStr)) foundEmpIds.add(idStr);
                     // Accettiamo i recovery Excel
                     else if (r.employee_name && !isInvalidName(r.employee_name, idStr)) foundEmpIds.add(idStr);
@@ -2342,6 +2374,9 @@
 
             const empsToCheck = filterEmpIds.length > 0 ? filterEmpIds : Array.from(foundEmpIds);
             const historicalOnlyEmployeeIds = new Set(["33", "56"]);
+			const employeeMetaByIdentity = new Map(
+				allEmployeesData.map(employee => [employeeIdentity(employee), employee])
+			);
 
             const todayStr = formatDateLocal(new Date());
 
@@ -2349,6 +2384,7 @@
                 let nameToUse = currentNamesMap[empId] || "";
                 const skipSyntheticEmptyRows =
                     historicalOnlyEmployeeIds.has(String(empId)) ||
+					employeeMetaByIdentity.get(String(empId))?.is_active === false ||
                     (
                         filterEmpIds.length === 0 &&
                         syntheticAbsenceLookbackDays > 0 &&
@@ -2358,7 +2394,7 @@
                 // Fallback attempt: if we don't have it in currentNamesMap, look inside records
                 if (!nameToUse && records) {
                     const matchedRecord = records.find(r => {
-                        if (String(r.employee_id) !== empId) return false;
+                        if (recordIdentity(r) !== empId) return false;
                         return !isInvalidName(r.employee_name, empId);
                     });
                     if (matchedRecord) {

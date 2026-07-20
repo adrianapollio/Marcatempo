@@ -40,7 +40,7 @@ services:
       - EMPLOYEE_ALIAS_MAPPINGS=${EMPLOYEE_ALIAS_MAPPINGS:-}
       # Se true, disabilita prima tutti gli alias DB e poi applica solo quelli da env
       - EMPLOYEE_ALIAS_REPLACE=${EMPLOYEE_ALIAS_REPLACE:-false}
-      # off: nessuna lettura; shadow: confronta il nuovo storico senza cambiare i risultati
+      # off: alias legacy; shadow: sola verifica; active: risoluzione temporale per persona
       - BADGE_HISTORY_MODE=${BADGE_HISTORY_MODE:-off}
       # Bootstrap opzionale del system admin (senza hardcode nel repo)
       - DEFAULT_SYSTEM_ADMIN_PASSWORD=${DEFAULT_SYSTEM_ADMIN_PASSWORD:-}

@@ -17,24 +17,30 @@ import (
 )
 
 type Record struct {
-	ID           int       `json:"id"`
-	EmployeeID   int       `json:"employee_id"`
-	EmployeeName string    `json:"employee_name"`
-	Timestamp    time.Time `json:"timestamp"`
-	Action       string    `json:"action"`      // Final action: device simplified flow uses "In", "Out", "I_pausa", "F_pausa"; legacy history and manual/web may still contain "U_trasf", "R_trasf"
-	StatusCode   int       `json:"status_code"` // Canonical status code used by final records
-	Source       string    `json:"source"`      // "web" or "device"
-	DeviceID     *int      `json:"device_id,omitempty"`
-	RawDeviceTS  *int64    `json:"raw_device_timestamp,omitempty"`
-	Latitude     *float64  `json:"latitude"`
-	Longitude    *float64  `json:"longitude"`
+	ID              int       `json:"id"`
+	EmployeeID      int       `json:"employee_id"`
+	AnvizEmployeeID int       `json:"anviz_employee_id,omitempty"`
+	PersonID        *int64    `json:"person_id,omitempty"`
+	PersonKey       string    `json:"person_key,omitempty"`
+	EmployeeName    string    `json:"employee_name"`
+	Timestamp       time.Time `json:"timestamp"`
+	Action          string    `json:"action"`      // Final action: device simplified flow uses "In", "Out", "I_pausa", "F_pausa"; legacy history and manual/web may still contain "U_trasf", "R_trasf"
+	StatusCode      int       `json:"status_code"` // Canonical status code used by final records
+	Source          string    `json:"source"`      // "web" or "device"
+	DeviceID        *int      `json:"device_id,omitempty"`
+	RawDeviceTS     *int64    `json:"raw_device_timestamp,omitempty"`
+	Latitude        *float64  `json:"latitude"`
+	Longitude       *float64  `json:"longitude"`
 }
 
 type Employee struct {
-	ID      int    `json:"id"`
-	Name    string `json:"name"`
-	PIN     string `json:"-"` // Non esportare il PIN nel JSON per sicurezza
-	IsAdmin bool   `json:"is_admin"`
+	ID        int    `json:"id"`
+	Name      string `json:"name"`
+	PIN       string `json:"-"` // Non esportare il PIN nel JSON per sicurezza
+	IsAdmin   bool   `json:"is_admin"`
+	PersonID  *int64 `json:"person_id,omitempty"`
+	PersonKey string `json:"person_key,omitempty"`
+	IsActive  bool   `json:"is_active"`
 }
 
 type SystemAdmin struct {
@@ -263,6 +269,9 @@ func InitDB() {
 		log.Printf("[WARN] Bootstrap alias dipendenti da env fallito: %v", err)
 	}
 	if err := runBadgeHistoryStartupShadowAudit(); err != nil {
+		if badgeHistoryActive() {
+			log.Fatalf("[BADGE_HISTORY_ACTIVE] avvio annullato: %v", err)
+		}
 		log.Printf("[WARN] Verifica shadow storico badge non eseguita: %v", err)
 	}
 }
@@ -708,6 +717,16 @@ func normalizeDeviceRawAction(action string, statusCode int) string {
 }
 
 func loadDeviceTimelineBeforeUsing(queryer sqlQueryer, employeeID int, timestamp time.Time) ([]deviceTimelineRecord, error) {
+	if badgeHistoryActive() {
+		timeline, managed, err := loadBadgeHistoryActiveTimelineBeforeUsing(queryer, employeeID, timestamp)
+		if err != nil {
+			return nil, err
+		}
+		if managed {
+			return timeline, nil
+		}
+	}
+
 	loc := anvizEpochLocation()
 	localTS := timestamp.In(loc)
 	dayStart := time.Date(localTS.Year(), localTS.Month(), localTS.Day(), 0, 0, 0, 0, loc)
@@ -1396,6 +1415,10 @@ func UpdateSystemAdminPassword(username, newPassword string) error {
 
 // GetAllEmployees restituisce la lista di tutti i dipendenti salvati nel DB
 func GetAllEmployees() ([]Employee, error) {
+	if badgeHistoryActive() {
+		return getBadgeHistoryActiveEmployees()
+	}
+
 	query := `SELECT id, name, is_admin FROM employees ORDER BY name ASC, id ASC`
 	rows, err := DB.Query(query)
 	if err != nil {
@@ -1419,6 +1442,7 @@ func GetAllEmployees() ([]Employee, error) {
 			return nil, err
 		}
 		e.IsAdmin = isAdminInt == 1
+		e.IsActive = true
 
 		canonicalID, ok := resolved[e.ID]
 		if !ok || canonicalID == 0 {
@@ -1435,6 +1459,7 @@ func GetAllEmployees() ([]Employee, error) {
 			}
 		}
 		aggregated.IsAdmin = aggregated.IsAdmin || e.IsAdmin
+		aggregated.IsActive = true
 		canonicalByID[canonicalID] = aggregated
 	}
 
@@ -1710,11 +1735,21 @@ func scanRecords(rows *sql.Rows) ([]Record, error) {
 
 		records = append(records, r)
 	}
-	return records, nil
+	return records, rows.Err()
 }
 
 // GetRecords legge i record SQLite con supporto a range filtri (query API) e filter opzionale per employee
 func GetRecords(startDate, endDate, employeeID string) ([]Record, error) {
+	return GetRecordsForPeople(startDate, endDate, employeeID, "")
+}
+
+// GetRecordsForPeople mantiene il filtro employee_id legacy e, in modalita active,
+// supporta il filtro stabile person_key usato dall'interfaccia amministrativa.
+func GetRecordsForPeople(startDate, endDate, employeeID, personKey string) ([]Record, error) {
+	if badgeHistoryActive() {
+		return getBadgeHistoryActiveRecords(startDate, endDate, employeeID, personKey)
+	}
+
 	ctx, err := loadEmployeeCanonicalContext()
 	if err != nil {
 		return nil, err
@@ -1799,6 +1834,23 @@ func GetRecords(startDate, endDate, employeeID string) ([]Record, error) {
 
 // GetEmployeeRecords legge solo gli ultimi record di uno specifico dipendente
 func GetEmployeeRecords(employeeID int, limit int) ([]Record, error) {
+	if badgeHistoryActive() {
+		records, err := getBadgeHistoryActiveRecords("", "", strconv.Itoa(employeeID), "")
+		if err != nil {
+			return nil, err
+		}
+		if limit < 0 {
+			limit = 0
+		}
+		if len(records) > limit {
+			records = records[len(records)-limit:]
+		}
+		for left, right := 0, len(records)-1; left < right; left, right = left+1, right-1 {
+			records[left], records[right] = records[right], records[left]
+		}
+		return records, nil
+	}
+
 	ctx, err := loadEmployeeCanonicalContext()
 	if err != nil {
 		return nil, err
@@ -1845,6 +1897,9 @@ func GetEmployeeRecords(employeeID int, limit int) ([]Record, error) {
 func GetEmployeeMonthlyRecords(employeeID int, year int, month int) ([]Record, error) {
 	startDate := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.Local).Format("2006-01-02")
 	endDate := time.Date(year, time.Month(month)+1, 0, 23, 59, 59, 0, time.Local).Format("2006-01-02")
+	if badgeHistoryActive() {
+		return getBadgeHistoryActiveRecords(startDate, endDate, strconv.Itoa(employeeID), "")
+	}
 
 	ctx, err := loadEmployeeCanonicalContext()
 	if err != nil {
@@ -1895,6 +1950,10 @@ func GetEmployeeMonthlyRecords(employeeID int, year int, month int) ([]Record, e
 
 // GetEmployeeRangeRecords restituisce tutti i record di un dipendente in un range di date
 func GetEmployeeRangeRecords(employeeID int, startDate string, endDate string) ([]Record, error) {
+	if badgeHistoryActive() {
+		return getBadgeHistoryActiveRecords(startDate, endDate, strconv.Itoa(employeeID), "")
+	}
+
 	ctx, err := loadEmployeeCanonicalContext()
 	if err != nil {
 		return nil, err
@@ -2064,6 +2123,16 @@ func actionGroup(action string) string {
 // recuperare manualmente marcature mancanti della stessa categoria in orari diversi.
 func GetRecordHasDeviceEquivalent(employeeID int, timestamp time.Time, action string) bool {
 	targetGroup := actionGroup(action)
+	if badgeHistoryActive() {
+		matched, managed, err := getBadgeHistoryActiveDeviceEquivalent(employeeID, timestamp, targetGroup)
+		if err != nil {
+			log.Printf("[BADGE_HISTORY_ACTIVE] controllo equivalente device fallito employee=%d timestamp=%s: %v", employeeID, timestamp.Format(time.RFC3339), err)
+			return true
+		}
+		if managed {
+			return matched
+		}
+	}
 
 	query := `SELECT action
 		FROM records

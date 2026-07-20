@@ -13,7 +13,15 @@ import (
 const (
 	badgeHistoryModeOff    = "off"
 	badgeHistoryModeShadow = "shadow"
+	badgeHistoryModeActive = "active"
 )
+
+type badgeHistoryPerson struct {
+	ID          int64
+	PersonKey   string
+	DisplayName string
+	IsActive    bool
+}
 
 type badgeHistoryAssignment struct {
 	PersonID        int64
@@ -31,8 +39,9 @@ type badgeHistoryPresentation struct {
 
 type badgeHistoryResolver struct {
 	AssignmentsByEmployee map[int][]badgeHistoryAssignment
-	PresentationByPerson  map[int64]badgeHistoryPresentation
-	People                map[int64]string
+	AssignmentsByPerson   map[int64][]badgeHistoryAssignment
+	People                map[int64]badgeHistoryPerson
+	PersonIDByKey         map[string]int64
 	AssignmentCount       int
 }
 
@@ -48,12 +57,12 @@ type badgeHistoryShadowReport struct {
 }
 
 func runBadgeHistoryStartupShadowAudit() error {
-	mode := strings.ToLower(strings.TrimSpace(os.Getenv("BADGE_HISTORY_MODE")))
+	mode := badgeHistoryMode()
 	if mode == "" || mode == badgeHistoryModeOff {
 		return nil
 	}
-	if mode != badgeHistoryModeShadow {
-		return fmt.Errorf("BADGE_HISTORY_MODE=%q non valido: valori ammessi off, shadow", mode)
+	if mode != badgeHistoryModeShadow && mode != badgeHistoryModeActive {
+		return fmt.Errorf("BADGE_HISTORY_MODE=%q non valido: valori ammessi off, shadow, active", mode)
 	}
 
 	ctx, err := loadEmployeeCanonicalContext()
@@ -65,7 +74,11 @@ func runBadgeHistoryStartupShadowAudit() error {
 		return fmt.Errorf("caricamento storico badge: %w", err)
 	}
 
-	log.Printf("[BADGE_HISTORY_SHADOW] storico caricato: persone=%d assegnazioni=%d", len(resolver.People), resolver.AssignmentCount)
+	logPrefix := "BADGE_HISTORY_SHADOW"
+	if mode == badgeHistoryModeActive {
+		logPrefix = "BADGE_HISTORY_ACTIVE"
+	}
+	log.Printf("[%s] storico caricato: persone=%d assegnazioni=%d", logPrefix, len(resolver.People), resolver.AssignmentCount)
 
 	checks := []struct {
 		label string
@@ -87,7 +100,8 @@ func runBadgeHistoryStartupShadowAudit() error {
 			return fmt.Errorf("audit %s: %w", check.label, err)
 		}
 		log.Printf(
-			"[BADGE_HISTORY_SHADOW] tabella=%s totali=%d coerenti=%d differenze=%d non_gestiti=%d intervallo_assente=%d ambigui=%d timestamp_invalidi=%d",
+			"[%s] tabella=%s totali=%d coerenti=%d differenze=%d non_gestiti=%d intervallo_assente=%d ambigui=%d timestamp_invalidi=%d",
+			logPrefix,
 			check.label,
 			report.Total,
 			report.Matched,
@@ -98,23 +112,38 @@ func runBadgeHistoryStartupShadowAudit() error {
 			report.InvalidTime,
 		)
 		for _, sample := range report.MismatchSamples {
-			log.Printf("[BADGE_HISTORY_SHADOW] [DIFF] tabella=%s %s", check.label, sample)
+			log.Printf("[%s] [DIFF] tabella=%s %s", logPrefix, check.label, sample)
 		}
 	}
 
 	return nil
 }
 
+func badgeHistoryMode() string {
+	mode := strings.ToLower(strings.TrimSpace(os.Getenv("BADGE_HISTORY_MODE")))
+	if mode == "" {
+		return badgeHistoryModeOff
+	}
+	return mode
+}
+
+func badgeHistoryActive() bool {
+	return badgeHistoryMode() == badgeHistoryModeActive
+}
+
 func loadBadgeHistoryResolverUsing(queryer sqlQueryer) (badgeHistoryResolver, error) {
 	resolver := badgeHistoryResolver{
 		AssignmentsByEmployee: make(map[int][]badgeHistoryAssignment),
-		PresentationByPerson:  make(map[int64]badgeHistoryPresentation),
-		People:                make(map[int64]string),
+		AssignmentsByPerson:   make(map[int64][]badgeHistoryAssignment),
+		People:                make(map[int64]badgeHistoryPerson),
+		PersonIDByKey:         make(map[string]int64),
 	}
 
 	rows, err := queryer.Query(`
 		SELECT h.person_id,
 		       p.person_key,
+		       p.display_name,
+		       p.is_active,
 		       h.anviz_employee_id,
 		       h.valid_from_utc,
 		       h.valid_to_utc
@@ -130,10 +159,14 @@ func loadBadgeHistoryResolverUsing(queryer sqlQueryer) (badgeHistoryResolver, er
 
 	for rows.Next() {
 		var assignment badgeHistoryAssignment
+		var displayName string
+		var isActive int
 		var validTo sql.NullInt64
 		if err := rows.Scan(
 			&assignment.PersonID,
 			&assignment.PersonKey,
+			&displayName,
+			&isActive,
 			&assignment.AnvizEmployeeID,
 			&assignment.ValidFromUTC,
 			&validTo,
@@ -144,24 +177,30 @@ func loadBadgeHistoryResolverUsing(queryer sqlQueryer) (badgeHistoryResolver, er
 			value := validTo.Int64
 			assignment.ValidToUTC = &value
 		}
+		if strings.TrimSpace(assignment.PersonKey) == "" || strings.TrimSpace(displayName) == "" {
+			return resolver, fmt.Errorf("persona %d senza chiave o nome", assignment.PersonID)
+		}
+		if assignment.ValidToUTC != nil && *assignment.ValidToUTC <= assignment.ValidFromUTC {
+			return resolver, fmt.Errorf("intervallo non valido per assegnazione employee_id=%d", assignment.AnvizEmployeeID)
+		}
 
 		resolver.AssignmentsByEmployee[assignment.AnvizEmployeeID] = append(
 			resolver.AssignmentsByEmployee[assignment.AnvizEmployeeID],
 			assignment,
 		)
-		resolver.People[assignment.PersonID] = assignment.PersonKey
+		resolver.AssignmentsByPerson[assignment.PersonID] = append(
+			resolver.AssignmentsByPerson[assignment.PersonID],
+			assignment,
+		)
+		person := badgeHistoryPerson{
+			ID:          assignment.PersonID,
+			PersonKey:   assignment.PersonKey,
+			DisplayName: strings.TrimSpace(displayName),
+			IsActive:    isActive == 1,
+		}
+		resolver.People[assignment.PersonID] = person
+		resolver.PersonIDByKey[assignment.PersonKey] = assignment.PersonID
 		resolver.AssignmentCount++
-
-		candidate := badgeHistoryPresentation{
-			AnvizEmployeeID: assignment.AnvizEmployeeID,
-			ValidFromUTC:    assignment.ValidFromUTC,
-			Open:            assignment.ValidToUTC == nil,
-		}
-		current, found := resolver.PresentationByPerson[assignment.PersonID]
-		if !found || (!current.Open && candidate.Open) ||
-			(current.Open == candidate.Open && candidate.ValidFromUTC > current.ValidFromUTC) {
-			resolver.PresentationByPerson[assignment.PersonID] = candidate
-		}
 	}
 	if err := rows.Err(); err != nil {
 		return resolver, err
@@ -172,8 +211,60 @@ func loadBadgeHistoryResolverUsing(queryer sqlQueryer) (badgeHistoryResolver, er
 			return resolver.AssignmentsByEmployee[employeeID][i].ValidFromUTC < resolver.AssignmentsByEmployee[employeeID][j].ValidFromUTC
 		})
 	}
+	for personID := range resolver.AssignmentsByPerson {
+		sort.Slice(resolver.AssignmentsByPerson[personID], func(i, j int) bool {
+			return resolver.AssignmentsByPerson[personID][i].ValidFromUTC < resolver.AssignmentsByPerson[personID][j].ValidFromUTC
+		})
+		if err := validateBadgeHistoryIntervals("person_id", personID, resolver.AssignmentsByPerson[personID]); err != nil {
+			return resolver, err
+		}
+	}
+	for employeeID := range resolver.AssignmentsByEmployee {
+		if err := validateBadgeHistoryIntervals("anviz_employee_id", int64(employeeID), resolver.AssignmentsByEmployee[employeeID]); err != nil {
+			return resolver, err
+		}
+	}
+	if badgeHistoryActive() && resolver.AssignmentCount == 0 {
+		return resolver, fmt.Errorf("storico badge vuoto in modalita active")
+	}
 
 	return resolver, nil
+}
+
+func validateBadgeHistoryIntervals(label string, id int64, assignments []badgeHistoryAssignment) error {
+	for i := 1; i < len(assignments); i++ {
+		previous := assignments[i-1]
+		current := assignments[i]
+		if previous.ValidToUTC == nil || current.ValidFromUTC < *previous.ValidToUTC {
+			return fmt.Errorf("intervalli sovrapposti per %s=%d", label, id)
+		}
+	}
+	return nil
+}
+
+func (resolver badgeHistoryResolver) presentationAt(personID int64, timestamp time.Time) (badgeHistoryPresentation, bool) {
+	assignments := resolver.AssignmentsByPerson[personID]
+	unixTime := timestamp.Unix()
+	var result badgeHistoryPresentation
+	found := false
+	for _, assignment := range assignments {
+		if unixTime < assignment.ValidFromUTC {
+			continue
+		}
+		if assignment.ValidToUTC != nil && unixTime >= *assignment.ValidToUTC {
+			continue
+		}
+		candidate := badgeHistoryPresentation{
+			AnvizEmployeeID: assignment.AnvizEmployeeID,
+			ValidFromUTC:    assignment.ValidFromUTC,
+			Open:            assignment.ValidToUTC == nil,
+		}
+		if !found || candidate.ValidFromUTC > result.ValidFromUTC {
+			result = candidate
+			found = true
+		}
+	}
+	return result, found
 }
 
 func (resolver badgeHistoryResolver) resolveAt(employeeID int, timestamp time.Time) (badgeHistoryAssignment, int, string) {
@@ -202,9 +293,9 @@ func (resolver badgeHistoryResolver) resolveAt(employeeID int, timestamp time.Ti
 	}
 
 	assignment := matches[0]
-	presentation, ok := resolver.PresentationByPerson[assignment.PersonID]
+	presentation, ok := resolver.presentationAt(assignment.PersonID, time.Now())
 	if !ok || presentation.AnvizEmployeeID <= 0 {
-		return badgeHistoryAssignment{}, 0, "interval_missing"
+		return assignment, assignment.AnvizEmployeeID, "resolved"
 	}
 	return assignment, presentation.AnvizEmployeeID, "resolved"
 }
