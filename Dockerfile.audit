@@ -1,0 +1,15 @@
+FROM golang:1.22-alpine AS builder
+
+WORKDIR /src
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY scripts/audit_badge_migration.go ./scripts/audit_badge_migration.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o /audit_badge_migration ./scripts/audit_badge_migration.go
+
+FROM scratch
+
+COPY --from=builder /audit_badge_migration /audit_badge_migration
+
+ENTRYPOINT ["/audit_badge_migration"]

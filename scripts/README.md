@@ -8,6 +8,7 @@ Tool usati dal build/runtime:
 - `fix_anviz_extract_dst.go`
 
 Tool operativi manuali:
+- `audit_badge_migration.go` (audit read-only preliminare dei DB di deploy)
 - `replace_device_from_extract.go`
 - `shift_device_records.go`
 - `dump_user_records.go`
@@ -18,3 +19,25 @@ Tool operativi manuali:
 Note di pulizia:
 - binari compilati, cache Go e file temporanei non vanno versionati
 - gli script storici one-off di manutenzione DB sono stati rimossi dal percorso operativo
+
+Audit preliminare migrazione badge:
+
+```bash
+go run audit_badge_migration.go -db ../runtime/data/attendance.db -label locale
+```
+
+Per il deploy viene costruita un'immagine di audit separata, senza modificare
+l'immagine o il container dell'applicazione:
+
+```bash
+docker build -f Dockerfile.audit \
+  -t zibola/marcatempo-audit:20260720 .
+
+docker run --rm --read-only --network none \
+  -v "$PWD/runtime/data:/data:ro" \
+  zibola/marcatempo-audit:20260720 \
+  -db /data/attendance.db -label Napoli
+```
+
+Il database viene aperto con `mode=ro` e `query_only`; il tool non stampa PIN
+o password e non applica migrazioni.
